@@ -112,7 +112,7 @@ const MC_ICON_DEFS = [
 const EMOJI_TO_MC = { '🧱': 'grass_block', '⛏️': 'diamond_pickaxe', '🗡️': 'diamond_sword', '🏹': 'bow', '🛡️': 'iron_chestplate', '🌲': 'oak_log', '🌋': 'magma_block', '🏰': 'stone_bricks', '🐉': 'ender_eye', '🧪': 'experience_bottle', '💎': 'diamond', '🔥': 'blaze_powder', '❄️': 'snowball', '🌙': 'clock', '⭐': 'nether_star', '🚀': 'firework_rocket', '🧭': 'compass', '🌸': 'cherry_planks', '🍄': 'red_mushroom', '🐺': 'bone', '🐝': 'honeycomb', '⚙️': 'redstone_block', '🎮': 'command_block', '🏝️': 'sand', '🌊': 'water_bucket', '👾': 'ender_pearl', '🌱': 'oak_sapling', '🌍': 'grass_block' };
 
 const McIcons = {
-  KEY: 'solaris.mcicons.v2',
+  KEY: 'solaris.mcicons.v3', // bump when the rendering changes so caches regenerate
   icons: {}, // key -> data URL
   source: null, // version id the textures came from
   loading: null,
@@ -126,13 +126,26 @@ const McIcons = {
   defaultFor(inst) { return this.icons[inst?.loader?.type && inst.loader.type !== 'vanilla' ? 'crafting_table' : 'grass_block'] || null; },
   ready() { return Object.keys(this.icons).length > 0; },
 
-  loadCache() {
-    try { const c = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (c && c.icons) { this.icons = c.icons; this.source = c.source; } } catch {}
+  /* cache lives in IndexedDB (the hi-res icon set is a few MB — too big for localStorage) */
+  db() {
+    return new Promise((res, rej) => { const r = indexedDB.open('solaris-mcicons', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  },
+  async idb(mode, fn) {
+    const d = await this.db();
+    try { return await new Promise((res, rej) => { const tx = d.transaction('kv', mode); const req = fn(tx.objectStore('kv')); tx.oncomplete = () => res(req?.result); tx.onerror = () => rej(tx.error); }); } finally { d.close(); }
+  },
+  async loadCache() {
+    if (this.ready()) return true;
+    try { const c = await this.idb('readonly', (s) => s.get(this.KEY)); if (c && c.icons && !this.ready()) { this.icons = c.icons; this.source = c.source; } } catch {}
+    return this.ready();
+  },
+  async saveCache() {
+    try { await this.idb('readwrite', (s) => s.put({ source: this.source, icons: this.icons }, this.KEY)); } catch (e) { console.warn('mcicons cache', e); }
+    try { for (const k of Object.keys(localStorage)) if (k.startsWith('solaris.mcicons.')) localStorage.removeItem(k); } catch {} // old cache format
   },
   /** Finds a downloaded client jar and extracts the icon set (once; cached afterwards). */
   async init({ force = false } = {}) {
-    this.loadCache();
-    if (this.ready() && !force) return true;
+    if (!force && (await this.loadCache())) return true;
     if (this.loading) return this.loading;
     this.loading = (async () => {
       const root = State.info?.dataDir;
@@ -147,7 +160,7 @@ const McIcons = {
           const icons = await this.extract(buf);
           if (Object.keys(icons).length < 10) continue;
           this.icons = icons; this.source = id;
-          try { localStorage.setItem(this.KEY, JSON.stringify({ source: id, icons })); } catch {}
+          await this.saveCache();
           return true;
         } catch (e) { console.warn('mcicons', id, e); }
       }
@@ -227,30 +240,45 @@ const McIcons = {
     g.globalCompositeOperation = 'destination-in'; g.drawImage(src, 0, 0);
     return c;
   },
+  SIZE: 192, // > 2× the largest on-screen size (84px), small enough to cache comfortably
+  /** Flat item: every texel becomes an exact whole-number block of pixels (no uneven pixels). */
   flat(img) {
-    const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+    const S = this.SIZE, w = img.width;
+    const k = Math.floor((S * 0.94) / w), off = Math.floor((S - k * w) / 2);
+    const c = document.createElement('canvas'); c.width = S; c.height = S;
     const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-    g.drawImage(img, 0, 0, img.width, img.height, 4, 4, 56, 56);
+    g.drawImage(img, 0, 0, w, w, off, off, k * w, k * w);
     return c.toDataURL('image/png');
   },
-  /** Isometric block: top face + two shaded side faces. */
+  /** Isometric block drawn texel-by-texel as vector parallelograms: crisp, even pixels and no seams. */
   cube(top, left, right) {
-    const c = document.createElement('canvas'); c.width = 64; c.height = 64;
-    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-    // each face is drawn on its own layer so the shading only darkens that face
-    const draw = (img, m, shade) => {
-      const l = document.createElement('canvas'); l.width = 64; l.height = 64;
-      const lg = l.getContext('2d'); lg.imageSmoothingEnabled = false;
-      lg.setTransform(...m);
-      lg.drawImage(img, 0, 0, img.width, img.height, 0, 0, 16, 16);
-      if (shade) { lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalCompositeOperation = 'source-atop'; lg.fillStyle = `rgba(0,0,0,${shade})`; lg.fillRect(0, 0, 64, 64); }
-      g.drawImage(l, 0, 0);
+    const S = this.SIZE, u = S / 64; // geometry designed on a 64-unit grid
+    const c = document.createElement('canvas'); c.width = S; c.height = S;
+    const g = c.getContext('2d');
+    const P = (x, y) => [x * u, y * u];
+    // cube corners: top face L-T-R-C, sides down to BL-B-BR (fills ~94% of the tile)
+    const L = P(2, 16.5), T = P(32, 1.5), R = P(62, 16.5), C = P(32, 31.5), BL = P(2, 47.5), B = P(32, 62.5);
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+    const face = (img, O, U, V, shade) => {
+      const w = img.width;
+      const d = img.getContext('2d').getImageData(0, 0, w, w).data;
+      const du = [U[0] / w, U[1] / w], dv = [V[0] / w, V[1] / w];
+      g.lineJoin = 'miter'; g.lineWidth = 0.6;
+      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+        const p = (j * w + i) * 4, a = d[p + 3];
+        if (a < 8) continue;
+        const m = 1 - shade;
+        const col = `rgba(${Math.round(d[p] * m)},${Math.round(d[p + 1] * m)},${Math.round(d[p + 2] * m)},${(a / 255).toFixed(3)})`;
+        const x = O[0] + du[0] * i + dv[0] * j, y = O[1] + du[1] * i + dv[1] * j;
+        g.beginPath();
+        g.moveTo(x, y); g.lineTo(x + du[0], y + du[1]); g.lineTo(x + du[0] + dv[0], y + du[1] + dv[1]); g.lineTo(x + dv[0], y + dv[1]); g.closePath();
+        g.fillStyle = col; g.fill();
+        if (a > 250) { g.strokeStyle = col; g.stroke(); } // covers hairline gaps between neighbouring texels
+      }
     };
-    const k = 28 / 16, h = 14 / 16;
-    draw(top, [k, -h, k, h, 4, 18], 0);
-    draw(left, [k, h, 0, k, 4, 18], 0.22);
-    draw(right, [k, -h, 0, k, 32, 32], 0.4);
+    face(left, L, sub(C, L), sub(BL, L), 0.2);
+    face(right, C, sub(R, C), sub(B, C), 0.38);
+    face(top, L, sub(T, L), sub(C, L), 0);
     return c.toDataURL('image/png');
   },
 };
-McIcons.loadCache();

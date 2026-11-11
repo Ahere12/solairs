@@ -175,7 +175,7 @@ document.addEventListener('drop', async (e) => {
   [State.settings, State.info] = await Promise.all([api('settings:get'), api('app:info')]);
   applyTheme(State.settings);
   $('#app-ver').textContent = State.info.version ? State.info.version : '';
-  await Promise.all([refreshInstances(), refreshAccounts()]);
+  await Promise.all([refreshInstances(), refreshAccounts(), McIcons.loadCache().catch(() => false)]);
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
   renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
   // real Minecraft icons from the player's own game files (cached after the first time)
