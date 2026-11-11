@@ -139,7 +139,7 @@ svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-widt
 .profile .icon-btn { width: 30px; height: 30px; }
 .profile .icon-btn svg.i { width: 17px; height: 17px; }
 .head { width: 36px; height: 36px; border-radius: 8px; image-rendering: pixelated; background: var(--panel-3); flex: none; display: grid; place-items: center; font-weight: 700; color: var(--muted); overflow: hidden; }
-.head canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+.head canvas { width: 100%; height: 100%; image-rendering: auto; }
 
 /* nav */
 #nav { display: flex; flex-direction: column; gap: 2px; }
@@ -580,3 +580,13 @@ svg.i.big-ic { width: 42px; height: 42px; color: var(--accent); }
 .mc-grid img { width: 52px; height: 52px; image-rendering: auto; }
 .mc-grid span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qp .inst-icon.mc img { padding: 7%; }
+
+/* ---------- skins: 3D-rendered wardrobe tiles ---------- */
+.skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
+.skin-tile .skin-shot { height: 168px; display: grid; place-items: center; border-radius: 9px; margin-bottom: 8px;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 65%), var(--panel-2); }
+.skin-tile .skin-shot img { width: 112px; height: 168px; object-fit: contain; opacity: 0; transition: opacity 0.2s; }
+.skin-tile .skin-shot img.ready { opacity: 1; }
+.skin-tile .skin-shot canvas.flat { width: 64px; height: 128px; image-rendering: pixelated; }
+.skin-tile .x { z-index: 1; }
+.skin-tile.on .shot { background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%), var(--panel-2); }

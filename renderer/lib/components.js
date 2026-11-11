@@ -77,14 +77,38 @@ function instMeta(inst) {
   return `<span class="chip">${esc(inst.versionId)}</span><span class="chip ${inst.loader?.type !== 'vanilla' ? 'accent' : ''}">${loaderLabel(inst)}</span>${inst.solarisModules ? '<span class="chip warn">Solaris</span>' : ''}`;
 }
 
-/** Draws the face of a Minecraft skin (with hat layer) on a canvas. */
+/** Draws the face of a Minecraft skin (with hat layer) on a canvas, at 8× so it scales down crisply. */
 function drawHead(canvas, src) {
   const ctx = canvas.getContext('2d');
-  canvas.width = 8; canvas.height = 8;
+  canvas.width = 64; canvas.height = 64;
   const img = new Image();
-  img.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 8, 8); ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 8, 8); };
+  img.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 64, 64); ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 64, 64); };
   img.src = src;
 }
+/** 3D snapshot of a skin (one shared off-screen skinview3d viewer, results cached) — used for wardrobe tiles. */
+const SkinShots = {
+  viewer: null, cache: new Map(), chain: Promise.resolve(),
+  key(src, slim) { let h = 2166136261; for (let i = 0; i < src.length; i++) h = Math.imul(h ^ src.charCodeAt(i), 16777619); return (slim ? 's' : 'w') + (h >>> 0) + ':' + src.length; },
+  render(src, slim) {
+    if (!src || !window.skinview3d) return Promise.resolve(null);
+    const k = this.key(src, slim);
+    if (this.cache.has(k)) return this.cache.get(k);
+    const p = (this.chain = this.chain.then(async () => {
+      if (!this.viewer) {
+        const c = document.createElement('canvas');
+        this.viewer = new skinview3d.SkinViewer({ canvas: c, width: 200, height: 300, preserveDrawingBuffer: true, renderPaused: true });
+        this.viewer.fov = 38; this.viewer.zoom = 0.92;
+        this.viewer.playerObject.rotation.y = 0.55;
+        try { this.viewer.playerObject.skin.leftArm.rotation.z = 0.06; this.viewer.playerObject.skin.rightArm.rotation.z = -0.06; } catch {}
+      }
+      await this.viewer.loadSkin(src, { model: slim ? 'slim' : 'default' });
+      this.viewer.render();
+      return this.viewer.canvas.toDataURL('image/png');
+    }).catch(() => null));
+    this.cache.set(k, p);
+    return p;
+  },
+};
 /** 2D front render of a full skin onto a 16×32 canvas. */
 function drawSkinFront(canvas, src, slim) {
   const ctx = canvas.getContext('2d');
@@ -115,20 +139,12 @@ function renderHead(el, acct) {
   if (!acct) { el.textContent = '?'; return; }
   const c = document.createElement('canvas');
   el.appendChild(c);
-  if (acct.skinUrl) drawHead(c, acct.skinUrl.replace('http://', 'https://'));
-  else drawHead(c, STEVE);
+  if (acct.skinUrl) { drawHead(c, acct.skinUrl.replace('http://', 'https://')); return; }
+  // no custom skin: the same default skin Minecraft gives this player (real texture from the game files)
+  const d = typeof McIcons !== 'undefined' ? McIcons.skinForUuid(acct.uuid) : null;
+  if (d) drawHead(c, d.src);
+  else { el.innerHTML = ''; el.textContent = (acct.name || '?')[0].toUpperCase(); }
 }
-// Default 64×64 skin-face stand-in (simple generated face) for offline accounts.
-const STEVE = (() => {
-  const c = document.createElement('canvas'); c.width = 64; c.height = 64;
-  const x = c.getContext('2d');
-  x.fillStyle = '#b4845f'; x.fillRect(8, 8, 8, 8);
-  x.fillStyle = '#3a2a1a'; x.fillRect(8, 8, 8, 2); x.fillRect(8, 10, 1, 1); x.fillRect(15, 10, 1, 1);
-  x.fillStyle = '#fff'; x.fillRect(9, 12, 2, 1); x.fillRect(13, 12, 2, 1);
-  x.fillStyle = '#4a3cb0'; x.fillRect(10, 12, 1, 1); x.fillRect(13, 12, 1, 1);
-  x.fillStyle = '#6b4a35'; x.fillRect(11, 14, 2, 1); x.fillRect(10, 15, 4, 1);
-  return c.toDataURL();
-})();
 
 function sparkline(points, { w = 600, h = 140 } = {}) {
   if (!points.length) return `<div class="empty small">No data yet — player counts are recorded each time you view this server.</div>`;

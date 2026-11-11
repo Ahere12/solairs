@@ -98,7 +98,7 @@ on('launch:started', ({ runId, instanceId, name }) => {
   Bus.emit('launch', instanceId); Bus.emit('runs');
   toast(`${name} is starting…`, 'info');
   // the game files for this version now exist on disk — load Minecraft icons if we still have none
-  if (!McIcons.ready()) McIcons.init().then((ok) => ok && Bus.emit('instances', State.instances)).catch(() => {});
+  if (!McIcons.ready()) McIcons.init().then((ok) => { if (ok) { Bus.emit('instances', State.instances); renderAccountChip(); } }).catch(() => {});
 });
 on('launch:exited', async ({ runId, instanceId, code, killed, analysis }) => {
   if (State.runs[runId]) State.runs[runId].running = false;
@@ -179,7 +179,7 @@ document.addEventListener('drop', async (e) => {
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
   renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
   // real Minecraft icons from the player's own game files (cached after the first time)
-  if (!McIcons.ready()) McIcons.init().then((ok) => ok && Bus.emit('instances', State.instances)).catch(() => {});
+  if (!McIcons.ready()) McIcons.init().then((ok) => { if (ok) { Bus.emit('instances', State.instances); renderAccountChip(); } }).catch(() => {});
   Router.go('home');
   if (State.settings.firstRun) {
     await saveSettings({ firstRun: false });

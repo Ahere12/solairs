@@ -108,12 +108,24 @@ const MC_ICON_DEFS = [
   ['sweet_berries', 'Sweet Berries', 'item', 'item/sweet_berries'],
 ];
 
+const SKIN_NAMES = ['alex', 'ari', 'efe', 'kai', 'makena', 'noor', 'steve', 'sunny', 'zuri'];
+/** Same rule as the game: DEFAULT_SKINS[floorMod(uuid.hashCode(), 18)], slim variants first, then wide. */
+function defaultSkinIndex(uuid) {
+  const h = String(uuid || '').replace(/-/g, '');
+  if (!/^[0-9a-f]{32}$/i.test(h)) return { name: 'steve', model: 'wide' };
+  const hilo = BigInt.asIntN(64, BigInt('0x' + h.slice(0, 16)) ^ BigInt('0x' + h.slice(16)));
+  const hash = Number(BigInt.asIntN(32, hilo >> 32n)) ^ Number(BigInt.asIntN(32, hilo));
+  const i = ((hash % 18) + 18) % 18;
+  return i < 9 ? { name: SKIN_NAMES[i], model: 'slim' } : { name: SKIN_NAMES[i - 9], model: 'wide' };
+}
+
 // The emoji icons Solaris used before → their real Minecraft counterpart.
 const EMOJI_TO_MC = { '🧱': 'grass_block', '⛏️': 'diamond_pickaxe', '🗡️': 'diamond_sword', '🏹': 'bow', '🛡️': 'iron_chestplate', '🌲': 'oak_log', '🌋': 'magma_block', '🏰': 'stone_bricks', '🐉': 'ender_eye', '🧪': 'experience_bottle', '💎': 'diamond', '🔥': 'blaze_powder', '❄️': 'snowball', '🌙': 'clock', '⭐': 'nether_star', '🚀': 'firework_rocket', '🧭': 'compass', '🌸': 'cherry_planks', '🍄': 'red_mushroom', '🐺': 'bone', '🐝': 'honeycomb', '⚙️': 'redstone_block', '🎮': 'command_block', '🏝️': 'sand', '🌊': 'water_bucket', '👾': 'ender_pearl', '🌱': 'oak_sapling', '🌍': 'grass_block' };
 
 const McIcons = {
-  KEY: 'solaris.mcicons.v3', // bump when the rendering changes so caches regenerate
+  KEY: 'solaris.mcicons.v4', // bump when the rendering changes so caches regenerate
   icons: {}, // key -> data URL
+  skins: { wide: {}, slim: {} }, // the official default skins (Steve, Alex, Ari, …) as raw 64×64 PNG data URLs
   source: null, // version id the textures came from
   loading: null,
   defs: MC_ICON_DEFS,
@@ -136,11 +148,11 @@ const McIcons = {
   },
   async loadCache() {
     if (this.ready()) return true;
-    try { const c = await this.idb('readonly', (s) => s.get(this.KEY)); if (c && c.icons && !this.ready()) { this.icons = c.icons; this.source = c.source; } } catch {}
+    try { const c = await this.idb('readonly', (s) => s.get(this.KEY)); if (c && c.icons && !this.ready()) { this.icons = c.icons; this.skins = c.skins || { wide: {}, slim: {} }; this.source = c.source; } } catch {}
     return this.ready();
   },
   async saveCache() {
-    try { await this.idb('readwrite', (s) => s.put({ source: this.source, icons: this.icons }, this.KEY)); } catch (e) { console.warn('mcicons cache', e); }
+    try { await this.idb('readwrite', (s) => s.put({ source: this.source, icons: this.icons, skins: this.skins }, this.KEY)); } catch (e) { console.warn('mcicons cache', e); }
     try { for (const k of Object.keys(localStorage)) if (k.startsWith('solaris.mcicons.')) localStorage.removeItem(k); } catch {} // old cache format
   },
   /** Finds a downloaded client jar and extracts the icon set (once; cached afterwards). */
@@ -157,9 +169,9 @@ const McIcons = {
         let buf;
         try { const r = await fetch(url); if (!r.ok) continue; buf = await r.arrayBuffer(); } catch { continue; }
         try {
-          const icons = await this.extract(buf);
+          const { icons, skins } = await this.extract(buf);
           if (Object.keys(icons).length < 10) continue;
-          this.icons = icons; this.source = id;
+          this.icons = icons; this.skins = skins; this.source = id;
           await this.saveCache();
           return true;
         } catch (e) { console.warn('mcicons', id, e); }
@@ -223,7 +235,26 @@ const McIcons = {
         if (top && left && right) out[key] = this.cube(top, left, right);
       } catch {}
     }
-    return out;
+    // official default skins: 1.19.3+ has 9 characters × wide/slim; older versions only steve/alex
+    const skins = { wide: {}, slim: {} };
+    const asDataUrl = async (e) => { const b = await this.readEntry(buf, e); return await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }); };
+    for (const model of ['wide', 'slim']) for (const n of SKIN_NAMES) {
+      const e = idx.get(`assets/minecraft/textures/entity/player/${model}/${n}.png`);
+      if (e) try { skins[model][n] = await asDataUrl(e); } catch {}
+    }
+    if (!skins.wide.steve) { const e = idx.get('assets/minecraft/textures/entity/steve.png'); if (e) skins.wide.steve = await asDataUrl(e); }
+    if (!skins.slim.alex) { const e = idx.get('assets/minecraft/textures/entity/alex.png'); if (e) skins.slim.alex = await asDataUrl(e); }
+    return { icons: out, skins };
+  },
+  /** A default skin, falling back to Steve. Returns { src, model } or null if no game files are loaded. */
+  defaultSkin(name = 'steve', model = 'wide') {
+    const src = this.skins?.[model]?.[name] || this.skins?.wide?.[name] || this.skins?.slim?.[name] || this.skins?.wide?.steve;
+    return src ? { src, model: this.skins?.[model]?.[name] ? model : this.skins?.wide?.[name] ? 'wide' : 'slim', name } : null;
+  },
+  /** The default skin Minecraft itself gives a player without a custom skin (picked from their UUID). */
+  skinForUuid(uuid) {
+    const p = defaultSkinIndex(uuid);
+    return this.defaultSkin(p.name, p.model);
   },
   /** First frame of (possibly animated) textures as a 16×16-ish square canvas. */
   square(bmp) {
