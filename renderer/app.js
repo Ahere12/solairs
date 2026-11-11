@@ -1,36 +1,76 @@
 /* Boot: shell chrome, navigation, events from the main process, keybinds, drag & drop. */
 const NAV = [
-  { section: 'Game' },
   { id: 'home', label: 'Home', icon: 'home', key: 'nav.home' },
-  { id: 'library', label: 'Library', icon: 'library', key: 'nav.library' },
-  { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
-  { section: 'Discover' },
   { id: 'browse', label: 'Browse', icon: 'browse', key: 'nav.browse' },
   { id: 'servers', label: 'Servers', icon: 'servers', key: 'nav.servers' },
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
+  { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
+  { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
+];
+const SIDE_TOOLS = [
+  { id: 'console', label: 'Console', icon: 'console' },
   { id: 'gallery', label: 'Gallery', icon: 'gallery' },
-  { section: 'Help' },
-  { id: 'console', label: 'Console', icon: 'console', key: 'nav.console' },
   { id: 'changelog', label: 'Changelog', icon: 'changelog' },
   { id: 'roadmap', label: 'Roadmap', icon: 'roadmap' },
-  { id: 'settings', label: 'Settings', icon: 'settings', key: 'nav.settings' },
 ];
 const ROUTE_ALIAS = { instance: 'library' };
 
+function selectedInstance() {
+  const insts = State.instances;
+  return insts.find((i) => i.id === State.settings?.selectedInstance) || [...insts].sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0))[0] || null;
+}
 function renderNav() {
   const cur = Router.current ? ROUTE_ALIAS[Router.current.name] || Router.current.name : 'home';
   const running = Object.values(State.runs).filter((r) => r.running).length;
-  $('#nav').innerHTML = NAV.map((n) => n.section
-    ? `<div class="section-label">${esc(T(n.section))}</div>`
-    : `<button class="nav-item ${cur === n.id ? 'active' : ''}" data-nav="${n.id}" title="${esc(State.settings.keybinds[n.key] || '')}">${icon(n.icon)}${esc(T(n.label))}${n.id === 'console' && running ? `<span class="count">${running}</span>` : ''}</button>`).join('');
-  $$('[data-nav]').forEach((b) => (b.onclick = () => Router.go(b.dataset.nav)));
+  $('#nav').innerHTML = NAV.map((n) => `<div class="nav-row"><button class="nav-item ${cur === n.id ? 'active' : ''}" data-nav="${n.id}" title="${esc(State.settings.keybinds[n.key] || '')}">${icon(n.icon)}<span>${esc(T(n.label))}</span></button>${n.add ? `<button class="icon-btn nav-add" id="nav-new" title="${esc(T('New instance'))}">${icon('plus')}</button>` : ''}</div>`).join('');
+  $$('[data-nav]', $('#nav')).forEach((b) => (b.onclick = () => Router.go(b.dataset.nav)));
+  $('#nav-new').onclick = () => openNewInstance();
+  $('#side-tools').innerHTML = SIDE_TOOLS.map((n) => `<button class="icon-btn ${cur === n.id ? 'on' : ''}" data-tool="${n.id}" title="${esc(T(n.label))}">${icon(n.icon)}${n.id === 'console' && running ? `<span class="count">${running}</span>` : ''}</button>`).join('');
+  $$('[data-tool]').forEach((b) => (b.onclick = () => Router.go(b.dataset.tool)));
+  renderSideInstances();
+  const st = $('#who-settings'); if (st) st.classList.toggle('on', cur === 'settings');
+}
+function renderSideInstances() {
+  const box = $('#side-insts');
+  if (!box || !State.settings) return;
+  const cur = Router.current?.name === 'instance' ? Router.current.params.id : null;
+  const list = [...State.instances].sort((a, b) => (b.pinned - a.pinned) || ((b.lastPlayed || 0) - (a.lastPlayed || 0))).slice(0, 12);
+  box.innerHTML = list.map((i) => `<button class="side-inst ${cur === i.id ? 'active' : ''} ${State.settings.selectedInstance === i.id ? 'selected' : ''}" data-side-inst="${esc(i.id)}" title="${esc(i.name)} · ${esc(i.versionId)}">${instIcon(i, 'xs')}<span class="n">${esc(i.name)}</span>${isRunning(i.id) ? '<span class="dot pulse"></span>' : ''}</button>`).join('');
+  $$('[data-side-inst]', box).forEach((b) => {
+    const inst = State.instances.find((i) => i.id === b.dataset.sideInst);
+    b.onclick = () => Router.go('instance', { id: inst.id });
+    b.oncontextmenu = (e) => instanceMenu(e, inst);
+  });
+}
+function renderSidePlay() {
+  const box = $('#side-play');
+  if (!box || !State.settings) return;
+  const sel = selectedInstance();
+  if (!sel) {
+    box.innerHTML = `<button class="big-play" id="bp-new"><span class="pi">${icon('plus')}</span><span class="pt"><b>${esc(T('New instance'))}</b><small>Create your first instance</small></span></button>`;
+    $('#bp-new').onclick = () => openNewInstance();
+    return;
+  }
+  const running = isRunning(sel.id);
+  const busy = State.launch[sel.id] && !State.launch[sel.id].error;
+  const sub = busy ? launchLabel(sel.id) : `${sel.name} · ${loaderLabel(sel)} ${sel.versionId}`;
+  box.innerHTML = `<div class="big-play-wrap"><button class="big-play ${running ? 'stop' : ''}" ${running ? `data-stop="${esc(sel.id)}"` : `data-play="${esc(sel.id)}"`} ${busy && !running ? 'disabled' : ''}>
+      <span class="pi">${icon(running ? 'stop' : 'play')}</span>
+      <span class="pt"><b>${running ? esc(T('Stop')).toUpperCase() : busy ? '…' : esc(T('Play')).toUpperCase()}</b><small>${esc(sub)}</small></span>
+    </button><button class="big-play-pick" id="bp-pick" title="Choose instance"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button></div>`;
+  $('#bp-pick').onclick = async () => { const i = await chooseInstance({ title: 'Select instance' }); if (i) { await saveSettings({ selectedInstance: i.id }); renderSideInstances(); } };
 }
 function renderAccountChip() {
   const chip = $('#account-chip');
   const a = State.accounts.accounts.find((x) => x.id === State.accounts.active);
-  chip.innerHTML = `<div class="head" id="chip-head"></div><div class="meta"><div class="name">${a ? esc(a.name) : T('Add account')}</div><div class="type">${a ? (a.type === 'msa' ? 'Microsoft' : 'Offline') : 'Click to sign in'}</div></div>${icon('more')}`;
+  chip.innerHTML = `<button class="who" id="who" title="Accounts"><div class="head" id="chip-head"></div><div class="meta"><div class="type">${a ? (a.type === 'msa' ? 'Logged in as' : 'Offline account') : 'Not signed in'}</div><div class="name">${a ? esc(a.name) : T('Add account')}</div></div><svg class="i caret" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="icon-btn" id="who-accts" title="Accounts">${icon('users')}</button>
+    <button class="icon-btn" id="who-settings" title="${esc(T('Settings'))}">${icon('settings')}</button>`;
   renderHead($('#chip-head'), a);
-  chip.onclick = openAccounts;
+  $('#who').onclick = openAccounts;
+  $('#who-accts').onclick = openAccounts;
+  $('#who-settings').onclick = () => Router.go('settings');
+  $('#who-settings').classList.toggle('on', Router.current?.name === 'settings');
 }
 function renderTasks() {
   const items = [];
@@ -41,6 +81,7 @@ function renderTasks() {
   }
   for (const t of Object.values(State.tasks)) items.push(t);
   $('#tasks').innerHTML = items.map((t) => `<div class="task ${t.error ? 'error' : ''}"><div class="label"><b>${esc(t.label)}</b>${t.progress != null ? `<span>${Math.round(t.progress * 100)}%</span>` : ''}</div>${t.detail ? `<div class="detail">${esc(t.detail)}</div>` : ''}${t.error ? '' : `<div class="progress ${t.progress == null ? 'indeterminate' : ''}"><div style="width:${(t.progress || 0) * 100}%"></div></div>`}</div>`).join('');
+  renderSidePlay();
 }
 
 /* ---------- main-process events ---------- */
@@ -80,7 +121,12 @@ on('window:maximized', (m) => ($('#win-max').innerHTML = icon(m ? 'copy' : 'max'
 Bus.on('launch', renderTasks);
 Bus.on('tasks', renderTasks);
 Bus.on('runs', renderNav);
+Bus.on('runs', renderSidePlay);
 Bus.on('route', renderNav);
+Bus.on('instances', renderSideInstances);
+Bus.on('instances', renderSidePlay);
+Bus.on('settings', renderSidePlay);
+Bus.on('settings', renderSideInstances);
 Bus.on('accounts', renderAccountChip);
 Bus.on('settings', (s) => applyTheme(s));
 
@@ -114,6 +160,8 @@ document.addEventListener('drop', async (e) => {
   $('#win-min').innerHTML = icon('min');
   $('#win-max').innerHTML = icon('max');
   $('#win-close').innerHTML = icon('close');
+  $('#tb-changelog').innerHTML = icon('star') + '<span>What&#39;s new</span>';
+  $('#tb-changelog').onclick = () => Router.go('changelog');
   $('#nav-back').onclick = () => Router.back();
   $('#nav-fwd').onclick = () => Router.forward();
   $('#win-min').onclick = () => api('win:minimize');
@@ -123,9 +171,10 @@ document.addEventListener('drop', async (e) => {
 
   [State.settings, State.info] = await Promise.all([api('settings:get'), api('app:info')]);
   applyTheme(State.settings);
+  $('#app-ver').textContent = State.info.version ? State.info.version : '';
   await Promise.all([refreshInstances(), refreshAccounts()]);
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
-  renderNav(); renderAccountChip(); renderTasks();
+  renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
   Router.go('home');
   if (State.settings.firstRun) {
     await saveSettings({ firstRun: false });

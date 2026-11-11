@@ -12,30 +12,50 @@ function miniMarkdown(md) {
 }
 
 Pages.browse = {
+  TYPES: [['mod', 'Mods'], ['modpack', 'Modpacks'], ['resourcepack', 'Resource Packs'], ['shader', 'Shaders'], ['datapack', 'Datapacks']],
+  /** A content-hub card: banner image, overlapping icon, title, downloads, description, author, install. */
+  hubCard(p) {
+    const banner = p.featured_gallery || (p.gallery && p.gallery[0]) || '';
+    return `<div class="hub-card" data-pid="${esc(p.project_id)}" data-ptype="${esc(p.project_type || '')}">
+      <div class="banner ${banner ? '' : 'blank'}" ${banner ? `style="background-image:url('${esc(banner)}')"` : ''}>${p.icon_url ? `<img class="pic" src="${esc(p.icon_url)}" loading="lazy" alt="">` : `<div class="pic"></div>`}</div>
+      <div class="body2">
+        <div class="info"><div class="t"><b title="${esc(p.title)}">${esc(p.title)}</b><span class="dl">${icon('download')}${fmtNum(p.downloads)}</span></div>
+        <div class="d">${esc(p.description)}</div></div>
+        <div class="foot"><span class="by">${icon('user')}${esc(p.author)}</span><button class="btn sm primary" data-quick="${esc(p.project_id)}">${icon('download')}${T('Install')}</button></div>
+      </div>
+    </div>`;
+  },
+  bindHub(root, type, target) {
+    $$('[data-pid]', root).forEach((c) => (c.onclick = (e) => { if (e.target.closest('button')) return; this.details(c.dataset.pid, c.dataset.ptype || type, target); }));
+    $$('[data-quick]', root).forEach((b) => (b.onclick = () => { const c = b.closest('[data-pid]'); this.install(b.dataset.quick, c?.dataset.ptype || type, target); }));
+  },
   async render(el, params, ctx) {
     const target = params.instanceId ? State.instances.find((i) => i.id === params.instanceId) : null;
     const st = { type: params.type || 'mod', query: '', gameVersion: target?.versionId || '', loader: target && target.loader.type !== 'vanilla' ? target.loader.type : '', cats: new Set(), sort: 'relevance', offset: 0, total: 0 };
-    const TYPES = [['mod', 'Mods'], ['modpack', 'Modpacks'], ['resourcepack', 'Resource Packs'], ['shader', 'Shaders'], ['datapack', 'Datapacks']];
+    let view = localStorage.getItem('browse.view') || 'grid';
+    const typeLabel = () => this.TYPES.find(([k]) => k === st.type)[1];
     el.innerHTML = `
-      <div class="page-head"><div><h1>${T('Browse')}</h1><div class="sub">${target ? `Installing into <b>${esc(target.name)}</b> · ${esc(target.versionId)} · ${loaderLabel(target)} <a href="#" id="clear-target">(any instance)</a>` : 'Mods, modpacks, resource packs, shaders and datapacks from Modrinth'}</div></div></div>
-      <div class="tabs" id="types">${TYPES.map(([k, l]) => `<button data-type="${k}" class="${k === st.type ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div class="browse">
-        <aside class="filters">
-          <div class="group"><h4>Minecraft version</h4><select id="f-ver" style="width:100%"><option value="">Any version</option></select></div>
-          <div class="group" id="loader-group"><h4>Loader</h4><select id="f-loader" style="width:100%"><option value="">Any loader</option><option value="fabric">Fabric</option><option value="quilt">Quilt</option><option value="forge">Forge</option><option value="neoforge">NeoForge</option></select></div>
-          <div class="group"><h4>Categories</h4><div class="chips" id="f-cats"></div></div>
-        </aside>
-        <section>
-          <div class="row" style="margin-bottom:14px">
-            <div class="search grow">${icon('search')}<input type="search" id="q" placeholder="${T('Search')} Modrinth…"></div>
-            <select id="sort"><option value="relevance">Relevance</option><option value="downloads">Downloads</option><option value="follows">Follows</option><option value="newest">Newest</option><option value="updated">Recently updated</option></select>
-          </div>
-          <div class="faint small" id="count" style="margin-bottom:8px"></div>
-          <div class="stack" id="results"></div>
-          <div class="row" style="justify-content:center;margin-top:16px"><button class="btn hidden" id="more">Load more</button></div>
-        </section>
-      </div>`;
+      <div class="page-head"><div><h1>${T('Browse')}</h1><div class="sub">${target ? `Installing into <b>${esc(target.name)}</b> · ${esc(target.versionId)} · ${loaderLabel(target)} <a href="#" id="clear-target">(any instance)</a>` : 'Find and install modpacks, mods, shaders and resource packs'}</div></div></div>
+      <div class="search big">${icon('search')}<input type="search" id="q" placeholder="${T('Search')} ${esc(typeLabel().toLowerCase())}…"></div>
+      <div class="hub-bar">
+        <h2 id="type-title">${esc(typeLabel())}</h2><span class="cnt" id="count"></span>
+        <div class="grow"></div>
+        <span class="chip">${icon('globe')}Modrinth</span>
+        <div class="seg icons" id="view"><button data-v="grid" title="Grid">${icon('grid')}</button><button data-v="list" title="List">${icon('list')}</button></div>
+      </div>
+      <div class="hub-filters">
+        <select id="f-type">${this.TYPES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+        <select id="f-cat"><option value="">All categories</option></select>
+        <select id="f-ver"><option value="">Any version</option></select>
+        <select id="f-loader"><option value="">Any loader</option><option value="fabric">Fabric</option><option value="quilt">Quilt</option><option value="forge">Forge</option><option value="neoforge">NeoForge</option></select>
+        <select id="sort"><option value="relevance">Relevance</option><option value="downloads">Downloads</option><option value="follows">Follows</option><option value="newest">Newest</option><option value="updated">Recently updated</option></select>
+      </div>
+      <div class="hub-grid" id="results"></div>
+      <div class="row" style="justify-content:center;margin-top:16px"><button class="btn hidden" id="more">Load more</button></div>`;
     if (target) $('#clear-target', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: st.type }, { replace: true }); };
+    $('#f-type', el).value = st.type;
+    const applyView = () => { $('#results', el).classList.toggle('as-list', view === 'list'); $$('[data-v]', el).forEach((b) => b.classList.toggle('on', b.dataset.v === view)); };
+    applyView();
     const versions = (await getVersions()).filter((v) => v.type === 'release');
     $('#f-ver', el).innerHTML += versions.map((v) => `<option>${esc(v.id)}</option>`).join('');
     $('#f-ver', el).value = st.gameVersion;
@@ -44,9 +64,11 @@ Pages.browse = {
     const drawCats = async () => {
       tags = tags || (await api('modrinth:tags').catch(() => ({ categories: [] })));
       const cats = tags.categories.filter((c) => c.project_type === (st.type === 'datapack' ? 'mod' : st.type) && c.header !== 'resolutions');
-      $('#f-cats', el).innerHTML = cats.map((c) => `<span class="chip toggle ${st.cats.has(c.name) ? 'on' : ''}" data-cat="${esc(c.name)}">${esc(c.name.replace(/-/g, ' '))}</span>`).join('');
-      $$('[data-cat]', el).forEach((c) => (c.onclick = () => { st.cats.has(c.dataset.cat) ? st.cats.delete(c.dataset.cat) : st.cats.add(c.dataset.cat); c.classList.toggle('on'); search(); }));
-      $('#loader-group', el).classList.toggle('hidden', !['mod', 'modpack'].includes(st.type));
+      $('#f-cat', el).innerHTML = `<option value="">All categories</option>` + cats.map((c) => `<option value="${esc(c.name)}">${esc(c.name.replace(/-/g, ' ').replace(/^\w/, (m) => m.toUpperCase()))}</option>`).join('');
+      $('#f-cat', el).value = [...st.cats][0] || '';
+      $('#f-loader', el).disabled = !['mod', 'modpack'].includes(st.type);
+      $('#type-title', el).textContent = typeLabel();
+      $('#q', el).placeholder = `${T('Search')} ${typeLabel().toLowerCase()}…`;
     };
     let seq = 0;
     const search = async (append = false) => {
@@ -56,19 +78,16 @@ Pages.browse = {
         const r = await api('modrinth:search', { query: st.query, type: st.type, gameVersion: st.gameVersion, loader: st.loader, categories: [...st.cats], sort: st.sort, offset: st.offset });
         if (my !== seq) return;
         st.total = r.total_hits;
-        $('#count', el).textContent = `${fmtNum(r.total_hits)} results`;
-        const html = r.hits.map((p) => `<div class="project" data-pid="${esc(p.project_id)}">
-          ${p.icon_url ? `<img src="${esc(p.icon_url)}" loading="lazy">` : '<div class="ph"></div>'}
-          <div class="grow" style="min-width:0"><div class="t">${esc(p.title)} <span class="faint small">by ${esc(p.author)}</span></div><div class="d">${esc(p.description)}</div>
-          <div class="row wrap"><span class="chip">${icon('download')}${fmtNum(p.downloads)}</span><span class="chip">${icon('star')}${fmtNum(p.follows)}</span>${(p.display_categories || []).slice(0, 4).map((c) => `<span class="chip">${esc(c)}</span>`).join('')}<span class="faint small">updated ${timeAgo(new Date(p.date_modified).getTime())}</span></div></div>
-          <button class="btn sm primary" data-quick="${esc(p.project_id)}">${icon('download')}${T('Install')}</button></div>`).join('');
-        if (append) $('#results', el).insertAdjacentHTML('beforeend', html); else $('#results', el).innerHTML = html || `<div class="empty">${icon('search')}<div>Nothing found.</div></div>`;
+        $('#count', el).textContent = `(${fmtNum(r.total_hits)} results)`;
+        const html = r.hits.map((p) => this.hubCard({ ...p, project_type: st.type === 'datapack' ? 'datapack' : p.project_type || st.type })).join('');
+        if (append) $('#results', el).insertAdjacentHTML('beforeend', html); else $('#results', el).innerHTML = html || `<div class="empty" style="grid-column:1/-1">${icon('search')}<div>Nothing found.</div></div>`;
         $('#more', el).classList.toggle('hidden', st.offset + r.hits.length >= st.total);
-        $$('[data-pid]', el).forEach((c) => (c.onclick = (e) => { if (e.target.closest('button')) return; this.details(c.dataset.pid, st.type, target); }));
-        $$('[data-quick]', el).forEach((b) => (b.onclick = () => this.install(b.dataset.quick, st.type, target)));
-      } catch (e) { $('#results', el).innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; }
+        this.bindHub($('#results', el), st.type, target);
+      } catch (e) { $('#results', el).innerHTML = `<div class="empty" style="grid-column:1/-1">${icon('alert')}<div>${esc(e.message)}</div></div>`; }
     };
-    $$('[data-type]', el).forEach((b) => (b.onclick = () => { st.type = b.dataset.type; st.cats.clear(); $$('[data-type]', el).forEach((x) => x.classList.toggle('on', x === b)); drawCats(); search(); }));
+    $('#f-type', el).onchange = (e) => { st.type = e.target.value; st.cats.clear(); drawCats(); search(); };
+    $('#f-cat', el).onchange = (e) => { st.cats.clear(); if (e.target.value) st.cats.add(e.target.value); search(); };
+    $$('[data-v]', el).forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('browse.view', view); applyView(); }));
     $('#q', el).oninput = debounce((e) => { st.query = e.target.value; search(); }, 300);
     $('#sort', el).onchange = (e) => { st.sort = e.target.value; search(); };
     $('#f-ver', el).onchange = (e) => { st.gameVersion = e.target.value; search(); };

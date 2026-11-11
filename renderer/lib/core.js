@@ -60,7 +60,12 @@ const ICONS = {
   bug: '<rect x="7" y="6" width="10" height="14" rx="5"/><path d="M12 10v10M3 13h4M17 13h4M5 7l3 2M19 7l-3 2M5 19l3-2M19 19l-3-2"/>',
   discord: '<path d="M8 17c-2 0-4-1-5-2 0-4 1-8 3-10 1-.5 2.5-1 4-1l.5 1c1-.2 2-.2 3 0l.5-1c1.5 0 3 .5 4 1 2 2 3 6 3 10-1 1-3 2-5 2l-1-2"/><circle cx="9" cy="12" r="1.2" fill="currentColor"/><circle cx="15" cy="12" r="1.2" fill="currentColor"/>',
   chart: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/>',
-  wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  sort: '<path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/>',
+  wifi:'<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/>',
 };
 const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${ICONS[name] || ''}</svg>`;
 

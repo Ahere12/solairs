@@ -1,57 +1,91 @@
 Pages.home = {
   async render(el, params, ctx) {
+    let featuredPacks = null;
     const draw = () => {
       const insts = State.instances;
-      const sel = insts.find((i) => i.id === State.settings.selectedInstance) || [...insts].sort((a, b) => b.lastPlayed - a.lastPlayed)[0];
-      const recent = [...insts].sort((a, b) => (b.pinned - a.pinned) || (b.lastPlayed - a.lastPlayed)).slice(0, 6);
-      const totalPlay = insts.reduce((s, i) => s + (i.playTime || 0), 0);
+      const recent = [...insts].sort((a, b) => (b.pinned - a.pinned) || ((b.lastPlayed || 0) - (a.lastPlayed || 0))).slice(0, 10);
       const acct = State.accounts.accounts.find((a) => a.id === State.accounts.active);
       const hour = new Date().getHours();
-      const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+      const greet = hour < 5 ? 'Up late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+      const tagline = hour < 5 ? 'The sun will be up soon.' : hour < 12 ? 'A fresh day to build something.' : hour < 18 ? 'Plenty of daylight left.' : 'Golden hour — perfect for a session.';
       el.innerHTML = `
-        <section class="hero">
-          <div class="sunburst">${SUN_SVG.replace('class="sun"', 'width="100%" height="100%"')}</div>
-          <div class="kicker">${esc(greet)}${acct ? ', ' + esc(acct.name) : ''}</div>
-          <h1>${sel ? esc(sel.name) : 'Welcome to Solaris'}</h1>
-          <div class="desc">${sel ? `Minecraft ${esc(sel.versionId)} · ${loaderLabel(sel)} · ${sel.lastPlayed ? `played ${fmtDuration(sel.playTime)} · last ${timeAgo(sel.lastPlayed)}` : 'never played'}` :'Create your first instance — or one-click the Solaris Client, an all-in-one performance modpack that keeps itself up to date.'}</div>
-          <div class="play-row">
-            ${sel ? `
-              ${playButton(sel, { size: 'lg' })}
-              <div class="inst-picker" id="pick">${instIcon(sel, 'sm')}<div><div class="t">${esc(sel.name)}</div><div class="s">${esc(sel.versionId)} · ${loaderLabel(sel)}</div></div><div class="grow"></div>${icon('fwd')}</div>
-            ` : `<button class="btn primary lg play" id="first-solaris">${icon('sun')}Get Solaris Client</button><button class="btn lg" id="first-new">${icon('plus')}${T('New instance')}</button>`}
-          </div>
-          <div class="launch-status" id="lstatus">${sel ? esc(launchLabel(sel.id)) : ''}</div>
-        </section>
-
-        <div class="grid cols-3" style="margin-top:18px">
-          <div class="card stat"><span class="v">${insts.length}</span><span class="l">Instances</span></div>
-          <div class="card stat"><span class="v">${fmtDuration(totalPlay)}</span><span class="l">Total play time</span></div>
-          <div class="card stat"><span class="v">${Object.values(State.runs).filter((r) => r.running).length}</span><span class="l">Running now</span></div>
+        <div class="dash-head">
+          <div><h1>${esc(greet)}${acct ? ', ' + esc(acct.name) : ''}</h1><div class="sub">${esc(tagline)}</div></div>
+          <button class="lib-link" id="to-lib">${icon('box')}<span><b>Browse Library</b><small>Explore your instances</small></span></button>
         </div>
 
-        ${recent.length ? `<h2>Jump back in</h2><div class="grid cols-auto" id="recent">${recent.map((i) => Pages.library.card(i)).join('')}</div>` : ''}
+        ${insts.length ? `
+          <div class="quick-play">
+            <span class="lbl">${icon('zap')}Quick Play</span>
+            ${recent.map((i) => `<button class="qp ${isRunning(i.id) ? 'running' : ''}" ${isRunning(i.id) ? `data-stop="${esc(i.id)}"` : `data-play="${esc(i.id)}"`} title="${isRunning(i.id) ? 'Stop' : 'Play'} ${esc(i.name)} · ${esc(i.versionId)}">${instIcon(i, 'sm')}</button>`).join('')}
+            <div class="grow"></div>
+            <span class="launch-status" id="lstatus"></span>
+          </div>` : `
+          <section class="hero-strip">
+            <div class="sunburst">${SUN_SVG.replace('class="sun"', 'width="100%" height="100%"')}</div>
+            <div class="txt"><h2>Welcome to Solaris</h2><div class="muted">Create your first instance — or one-click the Solaris Client, an all-in-one performance modpack that keeps itself up to date.</div>
+              <div class="row"><button class="btn primary" id="first-solaris">${icon('sun')}Get Solaris Client</button><button class="btn" id="first-new">${icon('plus')}${T('New instance')}</button></div></div>
+          </section>`}
 
-        <div class="grid cols-2" style="margin-top:8px">
-          <div><h2>Featured servers</h2><div class="stack" id="featured"><div class="faint small">Pinging servers…</div></div></div>
-          <div><h2>What's new in Solaris</h2><div class="card" id="news"></div></div>
+        <div class="section-head"><h2>Explore modpacks</h2><div class="grow"></div><a href="#" id="to-browse" class="small">See all →</a></div>
+        <div class="hub-grid" id="packs" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))"><div class="faint small">Loading…</div></div>
+
+        <div class="dash-cols">
+          <div><div class="section-head"><h2>Servers</h2><div class="grow"></div><a href="#" id="to-servers" class="small">All servers →</a></div><div class="stack" id="featured" style="gap:6px"><div class="faint small">Pinging servers…</div></div></div>
+          <div><div class="section-head"><h2>Your Playtime</h2></div><div class="card playtime" id="ptime"></div></div>
+        </div>
+
+        <div class="section-head"><h2>What's new in Solaris</h2></div><div class="card" id="news"></div>`;
+      $('#to-lib', el).onclick = () => Router.go('library');
+      $('#to-browse', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: 'modpack' }); };
+      $('#to-servers', el).onclick = (e) => { e.preventDefault(); Router.go('servers'); };
+      if (!insts.length) { $('#first-new', el).onclick = () => openNewInstance(); $('#first-solaris', el).onclick = () => Router.go('solaris'); }
+      updateStatus();
+      drawPlaytime(); loadPacks(); loadNews(); loadFeatured();
+    };
+    const updateStatus = () => {
+      const s = $('#lstatus', el); if (!s) return;
+      const id = Object.keys(State.launch).find((k) => State.launch[k]?.stage || State.launch[k]?.error);
+      s.textContent = id ? `${State.instances.find((i) => i.id === id)?.name || ''} · ${launchLabel(id)}` : '';
+    };
+    const drawPlaytime = () => {
+      const box = $('#ptime', el); if (!box) return;
+      const insts = State.instances;
+      const total = insts.reduce((s, i) => s + (i.playTime || 0), 0);
+      const played = insts.filter((i) => i.playTime > 0);
+      const top = [...insts].sort((a, b) => (b.playTime || 0) - (a.playTime || 0)).slice(0, 7);
+      const max = Math.max(1, ...top.map((i) => i.playTime || 0));
+      const longest = top[0];
+      box.innerHTML = `
+        <div class="big">${fmtDuration(total)}</div><div class="faint small">Across ${insts.length} instance${insts.length === 1 ? '' : 's'}</div>
+        <div class="pt-bars">${top.length ? top.map((i) => `<div class="b" title="${esc(i.name)} · ${fmtDuration(i.playTime)}"><span class="faint small" style="font-size:10px">${i.playTime ? fmtDuration(i.playTime) : ''}</span><div class="bar ${i.playTime ? '' : 'zero'}" style="height:${Math.max(4, ((i.playTime || 0) / max) * 100)}%"></div><span class="lbl">${esc(i.name)}</span></div>`).join('') : '<div class="faint small" style="margin:auto">Play something to see stats here.</div>'}</div>
+        <div class="pt-stats">
+          <div><b>${played.length ? fmtDuration(total / played.length) : '0m'}</b><span>Avg per instance</span></div>
+          <div><b title="${esc(longest?.name || '')}">${longest?.playTime ? esc(longest.name) : '—'}</b><span>Most played</span></div>
+          <div><b>${Object.values(State.runs).filter((r) => r.running).length}</b><span>Running now</span></div>
         </div>`;
-      if (sel) $('#pick', el).onclick = async () => { const i = await chooseInstance({ title: 'Select instance' }); if (i) { await saveSettings({ selectedInstance: i.id }); draw(); } };
-      else { $('#first-new', el).onclick = () => openNewInstance(); $('#first-solaris', el).onclick = () => Router.go('solaris'); }
-      Pages.library.bindCards(el);
-      loadNews(); loadFeatured();
+    };
+    const loadPacks = async () => {
+      const box = $('#packs', el); if (!box) return;
+      try {
+        featuredPacks = featuredPacks || (await api('modrinth:search', { query: '', type: 'modpack', sort: 'downloads', offset: 0 })).hits.slice(0, 4);
+        if (!$('#packs', el)) return;
+        box.innerHTML = featuredPacks.map((p) => Pages.browse.hubCard({ ...p, project_type: 'modpack' })).join('');
+        Pages.browse.bindHub(box, 'modpack', null);
+      } catch (e) { box.innerHTML = `<div class="faint small">Couldn't reach Modrinth (${esc(e.message)})</div>`; }
     };
     const loadNews = async () => {
       const log = await api('data:changelog');
       const r = log[0];
       if (!r || !$('#news', el)) return;
-      const entries = r.groups.flatMap((g) => g.entries.map((e) => ({ ...e, area: g.area }))).slice(0, 6);
+      const entries = r.groups.flatMap((g) => g.entries.map((e) => ({ ...e, area: g.area }))).slice(0, 5);
       $('#news', el).innerHTML = `<div class="row" style="margin-bottom:6px"><b>Solaris ${esc(r.version)}</b><span class="faint small">${fmtDate(r.date)}</span><div class="grow"></div><a href="#" id="all-news" class="small">Full changelog →</a></div>${entries.map((e) => `<div class="news-item"><span class="chip ${e.type === 'feature' ? 'accent' : e.type === 'bugfix' ? 'danger' : 'info'}">${esc(e.area)}</span><span class="small">${esc(e.text)}</span></div>`).join('')}`;
       $('#all-news', el).onclick = (e) => { e.preventDefault(); Router.go('changelog'); };
     };
     const loadFeatured = async () => {
       const { featured } = await api('servers:list');
       const box = $('#featured', el); if (!box) return;
-      box.innerHTML = featured.slice(0, 4).map((s) => `<div class="server" data-addr="${esc(s.address)}"><img class="fav" alt=""><div class="grow" style="min-width:0"><div class="row"><b>${esc(s.name)}</b><span class="chip">${esc(s.region)}</span></div><div class="faint small mono">${esc(s.address)}</div></div><div class="players"><div class="n">—</div><div class="faint small">players</div></div><button class="btn sm" data-join="${esc(s.address)}">Join</button></div>`).join('');
+      box.innerHTML = featured.slice(0, 5).map((s, n) => `<div class="srv-row" data-addr="${esc(s.address)}"><img class="fav" alt=""><div class="grow" style="min-width:0"><div class="row" style="gap:8px"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</b><span class="chip">${esc(s.region)}</span></div><span class="pc">${icon('users')}<span class="n">—</span></span></div><span class="rank">#${n + 1}</span><button class="btn sm" data-join="${esc(s.address)}">Join</button></div>`).join('');
       $$('[data-join]', box).forEach((b) => (b.onclick = () => Pages.servers.join(b.dataset.join)));
       for (const row of $$('[data-addr]', box)) {
         api('servers:ping', row.dataset.addr).then((r) => {
@@ -63,7 +97,7 @@ Pages.home = {
     };
     draw();
     ctx.on('instances', draw);
-    ctx.on('launch', (id) => { const s = $('#lstatus', el); if (s && id === State.settings.selectedInstance) s.textContent = launchLabel(id); if (!State.launch[id] || State.launch[id].error) draw(); });
+    ctx.on('launch', (id) => { updateStatus(); if (!State.launch[id] || State.launch[id].error) draw(); });
     ctx.on('runs', draw);
   },
 };

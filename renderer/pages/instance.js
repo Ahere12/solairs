@@ -25,7 +25,7 @@ Pages.instance = {
         ...EMOJIS.slice(0, 10).map((em) => ({ label: em === 'sun' ? 'Solaris' : em, icon: 'star', action: async () => { await api('instances:update', inst.id, { icon: em }); refreshInstances(); } })),
       ]);
     };
-    el.innerHTML = `<div id="ihead" style="margin-bottom:22px"></div>
+    el.innerHTML = `<div id="ihead" class="inst-hero"></div>
       <div class="tabs" id="itabs">
         <button data-t="content">Content</button><button data-t="worlds">Worlds</button><button data-t="console">Console</button><button data-t="settings">Settings</button>
       </div>
