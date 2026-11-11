@@ -16,7 +16,8 @@ function modal({ title, body = '', footer = '', wide = false, onClose } = {}) {
   back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}"><header><h2>${esc(title)}</h2><button class="icon-btn" data-close>${icon('close')}</button></header><div class="content">${body}</div>${footer ? `<footer>${footer}</footer>` : ''}</div>`;
   document.body.appendChild(back);
   const close = () => { back.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  // Escape closes only the top-most dialog (and not while a lightbox is open on top of it)
+  const onKey = (e) => { if (e.key === 'Escape' && !$('.lightbox') && [...document.querySelectorAll('.modal-back')].pop() === back) { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey);
   back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
   back.querySelector('[data-close]').onclick = close;
@@ -340,17 +341,23 @@ async function openNewInstance(preset = {}) {
   refreshLoaders();
   m.$('[data-cancel]').onclick = () => m.close();
   m.$('[data-import]').onclick = () => { m.close(); openImport(); };
-  m.$('[data-create]').onclick = async () => {
+  m.$('[data-create]').onclick = async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
     const versionId = m.$('#ni-version').value;
+    if (!versionId || versionId === 'Loading…') return toast('Pick a Minecraft version first', 'warn');
     const name = m.$('#ni-name').value.trim() || `${LOADER_NAMES[loader]} ${versionId}`;
+    if (loader !== 'vanilla' && !m.$('#ni-lv').value) return toast(`Pick a ${LOADER_NAMES[loader]} version first`, 'warn');
+    btn.disabled = true;
     try {
       const inst = await api('instances:create', { name, versionId, loader: { type: loader, version: loader === 'vanilla' ? null : m.$('#ni-lv').value }, icon: chosenIcon });
       m.close();
       await refreshInstances();
       toast(`Created ${inst.name}`);
       Router.go('library', { spotlight: inst.id });
-    } catch (e) { toastErr(e); }
+    } catch (er) { toastErr(er); btn.disabled = false; }
   };
+  m.$('#ni-name').onkeydown = (e) => { if (e.key === 'Enter') m.$('[data-create]').click(); };
   m.$('#ni-name').focus();
 }
 

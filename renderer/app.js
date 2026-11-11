@@ -132,6 +132,7 @@ Bus.on('settings', (s) => applyTheme(s));
 
 /* ---------- keyboard, mouse, drag & drop ---------- */
 document.addEventListener('keydown', (e) => {
+  if ($('.modal-back') || $('.lightbox')) return; // don't navigate behind an open dialog
   if (e.altKey && e.key === 'ArrowLeft') { Router.back(); return; }
   if (e.altKey && e.key === 'ArrowRight') { Router.forward(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) && !e.ctrlKey) return;

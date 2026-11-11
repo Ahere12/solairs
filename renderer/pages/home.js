@@ -7,7 +7,8 @@ Pages.home = {
       const acct = State.accounts.accounts.find((a) => a.id === State.accounts.active);
       const hour = new Date().getHours();
       const greet = hour < 5 ? 'Up late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-      const tagline = hour < 5 ? 'The sun will be up soon.' : hour < 12 ? 'A fresh day to build something.' : hour < 18 ? 'Plenty of daylight left.' : 'Golden hour — perfect for a session.';
+      const show = { packs: look(State.settings, 'homeModpacks'), servers: look(State.settings, 'homeServers'), playtime: look(State.settings, 'homePlaytime'), news: look(State.settings, 'homeNews') };
+      const tagline =hour < 5 ? 'The sun will be up soon.' : hour < 12 ? 'A fresh day to build something.' : hour < 18 ? 'Plenty of daylight left.' : 'Golden hour — perfect for a session.';
       el.innerHTML = `
         <div class="dash-head">
           <div><h1>${esc(greet)}${acct ? ', ' + esc(acct.name) : ''}</h1><div class="sub">${esc(tagline)}</div></div>
@@ -27,18 +28,20 @@ Pages.home = {
               <div class="row"><button class="btn primary" id="first-solaris">${icon('sun')}Get Solaris Client</button><button class="btn" id="first-new">${icon('plus')}${T('New instance')}</button></div></div>
           </section>`}
 
-        <div class="section-head"><h2>Explore modpacks</h2><div class="grow"></div><a href="#" id="to-browse" class="small">See all →</a></div>
-        <div class="hub-grid" id="packs" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))"><div class="faint small">Loading…</div></div>
+        ${show.packs ? `<div class="section-head"><h2>Explore modpacks</h2><div class="grow"></div><a href="#" id="to-browse" class="small">See all →</a></div>
+        <div class="hub-grid" id="packs" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))"><div class="faint small">Loading…</div></div>` : ''}
 
-        <div class="dash-cols">
-          <div><div class="section-head"><h2>Servers</h2><div class="grow"></div><a href="#" id="to-servers" class="small">All servers →</a></div><div class="stack" id="featured" style="gap:6px"><div class="faint small">Pinging servers…</div></div></div>
-          <div><div class="section-head"><h2>Your Playtime</h2></div><div class="card playtime" id="ptime"></div></div>
-        </div>
+        ${show.servers || show.playtime ? `<div class="dash-cols" ${show.servers && show.playtime ? '' : 'style="grid-template-columns:1fr"'}>
+          ${show.servers ? `<div><div class="section-head"><h2>Servers</h2><div class="grow"></div><a href="#" id="to-servers" class="small">All servers →</a></div><div class="stack" id="featured" style="gap:6px"><div class="faint small">Pinging servers…</div></div></div>` : ''}
+          ${show.playtime ? `<div><div class="section-head"><h2>Your Playtime</h2></div><div class="card playtime" id="ptime"></div></div>` : ''}
+        </div>` : ''}
 
-        <div class="section-head"><h2>What's new in Solaris</h2></div><div class="card" id="news"></div>`;
+        ${show.news ? `<div class="section-head"><h2>What's new in Solaris</h2></div><div class="card" id="news"></div>` : ''}
+        ${!show.packs && !show.servers && !show.playtime && !show.news ? `<p class="faint small" style="margin-top:24px">Home sections are hidden — turn them back on in <a href="#" id="to-look">Settings → Appearance</a>.</p>` : ''}`;
       $('#to-lib', el).onclick = () => Router.go('library');
-      $('#to-browse', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: 'modpack' }); };
-      $('#to-servers', el).onclick = (e) => { e.preventDefault(); Router.go('servers'); };
+      if ($('#to-browse', el)) $('#to-browse', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: 'modpack' }); };
+      if ($('#to-servers', el)) $('#to-servers', el).onclick = (e) => { e.preventDefault(); Router.go('servers'); };
+      if ($('#to-look', el)) $('#to-look', el).onclick = (e) => { e.preventDefault(); Router.go('settings', { tab: 'appearance' }); };
       if (!insts.length) { $('#first-new', el).onclick = () => openNewInstance(); $('#first-solaris', el).onclick = () => Router.go('solaris'); }
       updateStatus();
       drawPlaytime(); loadPacks(); loadNews(); loadFeatured();
@@ -99,5 +102,8 @@ Pages.home = {
     ctx.on('instances', draw);
     ctx.on('launch', (id) => { updateStatus(); if (!State.launch[id] || State.launch[id].error) draw(); });
     ctx.on('runs', draw);
+    let lastLook = '';
+    ctx.on('settings', (s) => { const k = ['homeModpacks', 'homeServers', 'homePlaytime', 'homeNews'].map((x) => look(s, x)).join(); if (lastLook && k !== lastLook) draw(); lastLook = k; });
+    lastLook = ['homeModpacks', 'homeServers', 'homePlaytime', 'homeNews'].map((x) => look(State.settings, x)).join();
   },
 };

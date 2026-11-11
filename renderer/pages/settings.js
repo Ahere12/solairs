@@ -25,6 +25,42 @@ function applyTheme(s) {
     root.style.setProperty('--panel', c.panel); root.style.setProperty('--panel-2', mix(c.panel, 10)); root.style.setProperty('--panel-3', mix(c.panel, 24));
     root.style.setProperty('--text', c.text);
   }
+  applyLook(s);
+}
+
+/* ---------- background & interface options (stored in settings, all optional) ---------- */
+const BACKGROUNDS = {
+  glow: { name: 'Solar glow' },
+  sunset: { name: 'Sunset' },
+  rays: { name: 'Sun rays' },
+  aurora: { name: 'Aurora' },
+  stars: { name: 'Night sky' },
+  ember: { name: 'Embers' },
+  plain: { name: 'Plain' },
+  image: { name: 'Your image' },
+};
+const LOOK_DEFAULTS = { bgStyle: 'glow', bgImage: '', bgDim: 35, bgBlur: 0, panelOpacity: 100, uiScale: 100, cornerStyle: 'rounded', compactSidebar: false, reduceMotion: false, showSideInstances: true, homeModpacks: true, homeServers: true, homePlaytime: true, homeNews: true };
+const look = (s, k) => (s?.[k] ?? LOOK_DEFAULTS[k]);
+const fileUrl = (p) => 'file:///' + String(p).replace(/\\/g, '/').replace(/^\/+/, '').split('/').map((seg, i) => (i === 0 && /^[a-z]:$/i.test(seg) ? seg : encodeURIComponent(seg))).join('/');
+function applyLook(s) {
+  const root = document.documentElement;
+  let style = look(s, 'bgStyle');
+  if (!BACKGROUNDS[style] || (style === 'image' && !s.bgImage)) style = 'glow';
+  root.dataset.bg = style;
+  const img = $('#bg-layer .bg-img');
+  if (img) img.style.backgroundImage = style === 'image' ? `url("${fileUrl(s.bgImage)}")` : '';
+  root.style.setProperty('--bg-dim', style === 'image' ? String(look(s, 'bgDim') / 100) : '0');
+  root.style.setProperty('--bg-blur', (style === 'image' ? look(s, 'bgBlur') : 0) + 'px');
+  const op = Math.min(100, Math.max(40, +look(s, 'panelOpacity')));
+  root.style.setProperty('--panel-mix', op + '%');
+  root.toggleAttribute('data-glass', op < 100);
+  const zoom = Math.min(150, Math.max(75, +look(s, 'uiScale'))) / 100;
+  root.style.zoom = String(zoom);
+  root.style.setProperty('--zoom', String(zoom));
+  root.dataset.corners = look(s, 'cornerStyle');
+  root.toggleAttribute('data-compact', !!look(s, 'compactSidebar'));
+  root.toggleAttribute('data-reduce-motion', !!look(s, 'reduceMotion'));
+  root.toggleAttribute('data-hide-side-insts', !look(s, 'showSideInstances'));
 }
 
 Pages.settings = {
@@ -35,15 +71,23 @@ Pages.settings = {
       <div class="settings"><nav>${TABS.map(([k, l, ic]) => `<button class="nav-item" data-st="${k}">${icon(ic)}${l}</button>`).join('')}</nav><div id="sbody"></div></div>`;
     const show = (t) => {
       tab = t;
+      this.stopKeyCapture();
       $$('[data-st]', el).forEach((b) => b.classList.toggle('active', b.dataset.st === t));
       this[t]($('#sbody', el));
     };
     $$('[data-st]', el).forEach((b) => (b.onclick = () => show(b.dataset.st)));
     show(tab);
+    return () => this.stopKeyCapture();
   },
   /* helpers */
   toggle(key, title, desc) {
     return `<div class="setting"><div class="txt"><div class="t">${title}</div><div class="d">${desc}</div></div><div class="ctl"><label class="switch"><input type="checkbox" data-bool="${key}" ${State.settings[key] ? 'checked' : ''}><span></span></label></div></div>`;
+  },
+  stopKeyCapture() {
+    if (this._keyCapture) { document.removeEventListener('keydown', this._keyCapture, true); this._keyCapture = null; }
+  },
+  lookToggle(key, title, desc) {
+    return `<div class="setting"><div class="txt"><div class="t">${title}</div><div class="d">${desc}</div></div><div class="ctl"><label class="switch"><input type="checkbox" data-look="${key}" ${look(State.settings, key) ? 'checked' : ''}><span></span></label></div></div>`;
   },
   bind(box) {
     $$('[data-bool]', box).forEach((c) => (c.onchange = async () => { await saveSettings({ [c.dataset.bool]: c.checked }); toast('Saved'); }));
@@ -78,8 +122,55 @@ Pages.settings = {
       <h3>Accent colour</h3><div class="swatches" style="margin:10px 0 6px">${ACCENTS.map((c) => `<div class="swatch ${c === s.accent ? 'on' : ''}" data-accent="${c}" style="background:${c}"></div>`).join('')}<input type="color" id="acc" value="${s.accent}" title="Custom colour" style="width:34px;height:34px;border:0;background:none;padding:0;cursor:pointer"></div>
       <div id="custom" class="${s.theme === 'custom' ? '' : 'hidden'}"><h3 style="margin-top:18px">Custom theme</h3>
         <div class="row wrap">${[['bg', 'Background'], ['panel', 'Panels'], ['text', 'Text']].map(([k, l]) => `<label class="field">${l}<input type="color" data-ct="${k}" value="${s.customTheme[k]}" style="width:80px;height:36px;border:0;background:none"></label>`).join('')}</div></div>
-      <p class="faint small" style="margin-top:16px">Changes preview live across the whole launcher.</p></div>`;
+      <p class="faint small" style="margin-top:16px">Changes preview live across the whole launcher.</p></div>
+
+    <h2>Background</h2>
+    <div class="card">
+      <div class="bg-grid">${Object.entries(BACKGROUNDS).map(([k, b]) => `<button class="bg-card ${look(s, 'bgStyle') === k ? 'on' : ''}" data-bgs="${k}"><div class="pv" data-bg-preview="${k}" ${k === 'image' && s.bgImage ? `style="${esc(`background-image:url("${fileUrl(s.bgImage)}")`)}"` : ''}>${k === 'image' && !s.bgImage ? icon('image') : ''}</div><span>${b.name}</span></button>`).join('')}</div>
+      <div id="img-opts" class="${look(s, 'bgStyle') === 'image' ? '' : 'hidden'}">
+        <div class="setting"><div class="txt"><div class="t">Background image</div><div class="d mono" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.bgImage ? esc(s.bgImage) : 'No image chosen yet'}</div></div><div class="ctl"><button class="btn sm" id="bg-pick">${icon('image')}Choose image…</button>${s.bgImage ? `<button class="btn sm ghost" id="bg-clear">${icon('close')}</button>` : ''}</div></div>
+        <div class="setting"><div class="txt"><div class="t">Darken: <span id="dimv">${look(s, 'bgDim')}</span>%</div><input type="range" min="0" max="90" step="5" value="${look(s, 'bgDim')}" data-range="bgDim" data-out="dimv"></div></div>
+        <div class="setting"><div class="txt"><div class="t">Blur: <span id="blurv">${look(s, 'bgBlur')}</span>px</div><input type="range" min="0" max="24" step="1" value="${look(s, 'bgBlur')}" data-range="bgBlur" data-out="blurv"></div></div>
+      </div>
+      <div class="setting"><div class="txt"><div class="t">Panel opacity: <span id="opv">${look(s, 'panelOpacity')}</span>%</div><div class="d">Lower it to let the background show through the sidebar and pages (frosted glass).</div><input type="range" min="40" max="100" step="5" value="${look(s, 'panelOpacity')}" data-range="panelOpacity" data-out="opv" style="margin-top:8px"></div></div>
+    </div>
+
+    <h2>Interface</h2>
+    <div class="card">
+      <div class="setting"><div class="txt"><div class="t">Interface size</div><div class="d">Scales the whole launcher.</div></div><div class="ctl"><div class="seg" id="scale">${[90, 100, 110, 125].map((n) => `<button data-scale="${n}" class="${+look(s, 'uiScale') === n ? 'on' : ''}">${n}%</button>`).join('')}</div></div></div>
+      <div class="setting"><div class="txt"><div class="t">Corners</div><div class="d">How rounded cards, buttons and panels are.</div></div><div class="ctl"><div class="seg">${[['sharp', 'Sharp'], ['rounded', 'Rounded'], ['round', 'Extra round']].map(([k, l]) => `<button data-corner="${k}" class="${look(s, 'cornerStyle') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div></div>
+      ${this.lookToggle('compactSidebar', 'Compact sidebar', 'Show only icons in the sidebar for more room.')}
+      ${this.lookToggle('showSideInstances', 'Instances in sidebar', 'List your instances under the menu for one-click access.')}
+      ${this.lookToggle('reduceMotion', 'Reduce motion', 'Turn off animations and transitions.')}
+    </div>
+
+    <h2>Home page</h2>
+    <div class="card">
+      ${this.lookToggle('homeModpacks', 'Explore modpacks', 'Popular modpacks from Modrinth.')}
+      ${this.lookToggle('homeServers', 'Servers', 'Featured servers with live player counts.')}
+      ${this.lookToggle('homePlaytime', 'Your Playtime', 'Play time per instance.')}
+      ${this.lookToggle('homeNews', "What's new", 'Latest Solaris changelog entries.')}
+    </div>
+    <div class="row" style="margin-top:14px"><button class="btn sm ghost" id="look-reset">${icon('refresh')}Reset appearance to defaults</button></div>`;
     const set = async (patch) => { await saveSettings(patch); applyTheme(State.settings); this.appearance(box); };
+    $$('[data-bgs]', box).forEach((b) => (b.onclick = async () => {
+      if (b.dataset.bgs === 'image' && !State.settings.bgImage) return pickImage();
+      set({ bgStyle: b.dataset.bgs });
+    }));
+    const pickImage = async () => {
+      const [f] = await api('dialog:open', { title: 'Choose a background image', filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }], properties: ['openFile'] });
+      if (f) set({ bgImage: f, bgStyle: 'image' });
+    };
+    if ($('#bg-pick', box)) $('#bg-pick', box).onclick = pickImage;
+    if ($('#bg-clear', box)) $('#bg-clear', box).onclick = () => set({ bgImage: '', bgStyle: 'glow' });
+    $$('[data-range]', box).forEach((r) => {
+      r.oninput = () => { $('#' + r.dataset.out, box).textContent = r.value; applyLook({ ...State.settings, [r.dataset.range]: +r.value }); };
+      r.onchange = () => saveSettings({ [r.dataset.range]: +r.value });
+    });
+    $$('[data-scale]', box).forEach((b) => (b.onclick = () => set({ uiScale: +b.dataset.scale })));
+    $$('[data-corner]', box).forEach((b) => (b.onclick = () => set({ cornerStyle: b.dataset.corner })));
+    $$('[data-look]', box).forEach((c) => (c.onchange = () => set({ [c.dataset.look]: c.checked })));
+    $('#look-reset', box).onclick = () => set({ ...LOOK_DEFAULTS, theme: 'solar', accent: '#ff9f1c' });
     $$('[data-theme]', box).forEach((d) => (d.onclick = () => set({ theme: d.dataset.theme })));
     $$('[data-accent]', box).forEach((d) => (d.onclick = () => set({ accent: d.dataset.accent })));
     $('#acc', box).oninput = (e) => { document.documentElement.style.setProperty('--accent', e.target.value); };
@@ -139,19 +230,23 @@ Pages.settings = {
     const kb = { ...State.settings.keybinds };
     box.innerHTML = `<div class="card">${Object.entries(KEY_LABELS).map(([k, l]) => `<div class="setting"><div class="txt"><div class="t">${l}</div></div><div class="ctl"><span class="kbd" data-kb="${k}">${esc(kb[k] || '—')}</span><button class="icon-btn" data-clear="${k}" title="Clear">${icon('close')}</button></div></div>`).join('')}
       <div class="row" style="justify-content:space-between;margin-top:12px"><span class="faint small">Click a shortcut, then press the new key combination. Alt+←/→ and mouse back/forward buttons navigate history.</span><button class="btn sm" id="kb-reset">Reset to defaults</button></div></div>`;
+    this.stopKeyCapture();
     $$('[data-kb]', box).forEach((k) => (k.onclick = () => {
-      $$('.kbd', box).forEach((x) => x.classList.remove('listening'));
+      this.stopKeyCapture();
+      $$('.kbd', box).forEach((x) => { x.classList.remove('listening'); x.textContent = State.settings.keybinds[x.dataset.kb] || '—'; });
       k.classList.add('listening'); k.textContent = 'Press keys…';
       const h = async (e) => {
         if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
-        e.preventDefault(); e.stopPropagation();
-        document.removeEventListener('keydown', h, true);
+        e.preventDefault(); e.stopImmediatePropagation();
+        this.stopKeyCapture();
+        if (!box.isConnected) return;
         if (e.key === 'Escape') return this.keybinds(box);
         const combo = comboOf(e);
         await saveSettings({ keybinds: { ...State.settings.keybinds, [k.dataset.kb]: combo } });
         this.keybinds(box);
       };
       document.addEventListener('keydown', h, true);
+      this._keyCapture = h;
     }));
     $$('[data-clear]', box).forEach((b) => (b.onclick = async () => { await saveSettings({ keybinds: { ...State.settings.keybinds, [b.dataset.clear]: '' } }); this.keybinds(box); }));
     $('#kb-reset', box).onclick = async () => { await saveSettings({ keybinds: {} }); State.settings = await api('settings:get'); this.keybinds(box); };

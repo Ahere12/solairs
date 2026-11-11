@@ -56,7 +56,7 @@ Pages.browse = {
     $('#f-type', el).value = st.type;
     const applyView = () => { $('#results', el).classList.toggle('as-list', view === 'list'); $$('[data-v]', el).forEach((b) => b.classList.toggle('on', b.dataset.v === view)); };
     applyView();
-    const versions = (await getVersions()).filter((v) => v.type === 'release');
+    const versions = (await getVersions().catch(() => [])).filter((v) => v.type === 'release'); // offline: still usable without the version list
     $('#f-ver', el).innerHTML += versions.map((v) => `<option>${esc(v.id)}</option>`).join('');
     $('#f-ver', el).value = st.gameVersion;
     $('#f-loader', el).value = st.loader;

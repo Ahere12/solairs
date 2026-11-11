@@ -35,15 +35,20 @@ Pages.instance = {
       tab = t;
       $$('[data-t]', el).forEach((b) => b.classList.toggle('on', b.dataset.t === t));
       const body = $('#ibody', el);
-      if (this.unsub) { this.unsub(); this.unsub = null; }
-      this.unsub = this[t](body, inst) || null;
+      body.ondrop = null; body.ondragover = null;
+      if (typeof this.unsub === 'function') this.unsub();
+      this.unsub = null;
+      // async tabs (worlds/settings) return a Promise — only keep real cleanup functions
+      const r = this[t](body, inst);
+      if (typeof r === 'function') this.unsub = r;
+      else if (r && typeof r.then === 'function') r.then((fn) => { if (typeof fn === 'function') { if (tab === t) this.unsub = fn; else fn(); } }).catch((e) => { body.innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; });
     };
     $$('[data-t]', el).forEach((b) => (b.onclick = () => show(b.dataset.t)));
     show(tab);
     ctx.on('instances', head);
     ctx.on('launch', (id) => id === inst.id && head());
     ctx.on('runs', head);
-    return () => { if (this.unsub) this.unsub(); };
+    return () => { if (typeof this.unsub === 'function') this.unsub(); this.unsub = null; };
   },
 
   /* ---------- content ---------- */
@@ -109,28 +114,37 @@ Pages.instance = {
         selected.clear(); draw();
       }));
     };
-    $$('[data-k]', body).forEach((b) => (b.onclick = () => { kind = b.dataset.k; updates = null; $$('[data-k]', body).forEach((x) => x.classList.toggle('on', x === b)); load(); }));
+    $$('[data-k]', body).forEach((b) => (b.onclick = () => { kind = b.dataset.k; updates = null; lastIdx = -1; resetUpd(); $$('[data-k]', body).forEach((x) => x.classList.toggle('on', x === b)); load(); }));
     $('#cf', body).oninput = (e) => { filter = e.target.value.toLowerCase(); draw(); };
     $('#browse', body).onclick = () => Router.go('browse', { type: kind === 'mods' ? 'mod' : kind === 'shaderpacks' ? 'shader' : 'resourcepack', instanceId: inst.id });
     $('#addf', body).onclick = async () => {
       const files = await api('dialog:open', { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Mods & packs', extensions: ['jar', 'zip', 'mrpack'] }] });
       if (files.length) { await api('instances:addFiles', inst.id, files, kind); load(); toast(`Added ${files.length} file(s)`); }
     };
-    $('#upd', body).onclick = async (e) => {
-      const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh')}Checking…`;
+    const updBtn = $('#upd', body);
+    const resetUpd = () => { updBtn.disabled = false; updBtn.innerHTML = `${icon('refresh')}Check updates`; updBtn.onclick = checkUpdates; };
+    const updateAll = async () => {
+      updBtn.disabled = true;
+      const todo = (updates || []).filter((x) => x.latest);
+      let done = 0;
+      for (const u of todo) {
+        updBtn.innerHTML = `${icon('download')}Updating ${++done}/${todo.length}…`;
+        try { await api('instances:applyUpdate', inst.id, kind, u.file, u.latest.id); } catch (er) { toastErr(er); }
+      }
+      updates = null; toast('All updates installed'); resetUpd(); load();
+    };
+    const checkUpdates = async () => {
+      updBtn.disabled = true; updBtn.innerHTML = `${icon('refresh')}Checking…`;
       try {
         updates = await api('instances:checkUpdates', inst.id, kind);
         const n = updates.filter((u) => u.latest).length;
         toast(n ? `${n} update(s) available` : 'Everything is up to date', n ? 'info' : 'ok');
         draw();
-        if (n > 1) {
-          b.innerHTML = `${icon('download')}Update all (${n})`; b.disabled = false;
-          b.onclick = async () => { b.disabled = true; for (const u of updates.filter((x) => x.latest)) { try { await api('instances:applyUpdate', inst.id, kind, u.file, u.latest.id); } catch (er) { toastErr(er); } } updates = null; toast('All updates installed'); load(); b.innerHTML = `${icon('refresh')}Check updates`; b.disabled = false; };
-          return;
-        }
+        if (n > 1) { updBtn.innerHTML = `${icon('download')}Update all (${n})`; updBtn.disabled = false; updBtn.onclick = updateAll; return; }
       } catch (er) { toastErr(er); }
-      b.disabled = false; b.innerHTML = `${icon('refresh')}Check updates`;
+      resetUpd();
     };
+    updBtn.onclick = checkUpdates;
     $('#tools', body).onclick = (e) => contextMenu(e.clientX, e.clientY, [
       { label: 'Find duplicate mods', icon: 'copy', action: async () => {
         const d = await api('instances:duplicates', inst.id);
@@ -147,8 +161,9 @@ Pages.instance = {
       { label: 'Open folder', icon: 'folder', action: () => api('instances:openFolder', inst.id, kind) },
     ]);
     const onDrop = (e) => { e.preventDefault(); e.stopPropagation(); const files = [...e.dataTransfer.files].map((f) => window.solaris.pathForFile(f)); hideDrop(); api('instances:addFiles', inst.id, files).then((r) => { toast('Added ' + Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${v} ${k}`).join(', ')); load(); if (r.modpacks) refreshInstances(); }).catch(toastErr); };
-    body.addEventListener('drop', onDrop);
-    body.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); showDrop(`Drop to add to ${inst.name}`); });
+    // assign (not addEventListener) so switching tabs never stacks duplicate handlers
+    body.ondrop = onDrop;
+    body.ondragover = (e) => { if (!e.dataTransfer?.types.includes('Files')) return; e.preventDefault(); e.stopPropagation(); showDrop(`Drop to add to ${inst.name}`); };
     load();
   },
 
@@ -157,7 +172,7 @@ Pages.instance = {
     body.innerHTML = '<div class="faint">Loading worlds…</div>';
     const ws = await api('instances:worlds', inst.id);
     body.innerHTML = ws.length ? `<div class="grid cols-wide">${ws.map((w) => `<div class="card row">
-        ${w.icon ? `<img src="${w.icon}" style="width:56px;height:56px;border-radius:10px;image-rendering:pixelated">` : `<div class="mod-icon" style="width:56px;height:56px">${icon('world')}</div>`}
+        ${w.icon ? `<img src="${esc(w.icon)}" style="width:56px;height:56px;border-radius:10px;image-rendering:pixelated">` : `<div class="mod-icon" style="width:56px;height:56px">${icon('world')}</div>`}
         <div class="grow" style="min-width:0"><b>${esc(w.name)}</b><div class="faint small">Played ${timeAgo(w.lastPlayed)}</div></div>
         <button class="icon-btn" data-open="${esc(w.path)}" title="Open folder">${icon('folder')}</button>
         <button class="btn sm primary" data-qp="${esc(w.name)}">${icon('play')}Quick Play</button></div>`).join('')}</div>

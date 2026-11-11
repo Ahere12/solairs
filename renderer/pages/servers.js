@@ -28,7 +28,7 @@ Pages.servers = {
     const row = (s) => {
       const p = pings[s.address];
       return `<div class="server" data-addr="${esc(s.address)}">
-        <img class="fav" ${p?.favicon ? `src="${p.favicon}"` : ''} alt="">
+        <img class="fav" ${p?.favicon ? `src="${esc(p.favicon)}"` : ''} alt="">
         <div class="grow" style="min-width:0">
           <div class="row"><b style="cursor:pointer" data-detail="${esc(s.address)}">${esc(s.name)}</b>${s.region ? `<span class="chip">${esc(s.region)}</span>` : ''}${(s.tags || []).slice(0, 3).map((t) => `<span class="chip">${esc(t)}</span>`).join('')}${p?.version ? `<span class="faint small">${esc(p.version)}</span>` : ''}</div>
           <div class="motd">${p ? (p.online ? motdHtml(p.motd) : `<span style="color:var(--danger)">Offline · ${esc(p.error || '')}</span>`) : '<span class="faint">Pinging…</span>'}</div>
@@ -87,7 +87,7 @@ Pages.servers = {
       const featured = (await api('servers:list')).featured.find((s) => s.address === address);
       $('#sd', el).innerHTML = `
         <div class="row" style="gap:18px;margin-bottom:20px">
-          ${p.favicon ? `<img src="${p.favicon}" style="width:84px;height:84px;border-radius:14px;image-rendering:pixelated">` : `<div class="inst-icon lg">${icon('servers')}</div>`}
+          ${p.favicon ? `<img src="${esc(p.favicon)}" style="width:84px;height:84px;border-radius:14px;image-rendering:pixelated">` : `<div class="inst-icon lg">${icon('servers')}</div>`}
           <div class="grow"><h1 style="margin:0">${esc(featured?.name || address)}</h1><div class="mono faint">${esc(address)}</div><div class="motd" style="margin-top:6px;font-family:var(--mono)">${p.online ? motdHtml(p.motd) : 'Offline'}</div></div>
           <button class="btn" id="cp">${icon('copy')}Copy IP</button><button class="btn primary lg" id="jn">${icon('play')}Join</button>
         </div>
