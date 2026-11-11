@@ -1,0 +1,22 @@
+{
+  "todo": [
+    { "title": "CurseForge browsing", "text": "Search and install CurseForge mods and modpacks (needs an approved API key)." },
+    { "title": "OptiFine installer", "text": "Standalone OptiFine install and import for vanilla instances." },
+    { "title": "Local P2P server hosting", "text": "Host a world for friends without port forwarding." },
+    { "title": "Friends list", "text": "See which friends are online and join them." },
+    { "title": "Automatic launcher updates", "text": "Background updates with release notes." },
+    { "title": "Cosmetics", "text": "Optional cosmetics for the Solaris Client modpack." }
+  ],
+  "progress": [
+    { "title": "Community feature requests", "text": "Collecting and voting on ideas from players." },
+    { "title": "More languages", "text": "Full translations beyond the navigation and core screens." }
+  ],
+  "done": [
+    { "title": "Solaris 1.0", "text": "Launcher with instances, loaders, Modrinth, servers, skins and crash assistant." },
+    { "title": "Solaris Client modpack", "text": "One-click performance and quality-of-life bundle that updates itself." },
+    { "title": "Integrated server browser", "text": "Live player counts, ping, region/tag filters and favourites." },
+    { "title": "Custom themes", "text": "Theme presets, accent colours and a custom theme editor." },
+    { "title": "Multi-instancing", "text": "Run multiple instances at the same time." }
+  ],
+  "paused": []
+}

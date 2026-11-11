@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="solar">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; connect-src 'self' data: blob:; font-src 'self' data:" />
+  <title>Solaris</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="titlebar">
+      <div class="brand"><img src="../assets/icon.png" alt="" />Solaris</div>
+      <div class="nav-arrows">
+        <button class="icon-btn" id="nav-back" title="Back (Alt+←)"></button>
+        <button class="icon-btn" id="nav-fwd" title="Forward (Alt+→)"></button>
+      </div>
+      <div class="spacer"></div>
+      <button class="win-btn" id="win-min" title="Minimize"></button>
+      <button class="win-btn" id="win-max" title="Maximize"></button>
+      <button class="win-btn close" id="win-close" title="Close"></button>
+    </header>
+    <div class="body">
+      <aside class="sidebar">
+        <div id="nav"></div>
+        <div class="grow"></div>
+        <div class="tasks" id="tasks"></div>
+        <div class="account-chip" id="account-chip"></div>
+      </aside>
+      <main class="main" id="main"></main>
+    </div>
+  </div>
+  <div class="toasts" id="toasts"></div>
+
+  <script src="../node_modules/skinview3d/bundles/skinview3d.bundle.js"></script>
+  <script src="lib/core.js"></script>
+  <script src="lib/components.js"></script>
+  <script src="pages/home.js"></script>
+  <script src="pages/library.js"></script>
+  <script src="pages/instance.js"></script>
+  <script src="pages/browse.js"></script>
+  <script src="pages/solaris.js"></script>
+  <script src="pages/servers.js"></script>
+  <script src="pages/skins.js"></script>
+  <script src="pages/gallery.js"></script>
+  <script src="pages/console.js"></script>
+  <script src="pages/changelog.js"></script>
+  <script src="pages/settings.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

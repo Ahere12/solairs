@@ -1,0 +1,51 @@
+[
+  {
+    "product": "launcher", "version": "1.0.0", "date": "2026-11-09",
+    "title": "Solaris is here",
+    "groups": [
+      { "area": "Launch", "entries": [
+        { "type": "feature", "text": "Launch every Minecraft: Java Edition release, snapshot and old version from one launcher." },
+        { "type": "feature", "text": "Multi-instancing: run several instances at the same time, each with its own live console." },
+        { "type": "feature", "text": "Automatic Java: the right official Java runtime is downloaded for every version." },
+        { "type": "feature", "text": "Quick Play: join a server or open a world straight from the launcher." },
+        { "type": "feature", "text": "Auto memory sizing based on your system RAM, with per-instance overrides." },
+        { "type": "feature", "text": "Performance mode and dedicated-GPU preference for laptops." }
+      ]},
+      { "area": "Instances", "entries": [
+        { "type": "feature", "text": "Fabric, Quilt, Forge, NeoForge and Legacy Fabric — loaders only show up on compatible versions." },
+        { "type": "feature", "text": "Duplicate instances with selective copying of mods, packs, worlds and config." },
+        { "type": "feature", "text": "Share instances as .solpack files and import .mrpack modpacks by drag & drop." },
+        { "type": "feature", "text": "Custom icons, pinned favourites, readable folder names and play-time tracking." },
+        { "type": "feature", "text": "Import from the official launcher, MultiMC and Prism Launcher." }
+      ]},
+      { "area": "Content", "entries": [
+        { "type": "feature", "text": "Built-in Modrinth browser for mods, modpacks, resource packs, shaders and datapacks." },
+        { "type": "feature", "text": "Version picker, automatic required dependencies and multi-category filters." },
+        { "type": "feature", "text": "Bulk select, enable, disable and delete with Ctrl/Shift+Click." },
+        { "type": "feature", "text": "Update manager that checks every mod against Modrinth by file hash." },
+        { "type": "feature", "text": "Duplicate-mod detection and a heuristic malware scan." }
+      ]},
+      { "area": "Solaris Client", "entries": [
+        { "type": "feature", "text": "One-click all-in-one modpack: Sodium, Lithium, FerriteCore, Zoomify and more, kept up to date on every launch." },
+        { "type": "feature", "text": "Toggle modules per instance from the Solaris Client page." }
+      ]},
+      { "area": "Social", "entries": [
+        { "type": "feature", "text": "Server browser with live player counts, ping, MOTD, region & tag filters and favourites." },
+        { "type": "feature", "text": "Server statistics: player count history for every server you check." },
+        { "type": "feature", "text": "Skin wardrobe with a 3D preview, staged Apply, and cape switching for Microsoft accounts." },
+        { "type": "feature", "text": "Discord Rich Presence." }
+      ]},
+      { "area": "Troubleshooting", "entries": [
+        { "type": "feature", "text": "Crash assistant explains crashes in plain language with suggested fixes and hex exit codes." },
+        { "type": "feature", "text": "Live console with filtering and one-click log sharing to mclo.gs." },
+        { "type": "feature", "text": "Hosts-file check for blocked Mojang/Microsoft domains." }
+      ]},
+      { "area": "Interface", "entries": [
+        { "type": "feature", "text": "Themes with live preview, custom accent colours and a custom theme editor." },
+        { "type": "feature", "text": "Editable keybinds, mouse back/forward navigation and instant language switching." },
+        { "type": "feature", "text": "Gallery of screenshots across all instances." },
+        { "type": "improvement", "text": "Storage manager: see what uses space, clean up unused files and move the data folder." }
+      ]}
+    ]
+  }
+]

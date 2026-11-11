@@ -1,0 +1,68 @@
+{
+  "name": "solaris-launcher",
+  "productName": "Solaris",
+  "version": "1.0.0",
+  "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
+  "main": "main.js",
+  "author": "Solaris",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "icon": "node tools/make-icon.js",
+    "dist": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux AppImage rpm",
+    "predist": "node tools/check-release.js",
+    "predist:mac": "node tools/check-release.js",
+    "predist:linux": "node tools/check-release.js"
+  },
+  "build": {
+    "appId": "app.solaris.launcher",
+    "productName": "Solaris",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**",
+      "renderer/**",
+      "data/**",
+      "assets/**",
+      "node_modules/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "rpm"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Game"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1",
+    "skinview3d": "^3.4.2"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}

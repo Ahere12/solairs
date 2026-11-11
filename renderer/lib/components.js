@@ -1,0 +1,451 @@
+/* Reusable UI: toasts, modals, menus, instance icons, player heads, launch helpers, shared dialogs. */
+
+function toast(text, type = 'ok', ms = 3800) {
+  if (type === 'ok' && State.settings && State.settings.notifications === false) return;
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = text;
+  $('#toasts').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .25s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 260); }, ms);
+}
+const toastErr = (e) => toast(e?.message || String(e), 'error', 6500);
+
+function modal({ title, body = '', footer = '', wide = false, onClose } = {}) {
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}"><header><h2>${esc(title)}</h2><button class="icon-btn" data-close>${icon('close')}</button></header><div class="content">${body}</div>${footer ? `<footer>${footer}</footer>` : ''}</div>`;
+  document.body.appendChild(back);
+  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
+  back.querySelector('[data-close]').onclick = close;
+  return { el: back.querySelector('.modal'), close, $: (s) => back.querySelector(s) };
+}
+function confirmDialog(text, { title = 'Are you sure?', ok = 'Confirm', danger = false } = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const m = modal({ title, body: `<p class="muted">${esc(text)}</p>`, footer: `<button class="btn ghost" data-no>${T('Cancel')}</button><button class="btn ${danger ? 'danger solid' : 'primary'}" data-yes>${esc(ok)}</button>`, onClose: () => { if (!done) resolve(false); } });
+    m.$('[data-no]').onclick = () => m.close();
+    m.$('[data-yes]').onclick = () => { done = true; m.close(); resolve(true); };
+    m.$('[data-yes]').focus();
+  });
+}
+function promptDialog(title, { value = '', placeholder = '', ok = 'OK' } = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const m = modal({ title, body: `<input type="text" style="width:100%" value="${esc(value)}" placeholder="${esc(placeholder)}">`, footer: `<button class="btn ghost" data-no>${T('Cancel')}</button><button class="btn primary" data-yes>${esc(ok)}</button>`, onClose: () => { if (!done) resolve(null); } });
+    const inp = m.$('input');
+    inp.focus(); inp.select();
+    const submit = () => { done = true; m.close(); resolve(inp.value.trim()); };
+    inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    m.$('[data-no]').onclick = () => m.close();
+    m.$('[data-yes]').onclick = submit;
+  });
+}
+
+function contextMenu(x, y, items) {
+  $$('.ctx-menu').forEach((m) => m.remove());
+  const m = document.createElement('div');
+  m.className = 'ctx-menu';
+  m.innerHTML = items.map((it, i) => (it === '-' ? '<hr>' : `<button data-i="${i}" class="${it.danger ? 'danger' : ''}">${icon(it.icon || 'fwd')}${esc(it.label)}</button>`)).join('');
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+  m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  m.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; m.remove(); items[+b.dataset.i].action(); };
+  setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', off); } }), 0);
+}
+
+/* ---------- visuals ---------- */
+const SUN_SVG = `<svg class="sun" viewBox="0 0 100 100"><defs><radialGradient id="sg" cx="40%" cy="40%"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#ff7a1a"/></radialGradient></defs>${Array.from({ length: 12 }, (_, i) => `<rect x="48" y="2" width="4" height="16" rx="2" fill="#ff9f1c" opacity=".85" transform="rotate(${i * 30} 50 50)"/>`).join('')}<circle cx="50" cy="50" r="26" fill="url(#sg)"/></svg>`;
+function instIcon(inst, size = '') {
+  const ic = inst?.icon;
+  let inner;
+  if (!ic) inner = '🧱';
+  else if (ic === 'sun') inner = SUN_SVG;
+  else if (/^(data:|https?:)/.test(ic)) inner = `<img src="${esc(ic)}" alt="">`;
+  else inner = esc(ic);
+  return `<div class="inst-icon ${size}">${inner}</div>`;
+}
+function loaderLabel(inst) { return LOADER_NAMES[inst.loader?.type || 'vanilla']; }
+function instMeta(inst) {
+  return `<span class="chip">${esc(inst.versionId)}</span><span class="chip ${inst.loader?.type !== 'vanilla' ? 'accent' : ''}">${loaderLabel(inst)}</span>${inst.solarisModules ? '<span class="chip warn">Solaris</span>' : ''}`;
+}
+
+/** Draws the face of a Minecraft skin (with hat layer) on a canvas. */
+function drawHead(canvas, src) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = 8; canvas.height = 8;
+  const img = new Image();
+  img.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 8, 8); ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 8, 8); };
+  img.src = src;
+}
+/** 2D front render of a full skin onto a 16×32 canvas. */
+function drawSkinFront(canvas, src, slim) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = 16; canvas.height = 32;
+  const img = new Image();
+  img.onload = () => {
+    ctx.imageSmoothingEnabled = false;
+    const modern = img.height === 64;
+    const aw = slim ? 3 : 4;
+    const d = (sx, sy, w, h, dx, dy) => ctx.drawImage(img, sx, sy, w, h, dx, dy, w, h);
+    d(8, 8, 8, 8, 4, 0); d(20, 20, 8, 12, 4, 8);
+    d(44, 20, aw, 12, 4 - aw, 8);
+    if (modern) d(36, 52, aw, 12, 12, 8); else { ctx.save(); ctx.scale(-1, 1); ctx.drawImage(img, 44, 20, aw, 12, -12 - aw, 8, aw, 12); ctx.restore(); }
+    d(4, 20, 4, 12, 4, 20);
+    if (modern) d(20, 52, 4, 12, 8, 20); else { ctx.save(); ctx.scale(-1, 1); ctx.drawImage(img, 4, 20, 4, 12, -12, 20, 4, 12); ctx.restore(); }
+    d(40, 8, 8, 8, 4, 0);
+    if (modern) { d(20, 36, 8, 12, 4, 8); d(44, 36, aw, 12, 4 - aw, 8); d(52, 52, aw, 12, 12, 8); d(4, 36, 4, 12, 4, 20); d(4, 52, 4, 12, 8, 20); }
+  };
+  img.src = src;
+}
+const headCache = {};
+async function accountHead(acct) {
+  if (!acct) return null;
+  return headCache[acct.id] || null;
+}
+function renderHead(el, acct) {
+  el.innerHTML = '';
+  if (!acct) { el.textContent = '?'; return; }
+  const c = document.createElement('canvas');
+  el.appendChild(c);
+  if (acct.skinUrl) drawHead(c, acct.skinUrl.replace('http://', 'https://'));
+  else drawHead(c, STEVE);
+}
+// Default 64×64 skin-face stand-in (simple generated face) for offline accounts.
+const STEVE = (() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = '#b4845f'; x.fillRect(8, 8, 8, 8);
+  x.fillStyle = '#3a2a1a'; x.fillRect(8, 8, 8, 2); x.fillRect(8, 10, 1, 1); x.fillRect(15, 10, 1, 1);
+  x.fillStyle = '#fff'; x.fillRect(9, 12, 2, 1); x.fillRect(13, 12, 2, 1);
+  x.fillStyle = '#4a3cb0'; x.fillRect(10, 12, 1, 1); x.fillRect(13, 12, 1, 1);
+  x.fillStyle = '#6b4a35'; x.fillRect(11, 14, 2, 1); x.fillRect(10, 15, 4, 1);
+  return c.toDataURL();
+})();
+
+function sparkline(points, { w = 600, h = 140 } = {}) {
+  if (!points.length) return `<div class="empty small">No data yet — player counts are recorded each time you view this server.</div>`;
+  const xs = points.map((p) => p.t), ys = points.map((p) => p.n);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs) || x0 + 1, y1 = Math.max(...ys, 1);
+  const px = (t) => (x1 === x0 ? w / 2 : ((t - x0) / (x1 - x0)) * (w - 20) + 10), py = (n) => h - 18 - (n / y1) * (h - 34);
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${px(p.t).toFixed(1)},${py(p.n).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="sp" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} L${px(xs[xs.length - 1])},${h - 18} L${px(xs[0])},${h - 18} Z" fill="url(#sp)"/>
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+    <text x="10" y="14" fill="var(--muted)" font-size="11">peak ${fmtNum(y1)}</text>
+    <text x="10" y="${h - 4}" fill="var(--faint)" font-size="10">${new Date(x0).toLocaleString()}</text>
+    <text x="${w - 10}" y="${h - 4}" fill="var(--faint)" font-size="10" text-anchor="end">${new Date(x1).toLocaleString()}</text></svg>`;
+}
+
+/* ---------- launching ---------- */
+async function play(instanceId, opts = {}) {
+  if (!State.accounts.active) { openAccounts(); toast('Add an account first', 'warn'); return; }
+  State.launch[instanceId] = { stage: 'Starting', progress: null };
+  Bus.emit('launch', instanceId);
+  await saveSettings({ selectedInstance: instanceId });
+  try { await api('launch:start', instanceId, opts); }
+  catch (e) { State.launch[instanceId] = { error: e.message }; Bus.emit('launch', instanceId); toastErr(e); setTimeout(() => { delete State.launch[instanceId]; Bus.emit('launch', instanceId); }, 4000); }
+}
+function runsFor(instanceId) { return Object.entries(State.runs).filter(([, r]) => r.instanceId === instanceId && r.running).map(([id]) => id); }
+function stopInstance(instanceId) { for (const runId of runsFor(instanceId)) api('launch:stop', runId); }
+function isRunning(instanceId) { return runsFor(instanceId).length > 0; }
+function launchLabel(instanceId) {
+  const s = State.launch[instanceId];
+  if (!s) return '';
+  if (s.error) return '⚠ ' + s.error;
+  return s.stage + (s.progress != null ? ` · ${Math.round(s.progress * 100)}%` : '') + (s.detail ? ` · ${s.detail}` : '');
+}
+/** A play / stop / progress button bound to an instance. */
+function playButton(inst, { size = '' } = {}) {
+  const busy = State.launch[inst.id] && !State.launch[inst.id].error;
+  if (isRunning(inst.id)) return `<button class="btn stop ${size}" data-stop="${esc(inst.id)}">${icon('stop')}${T('Stop')}</button>`;
+  return `<button class="btn primary ${size} ${size === 'lg' ? 'play' : ''}" data-play="${esc(inst.id)}" ${busy ? 'disabled' : ''}>${icon('play')}${busy ? '…' : T('Play')}</button>`;
+}
+document.addEventListener('click', (e) => {
+  const p = e.target.closest('[data-play]');
+  if (p) { e.stopPropagation(); play(p.dataset.play); return; }
+  const s = e.target.closest('[data-stop]');
+  if (s) { e.stopPropagation(); stopInstance(s.dataset.stop); }
+}, true);
+
+function showCrash({ instanceId, analysis, runId }) {
+  const inst = State.instances.find((i) => i.id === instanceId);
+  const m = modal({
+    title: `${inst?.name || 'Minecraft'} crashed`,
+    wide: true,
+    body: `<div class="row" style="margin-bottom:12px"><span class="chip danger">Exit code ${analysis.code} · ${esc(analysis.hex)}</span>${analysis.codeMeaning ? `<span class="muted small">${esc(analysis.codeMeaning)}</span>` : ''}</div>
+      ${analysis.description ? `<p class="muted">Crash report: <b>${esc(analysis.description)}</b></p>` : ''}
+      <h3>What probably happened</h3>
+      ${analysis.causes.map((c) => `<div class="crash-cause"><b>${esc(c.title)}</b><div class="muted small">${esc(c.fix)}</div></div>`).join('')}`,
+    footer: `${analysis.crashReport ? `<button class="btn ghost" data-report>${icon('folder')}Open crash report</button>` : ''}<button class="btn" data-share>${icon('share')}Share log</button><button class="btn" data-console>${icon('console')}Open console</button><button class="btn primary" data-retry>${icon('play')}Try again</button>`,
+  });
+  if (analysis.crashReport) m.$('[data-report]').onclick = () => api('shell:showItem', analysis.crashReport);
+  m.$('[data-console]').onclick = () => { m.close(); Router.go('console', { runId }); };
+  m.$('[data-retry]').onclick = () => { m.close(); play(instanceId); };
+  m.$('[data-share]').onclick = () => shareLog(runId);
+}
+async function shareLog(runId) {
+  const ok = await confirmDialog('This uploads the game log publicly to mclo.gs (access tokens are already hidden). Continue?', { title: 'Share log', ok: 'Upload' });
+  if (!ok) return;
+  try {
+    const lines = State.runs[runId]?.lines?.length ? State.runs[runId].lines : await api('launch:logs', runId);
+    const url = await api('logs:share', lines.join('\n'));
+    toast('Log uploaded — link copied: ' + url);
+    api('shell:open', url);
+  } catch (e) { toastErr(e); }
+}
+
+/* ---------- accounts dialog ---------- */
+const MS_LOGO = '<svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>';
+
+function openAccounts() {
+  const m = modal({ title: 'Accounts', body: '<div id="acct-body"></div>' });
+  const draw = async () => {
+    const [{ active, accounts }, msOk] = await Promise.all([refreshAccounts(), api('accounts:microsoftAvailable').catch(() => false)]);
+    m.$('#acct-body').innerHTML = `
+      ${accounts.length ? `<div class="stack" style="margin-bottom:18px">${accounts.map((a) => `<div class="list-row" style="border:1px solid var(--border);border-radius:12px">
+          <div class="head" data-head="${esc(a.id)}"></div>
+          <div class="info"><div class="title">${esc(a.name)} ${a.id === active ? '<span class="chip ok">Active</span>' : ''} ${a.needsReauth ? '<span class="chip danger">Session expired</span>' : ''}</div><div class="desc">${a.type === 'msa' ? 'Microsoft account' : 'Offline account'}</div></div>
+          ${a.needsReauth && msOk ? `<button class="btn sm primary" data-reauth>Sign in again</button>` : ''}
+          ${a.id !== active ? `<button class="btn sm" data-use="${esc(a.id)}">Use</button>` : ''}
+          <button class="icon-btn" data-rm="${esc(a.id)}" title="Remove">${icon('trash')}</button></div>`).join('')}</div>` : ''}
+      <button class="btn lg" data-ms style="width:100%;background:#fff;color:#1b1b1b;border:0" ${msOk ? '' : 'disabled'}>${MS_LOGO}Sign in with Microsoft</button>
+      ${msOk ? '<div class="faint small" style="text-align:center;margin-top:8px">Uses Microsoft’s secure sign-in page. Solaris never sees your password.</div>'
+        : '<div class="faint small" style="text-align:center;margin-top:8px">Microsoft sign-in isn’t available in this version of Solaris yet. Update Solaris to enable it — you can play offline meanwhile.</div>'}
+      <div class="row" style="margin:18px 0 10px"><div class="grow" style="height:1px;background:var(--border)"></div><span class="faint small">or play offline</span><div class="grow" style="height:1px;background:var(--border)"></div></div>
+      <div class="row"><input type="text" class="grow" id="off-name" placeholder="Username (3–16 characters)" maxlength="16"><button class="btn" data-off>Add offline</button></div>
+      <div class="faint small" style="margin-top:8px">Offline accounts play singleplayer and offline-mode servers. Online servers and skins need a Microsoft account that owns Minecraft.</div>`;
+    $$('[data-head]', m.el).forEach((el) => renderHead(el, accounts.find((a) => a.id === el.dataset.head)));
+    $$('[data-use]', m.el).forEach((b) => (b.onclick = async () => { await api('accounts:setActive', b.dataset.use); draw(); }));
+    $$('[data-rm]', m.el).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this account from Solaris?', { danger: true, ok: 'Remove' })) { await api('accounts:remove', b.dataset.rm); draw(); } }));
+    $$('[data-reauth]', m.el).forEach((b) => (b.onclick = () => microsoftLogin(m, draw)));
+    m.$('[data-off]').onclick = async () => { try { await api('accounts:addOffline', m.$('#off-name').value.trim()); toast('Account added'); draw(); } catch (e) { toastErr(e); } };
+    m.$('#off-name').onkeydown = (e) => { if (e.key === 'Enter') m.$('[data-off]').click(); };
+    if (msOk) m.$('[data-ms]').onclick = () => microsoftLogin(m, draw);
+  };
+  draw();
+}
+/** Waits for the main process to report the sign-in result. */
+function awaitLogin(m, redraw) {
+  const off = window.solaris.on('account:login', (r) => {
+    off();
+    if (r.ok) { toast(`Signed in as ${r.account.name}`); m.close(); redraw && redraw(); refreshAccounts(); }
+    else { toast(r.error, 'error', 9000); m.close(); }
+  });
+  return off;
+}
+/** Microsoft sign-in: opens Microsoft's page in the browser; Solaris finishes automatically. */
+async function microsoftLogin(parent, redraw, method = 'browser') {
+  let info;
+  try { info = await api('accounts:startMicrosoft', { method }); }
+  catch (e) { toastErr(e); return; }
+  if (info.mode === 'browser') {
+    let off = () => {};
+    const m = modal({
+      title: 'Sign in with Microsoft',
+      body: `<div style="text-align:center;padding:6px 0 4px">${icon('globe', 'big-ic')}
+        <p style="font-size:15px;margin:10px 0 4px"><b>Continue in your browser</b></p>
+        <p class="muted" style="margin:0">Sign in with the Microsoft account that owns Minecraft: Java Edition and allow Solaris. You'll come back here automatically.</p></div>
+        <div class="row" style="margin-top:16px"><div class="progress indeterminate grow"><div></div></div><span class="faint small">Waiting for Microsoft…</span></div>
+        <p class="faint small" style="margin-top:14px">Browser didn't open? <a href="#" data-reopen>Open it again</a> · Signing in on another device? <a href="#" data-code>Use a code instead</a></p>`,
+      footer: `<button class="btn ghost" data-cancel>${T('Cancel')}</button>`,
+      onClose: () => { off(); api('accounts:cancelMicrosoft'); },
+    });
+    m.$('[data-cancel]').onclick = () => m.close();
+    m.$('[data-reopen]').onclick = (e) => { e.preventDefault(); if (info.url) api('shell:open', info.url); };
+    m.$('[data-code]').onclick = (e) => { e.preventDefault(); m.close(); microsoftLogin(parent, redraw, 'code'); };
+    off = awaitLogin(m, redraw);
+    return;
+  }
+  const m = modal({
+    title: 'Sign in with Microsoft',
+    body: `<p class="muted">On any device, open <b>${esc(info.verificationUri)}</b> and enter this code:</p><div class="code-box">${esc(info.userCode)}</div><div class="row" style="margin-top:14px"><div class="progress indeterminate grow"><div></div></div><span class="faint small">Waiting for you to finish signing in…</span></div>`,
+    footer: `<button class="btn ghost" data-cancel>${T('Cancel')}</button><button class="btn primary" data-open>${icon('copy')}Copy code & open browser</button>`,
+    onClose: () => { off(); api('accounts:cancelMicrosoft'); },
+  });
+  m.$('[data-open]').onclick = () => { api('clipboard:write', info.userCode); api('shell:open', info.verificationUri); };
+  m.$('[data-cancel]').onclick = () => m.close();
+  const off = awaitLogin(m, redraw);
+}
+
+/* ---------- new instance dialog ---------- */
+const EMOJIS = ['🧱', '⛏️', '🗡️', '🏹', '🛡️', '🌲', '🌋', '🏰', '🐉', '🧪', '💎', '🔥', '❄️', '🌙', '⭐', '🚀', '🧭', '🌸', '🍄', '🐺', '🐝', '⚙️', '🎮', '🏝️', '🌊', '👾', 'sun'];
+let versionCache = null;
+async function getVersions() { if (!versionCache) versionCache = await api('versions:list'); return versionCache; }
+
+async function openNewInstance(preset = {}) {
+  const m = modal({
+    title: T('New instance'),
+    body: `<div class="stack">
+      <div class="row" style="align-items:flex-start;gap:14px">
+        <div id="ni-icon" style="cursor:pointer" title="Change icon"></div>
+        <label class="field grow">Name<input type="text" id="ni-name" placeholder="My world" value="${esc(preset.name || '')}"></label>
+      </div>
+      <div class="emoji-grid hidden" id="ni-emojis">${EMOJIS.map((e) => `<button data-emoji="${e}">${e === 'sun' ? '☀️' : e}</button>`).join('')}</div>
+      <div class="row">
+        <label class="field grow">Minecraft version<select id="ni-version"><option>Loading…</option></select></label>
+        <label class="field" style="padding-top:20px;flex-direction:row;align-items:center"><input type="checkbox" id="ni-snap"> Snapshots &amp; old</label>
+      </div>
+      <label class="field">Mod loader<div class="seg" id="ni-loader"></div></label>
+      <label class="field" id="ni-lv-wrap">Loader version<select id="ni-lv"></select></label>
+      <div class="faint small" id="ni-note"></div>
+    </div>`,
+    footer: `<button class="btn ghost" data-import>${icon('upload')}${T('Import')}…</button><div class="grow"></div><button class="btn ghost" data-cancel>${T('Cancel')}</button><button class="btn primary" data-create>${icon('plus')}Create</button>`,
+  });
+  let chosenIcon = preset.icon || '🧱', loader = preset.loader || 'vanilla';
+  const drawIcon = () => (m.$('#ni-icon').innerHTML = instIcon({ icon: chosenIcon }, 'lg'));
+  drawIcon();
+  m.$('#ni-icon').onclick = () => m.$('#ni-emojis').classList.toggle('hidden');
+  $$('[data-emoji]', m.el).forEach((b) => (b.onclick = () => { chosenIcon = b.dataset.emoji; drawIcon(); m.$('#ni-emojis').classList.add('hidden'); }));
+  const versions = await getVersions();
+  const fillVersions = () => {
+    const snap = m.$('#ni-snap').checked;
+    m.$('#ni-version').innerHTML = versions.filter((v) => snap || v.type === 'release').map((v) => `<option value="${esc(v.id)}">${esc(v.id)}${v.type !== 'release' ? ' (' + v.type.replace('old_', '') + ')' : ''}</option>`).join('');
+    if (preset.versionId) m.$('#ni-version').value = preset.versionId;
+  };
+  fillVersions();
+  m.$('#ni-snap').onchange = () => { fillVersions(); refreshLoaders(); };
+  const loaderTypes = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge', 'legacyfabric'];
+  const support = {};
+  const refreshLoaders = async () => {
+    const mc = m.$('#ni-version').value;
+    m.$('#ni-loader').innerHTML = loaderTypes.map((l) => `<button data-l="${l}" class="${l === loader ? 'on' : ''}" ${l !== 'vanilla' ? 'disabled style="opacity:.4"' : ''}>${LOADER_NAMES[l]}</button>`).join('');
+    bindLoader();
+    await Promise.all(loaderTypes.slice(1).map(async (l) => {
+      try { support[l] = await api('loaders:versions', l, mc); } catch { support[l] = []; }
+      if (m.$('#ni-version').value !== mc) return;
+      const b = m.$(`[data-l="${l}"]`);
+      if (b && support[l].length) { b.disabled = false; b.style.opacity = ''; }
+      else if (b) b.title = `Not available for ${mc}`;
+    }));
+    if (loader !== 'vanilla' && !support[loader]?.length) loader = 'vanilla';
+    $$('[data-l]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.l === loader));
+    fillLoaderVersions();
+  };
+  const bindLoader = () => $$('[data-l]', m.el).forEach((b) => (b.onclick = () => { loader = b.dataset.l; $$('[data-l]', m.el).forEach((x) => x.classList.toggle('on', x === b)); fillLoaderVersions(); }));
+  const fillLoaderVersions = () => {
+    const wrap = m.$('#ni-lv-wrap');
+    wrap.classList.toggle('hidden', loader === 'vanilla');
+    const list = support[loader] || [];
+    m.$('#ni-lv').innerHTML = list.slice(0, 200).map((v) => `<option value="${esc(v.version)}">${esc(v.label || v.version)}${v.recommended ? ' ★ recommended' : v.stable === false ? ' (beta)' : ''}</option>`).join('');
+    const pick = list.find((v) => v.recommended) || list.find((v) => v.stable) || list[0];
+    if (pick) m.$('#ni-lv').value = pick.version;
+    m.$('#ni-note').textContent = loader === 'forge' || loader === 'neoforge' ? `${LOADER_NAMES[loader]} runs its official installer on first launch (needs a minute).` : '';
+  };
+  m.$('#ni-version').onchange = refreshLoaders;
+  refreshLoaders();
+  m.$('[data-cancel]').onclick = () => m.close();
+  m.$('[data-import]').onclick = () => { m.close(); openImport(); };
+  m.$('[data-create]').onclick = async () => {
+    const versionId = m.$('#ni-version').value;
+    const name = m.$('#ni-name').value.trim() || `${LOADER_NAMES[loader]} ${versionId}`;
+    try {
+      const inst = await api('instances:create', { name, versionId, loader: { type: loader, version: loader === 'vanilla' ? null : m.$('#ni-lv').value }, icon: chosenIcon });
+      m.close();
+      await refreshInstances();
+      toast(`Created ${inst.name}`);
+      Router.go('library', { spotlight: inst.id });
+    } catch (e) { toastErr(e); }
+  };
+  m.$('#ni-name').focus();
+}
+
+/* ---------- import dialog ---------- */
+function openImport() {
+  const m = modal({
+    title: T('Import'),
+    body: `<div class="stack">
+      <button class="btn" data-file style="justify-content:flex-start">${icon('box')}Modpack or shared instance (.mrpack, .solpack)</button>
+      <button class="btn" data-official style="justify-content:flex-start">${icon('download')}Official Minecraft Launcher profiles</button>
+      <button class="btn" data-mmc style="justify-content:flex-start">${icon('folder')}MultiMC / Prism Launcher instances folder</button>
+      <div id="imp-list"></div>
+      <div class="faint small">Tip: you can also drag & drop .mrpack / .solpack files anywhere in Solaris.</div></div>`,
+  });
+  m.$('[data-file]').onclick = async () => {
+    const files = await api('dialog:open', { filters: [{ name: 'Packs', extensions: ['mrpack', 'solpack', 'skpack'] }], properties: ['openFile', 'multiSelections'] });
+    m.close();
+    for (const f of files) await importFile(f);
+  };
+  const pickList = (items, onImport) => {
+    m.$('#imp-list').innerHTML = items.length ? `<div class="list">${items.map((p, i) => `<label class="list-row"><input type="checkbox" data-k="${i}" checked><div class="info"><div class="title">${esc(p.name)}</div><div class="desc">${esc(p.lastVersionId || p.versionId || '')} ${p.loader ? '· ' + esc(LOADER_NAMES[p.loader.type]) : ''}</div></div></label>`).join('')}</div><button class="btn primary" style="margin-top:10px" data-go>Import selected</button>` : '<div class="empty small">Nothing found to import.</div>';
+    if (items.length) m.$('[data-go]').onclick = async () => {
+      const keys = $$('[data-k]', m.el).filter((c) => c.checked).map((c) => items[+c.dataset.k].key);
+      try { const r = await onImport(keys); toast(`Imported ${r.length} instance(s)`); m.close(); await refreshInstances(); Router.go('library'); } catch (e) { toastErr(e); }
+    };
+  };
+  m.$('[data-official]').onclick = async () => pickList(await api('import:officialScan'), (keys) => api('import:official', keys));
+  m.$('[data-mmc]').onclick = async () => {
+    const [dir] = await api('dialog:open', { properties: ['openDirectory'], title: 'Select the "instances" folder of MultiMC or Prism Launcher' });
+    if (dir) pickList(await api('import:mmcScan', dir), (keys) => api('import:mmc', dir, keys));
+  };
+}
+async function importFile(f) {
+  try {
+    State.tasks['import'] = { label: 'Importing ' + f.split(/[\\/]/).pop(), progress: null };
+    Bus.emit('tasks');
+    const inst = await api('instances:importFile', f);
+    toast(`Imported ${inst.name}`);
+    await refreshInstances();
+    Router.go('library', { spotlight: inst.id });
+  } catch (e) { toastErr(e); }
+  finally { delete State.tasks['import']; Bus.emit('tasks'); }
+}
+
+/* ---------- choose instance dialog ---------- */
+function chooseInstance({ title = 'Choose an instance', filter = () => true, note = '' } = {}) {
+  return new Promise((resolve) => {
+    const list = State.instances.filter(filter);
+    let done = false;
+    const m = modal({
+      title,
+      body: `${note ? `<p class="muted small">${esc(note)}</p>` : ''}${list.length ? `<div class="list">${list.map((i) => `<div class="list-row" style="cursor:pointer" data-id="${esc(i.id)}">${instIcon(i, 'sm')}<div class="info"><div class="title">${esc(i.name)}</div><div class="desc">${esc(i.versionId)} · ${loaderLabel(i)}</div></div>${icon('fwd')}</div>`).join('')}</div>` : '<div class="empty small">No compatible instances. Create one first.</div>'}`,
+      footer: `<button class="btn" data-new>${icon('plus')}${T('New instance')}</button>`,
+      onClose: () => { if (!done) resolve(null); },
+    });
+    $$('[data-id]', m.el).forEach((r) => (r.onclick = () => { done = true; m.close(); resolve(State.instances.find((i) => i.id === r.dataset.id)); }));
+    m.$('[data-new]').onclick = () => { m.close(); openNewInstance(); };
+  });
+}
+
+/* ---------- instance context menu ---------- */
+function instanceMenu(e, inst) {
+  e.preventDefault();
+  contextMenu(e.clientX, e.clientY, [
+    isRunning(inst.id) ? { label: T('Stop'), icon: 'stop', action: () => stopInstance(inst.id) } : { label: T('Play'), icon: 'play', action: () => play(inst.id) },
+    { label: 'Open', icon: 'fwd', action: () => Router.go('instance', { id: inst.id }) },
+    { label: inst.pinned ? 'Unpin' : 'Pin to top', icon: 'star', action: async () => { await api('instances:update', inst.id, { pinned: !inst.pinned }); refreshInstances(); } },
+    { label: 'Open folder', icon: 'folder', action: () => api('instances:openFolder', inst.id) },
+    '-',
+    { label: 'Duplicate…', icon: 'copy', action: () => duplicateDialog(inst) },
+    { label: 'Share (.solpack)', icon: 'share', action: () => api('instances:export', inst.id).catch(toastErr) },
+    '-',
+    { label: T('Delete'), icon: 'trash', danger: true, action: () => deleteInstance(inst) },
+  ]);
+}
+async function deleteInstance(inst) {
+  if (!(await confirmDialog(`"${inst.name}" and its worlds will be moved to the Recycle Bin.`, { title: `Delete ${inst.name}?`, ok: T('Delete'), danger: true }))) return;
+  await api('instances:delete', inst.id);
+  toast('Instance moved to the Recycle Bin');
+  await refreshInstances();
+  if (Router.current?.name === 'instance') Router.go('library', {}, { replace: true });
+}
+function duplicateDialog(inst) {
+  const parts = [['mods', 'Mods'], ['config', 'Config'], ['resourcepacks', 'Resource packs'], ['shaderpacks', 'Shaders'], ['saves', 'Worlds'], ['options.txt', 'Game options'], ['screenshots', 'Screenshots']];
+  const m = modal({
+    title: `Duplicate ${inst.name}`,
+    body: `<div class="stack"><label class="field">New name<input type="text" id="dup-name" value="${esc(inst.name)} (copy)"></label>
+      <div class="field">Copy<div class="row wrap">${parts.map(([k, l]) => `<label class="chip toggle on"><input type="checkbox" data-part="${k}" checked style="display:none">${l}</label>`).join('')}</div></div></div>`,
+    footer: `<button class="btn ghost" data-cancel>${T('Cancel')}</button><button class="btn primary" data-go>${icon('copy')}Duplicate</button>`,
+  });
+  $$('.chip.toggle', m.el).forEach((c) => (c.onclick = (e) => { e.preventDefault(); const cb = c.querySelector('input'); cb.checked = !cb.checked; c.classList.toggle('on', cb.checked); }));
+  m.$('[data-cancel]').onclick = () => m.close();
+  m.$('[data-go]').onclick = async () => {
+    const include = $$('[data-part]', m.el).filter((c) => c.checked).map((c) => c.dataset.part);
+    try { const c = await api('instances:duplicate', inst.id, { name: m.$('#dup-name').value.trim(), include }); m.close(); await refreshInstances(); toast('Duplicated'); Router.go('library', { spotlight: c.id }); }
+    catch (e) { toastErr(e); }
+  };
+}
