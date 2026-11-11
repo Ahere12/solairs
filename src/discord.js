@@ -50,6 +50,24 @@ async function setActivity(activity) {
   sock.write(frame(1, { cmd: 'SET_ACTIVITY', args: { pid: process.pid, activity: activity || null }, nonce: String(Date.now()) + Math.random() }));
 }
 function idle() { return setActivity({ details: 'In the launcher', assets: { large_image: 'solaris', large_text: 'Solaris Launcher' } }); }
+/**
+ * "Playing" presence. Privacy settings decide whether the instance, the server and the player head are shown.
+ * For Microsoft accounts the large image is the player's own head (an https image Discord loads itself).
+ */
+function playing({ inst, server, start, account, modded }) {
+  const s = settings.get();
+  const head = s.discordShowHead !== false && account?.type === 'msa' && account.uuid ? `https://mc-heads.net/avatar/${String(account.uuid).replace(/-/g, '')}/128` : null;
+  const showInst = s.discordShowInstance !== false;
+  const state = server && s.discordShowServer !== false ? `On ${server}` : `Minecraft ${inst.versionId}${modded ? ' · ' + inst.loader.type : ''}`;
+  return setActivity({
+    details: showInst ? `Playing ${inst.name}` : 'Playing Minecraft',
+    state,
+    timestamps: { start: Math.floor(start / 1000) },
+    assets: head
+      ? { large_image: head, large_text: s.streamerMode ? 'Minecraft' : account.name, small_image: 'solaris', small_text: 'Solaris Launcher' }
+      : { large_image: 'solaris', large_text: 'Solaris Launcher' },
+  });
+}
 function disconnect() { try { sock && sock.destroy(); } catch {} sock = null; ready = false; }
 
-module.exports = { setActivity, idle, disconnect };
+module.exports = { setActivity, idle, playing, disconnect };

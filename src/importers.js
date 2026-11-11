@@ -89,3 +89,31 @@ async function importFolder(folder, { name, versionId, loader }) {
 }
 
 module.exports = { officialDir, scanOfficial, importOfficial, scanMultiMC, importMultiMC, importFolder };
+
+/** CurseForge app instances (…/curseforge/minecraft/Instances). Mods stay in the CurseForge folder. */
+function curseforgeDir() { return path.join(app.getPath('home'), 'curseforge', 'minecraft', 'Instances'); }
+function scanCurseForge(root = curseforgeDir()) {
+  let dirs = []; try { dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()); } catch {}
+  const out = [];
+  for (const d of dirs) {
+    const dir = path.join(root, d.name);
+    const j = readJSON(path.join(dir, 'minecraftinstance.json'), null);
+    if (!j) continue;
+    const mc = j.gameVersion || j.baseModLoader?.minecraftVersion;
+    if (!mc) continue;
+    const [t, ...rest] = String(j.baseModLoader?.name || 'vanilla').split('-');
+    let loader = { type: 'vanilla' };
+    if (t === 'forge') loader = { type: 'forge', version: `${mc}-${rest.join('-').replace(new RegExp('^' + mc.replace(/\./g, '\.') + '-'), '')}` };
+    else if (t === 'neoforge') loader = { type: 'neoforge', version: rest.join('-') };
+    else if (t === 'fabric' || t === 'quilt') loader = { type: t, version: rest[0] };
+    out.push({ key: d.name, name: j.name || d.name, versionId: mc, loader, gameDir: dir });
+  }
+  return out;
+}
+function importCurseForge(keys, root) {
+  return scanCurseForge(root).filter((x) => keys.includes(x.key)).map((p) =>
+    instances.create({ name: p.name, versionId: p.versionId, loader: p.loader, extra: { externalGameDir: p.gameDir, importedFrom: 'CurseForge app' } }));
+}
+module.exports.scanCurseForge = scanCurseForge;
+module.exports.importCurseForge = importCurseForge;
+module.exports.curseforgeDir = curseforgeDir;

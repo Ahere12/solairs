@@ -37,10 +37,28 @@ function expandArgs(list, vars, features) {
   return out;
 }
 
+/**
+ * Automatic Java selection: instance Java → global Java → your Java for this major version → Solaris's
+ * official runtime (installed on demand). A chosen Java that is too old for the version is skipped with a notice.
+ */
 async function resolveJava(inst, version, onProgress) {
-  const custom = inst.javaPath || settings.get().javaPath;
-  if (custom && fs.existsSync(custom)) return custom;
+  const s = settings.get();
+  const need = version.javaVersion?.majorVersion || 8;
+  for (const [p, where] of [[inst.javaPath, 'this instance'], [s.javaPath, 'Settings → Java'], [s.javaPaths?.[need], `Settings → Java (Java ${need})`]]) {
+    if (!p) continue;
+    if (!fs.existsSync(p)) { push('toast', { type: 'warn', text: `The Java set in ${where} no longer exists — using automatic Java.` }); continue; }
+    const v = await java.javaVersionOf(p);
+    const major = v ? java.majorOf(v.version) : null;
+    if (major && major < need) { push('toast', { type: 'warn', text: `Minecraft ${inst.versionId} needs Java ${need}, but ${where} is Java ${major} — using automatic Java instead.` }); continue; }
+    return p;
+  }
   const component = version.javaVersion?.component || 'jre-legacy';
+  if (s.javaAutoInstall === false) {
+    const all = await java.detect();
+    const found = all.find((j) => java.majorOf(j.version) === need) || all.find((j) => java.majorOf(j.version) > need && need >= 17);
+    if (found) return found.path;
+    if (!java.isInstalled(component)) throw new Error(`Java ${need} is needed but not installed, and automatic Java installs are off. Install it in Settings → Java.`);
+  }
   return java.ensureRuntime(component, onProgress);
 }
 
@@ -126,7 +144,8 @@ async function launchInner(instanceId, opts = {}) {
   const clientDl = version.downloads?.client;
   const baseJar = path.join(paths.versions(), jarId, jarId + '.jar');
   const tasks = [];
-  if (clientDl) tasks.push({ url: clientDl.url, path: baseJar, sha1: clientDl.sha1, size: clientDl.size });
+  // The client jar is always checked by checksum, so a damaged game jar is detected and fixed automatically.
+  if (clientDl) tasks.push({ url: clientDl.url, path: baseJar, sha1: clientDl.sha1, size: clientDl.size, verify: true });
   const libs = versions.collectLibraries(version);
   tasks.push(...libs.classpath, ...libs.natives);
   status(instanceId, 'Checking assets');
@@ -229,12 +248,7 @@ async function launchInner(instanceId, opts = {}) {
   instances.save({ ...instances.get(instanceId), lastPlayed: Date.now() });
   push('launch:started', { runId, instanceId, name: inst.name });
   events.emit('window', s.launchBehavior);
-  discord.setActivity({
-    details: `Playing ${inst.name}`,
-    state: opts.server ? `On ${opts.server}` : `Minecraft ${inst.versionId}${modded ? ' · ' + inst.loader.type : ''}`,
-    timestamps: { start: Math.floor(run.start / 1000) },
-    assets: { large_image: 'solaris', large_text: 'Solaris Launcher' },
-  });
+  discord.playing({ inst, server: opts.server, start: run.start, account: accounts.active(), modded });
 
   proc.on('close', (code, signal) => {
     if (!running.has(runId)) return; // already handled (Java failed to start)
@@ -247,6 +261,8 @@ async function launchInner(instanceId, opts = {}) {
     let analysis = null;
     if (code !== 0 && !killed) {
       analysis = crash.analyze({ code: code ?? -1, lines: run.lines.slice(-400), gameDir, since: run.start });
+      // Damaged game files: check and re-download everything on the next launch automatically.
+      if (analysis.corrupt) { try { fs.writeFileSync(paths.file('repair.flag'), new Date().toISOString()); } catch {} push('toast', { type: 'warn', text: 'Some game files look damaged — Solaris will check and repair them the next time you press Play.' }); }
       if (settings.get().notifications && Notification.isSupported()) new Notification({ title: `${inst.name} crashed`, body: analysis.causes[0].title }).show();
     }
     history.unshift({ runId, instanceId, name: inst.name, start: run.start, end: Date.now(), code, lines: run.lines, logFile, analysis });

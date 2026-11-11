@@ -127,9 +127,9 @@ async function installModpack(opts) {
   }
 }
 async function installModpackInner({ versionId, file, name, icon }, onCreated) {
-  let mrpack = file;
+  let mrpack = file, packProject = null;
   if (versionId) {
-    const v = await version(versionId);
+    const v = await version(versionId); packProject = v.project_id;
     const f = v.files.find((x) => x.primary) || v.files[0];
     mrpack = path.join(paths.cache(), 'modpacks', f.filename);
     push('task', { id: 'modpack', label: `Downloading ${f.filename}`, progress: 0 });
@@ -144,7 +144,7 @@ async function installModpackInner({ versionId, file, name, icon }, onCreated) {
   let loaderVersion = deps['fabric-loader'] || deps['quilt-loader'] || deps.neoforge || deps.forge || null;
   if (loaderType === 'forge' && loaderVersion && !loaderVersion.startsWith(deps.minecraft + '-')) loaderVersion = `${deps.minecraft}-${loaderVersion}`;
   const inst = instances.create({ name: name || index.name, versionId: deps.minecraft, loader: { type: loaderType, version: loaderVersion }, icon: icon || null,
-    extra: { modpack: { name: index.name, version: index.versionId, versionId: versionId || null } } });
+    extra: { modpack: { name: index.name, version: index.versionId, versionId: versionId || null, projectId: packProject } } });
   onCreated(inst);
   const root = inst.gameDir;
   const tasks = (index.files || []).filter((f) => f.env?.client !== 'unsupported').map((f) => {
@@ -166,10 +166,91 @@ async function installModpackInner({ versionId, file, name, icon }, onCreated) {
   try {
     const mods = await installedProjects(path.join(root, 'mods'));
     const record = readRecord(inst);
-    for (const [pid, r] of Object.entries(mods)) if (!record[pid]) record[pid] = { file: r.file, versionId: r.versionId, type: 'mod' };
+    for (const [pid, r] of Object.entries(mods)) if (!record[pid]) record[pid] = { file: r.file, versionId: r.versionId, type: 'mod', pack: true };
     writeRecord(inst, record);
   } catch {}
   return inst;
+}
+
+/** Download (cached) and read a Modrinth modpack version: { zip, index, version }. */
+async function readPackVersion(versionId) {
+  const v = await version(versionId);
+  const f = v.files.find((x) => x.primary) || v.files[0];
+  const file = path.join(paths.cache(), 'modpacks', f.filename);
+  await download(f.url, file, { sha1: f.hashes.sha1 });
+  const zip = new AdmZip(file);
+  return { zip, index: JSON.parse(zip.readAsText('modrinth.index.json')), version: v };
+}
+async function packProjectId(inst) {
+  if (inst.modpack?.projectId) return inst.modpack.projectId;
+  if (inst.modpack?.versionId) return (await version(inst.modpack.versionId)).project_id;
+  return null;
+}
+
+/** Versions a Modrinth modpack instance can switch to (newest first). */
+async function modpackVersions(instanceId) {
+  const inst = instances.get(instanceId);
+  const pid = await packProjectId(inst);
+  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Solaris doesn’t know where to look for updates.' };
+  const list = await versions(pid);
+  return {
+    updatable: true, projectId: pid, current: inst.modpack.versionId,
+    versions: list.map((v) => ({ id: v.id, name: v.name, number: v.version_number, type: v.version_type, date: v.date_published, gameVersions: v.game_versions, loaders: v.loaders, changelog: v.changelog })),
+  };
+}
+
+/**
+ * Switch a modpack instance to another pack version: files the old version installed are removed,
+ * the new ones downloaded and overrides applied. Worlds, options, screenshots and mods you added yourself are kept.
+ */
+async function updateModpack(instanceId, versionId) {
+  const inst = instances.get(instanceId);
+  const root = path.resolve(inst.gameDir);
+  push('task', { id: 'modpack', label: `Updating ${inst.name}`, progress: null });
+  try {
+    const next = await readPackVersion(versionId);
+    let oldPaths = [];
+    if (inst.modpack?.versionId) { try { oldPaths = ((await readPackVersion(inst.modpack.versionId)).index.files || []).map((f) => f.path); } catch {} }
+    const newPaths = new Set((next.index.files || []).map((f) => f.path));
+    for (const p of oldPaths) {
+      if (newPaths.has(p)) continue;
+      const full = path.resolve(root, p);
+      if (!full.startsWith(root + path.sep)) continue;
+      for (const f of [full, full + '.disabled']) try { fs.rmSync(f, { force: true }); } catch {}
+    }
+    const tasks = (next.index.files || []).filter((f) => f.env?.client !== 'unsupported').map((f) => {
+      const out = path.resolve(root, f.path);
+      if (!out.startsWith(root + path.sep)) throw new Error('Unsafe path in modpack: ' + f.path);
+      return { url: f.downloads[0], path: out, sha1: f.hashes.sha1, size: f.fileSize, verify: true };
+    }).filter((t) => !fs.existsSync(t.path + '.disabled')); // keep mods the player turned off
+    await downloadAll(tasks, { concurrency: 8, onProgress: (d, t) => push('task', { id: 'modpack', label: `Updating ${inst.name}`, progress: d / t, detail: `${d}/${t} files` }) });
+    const KEEP = /^(options\.txt|optionsof\.txt|servers\.dat|saves\/)/i;
+    for (const e of next.zip.getEntries()) {
+      const m = !e.isDirectory && e.entryName.match(/^(client-overrides|overrides)\/(.+)$/);
+      if (!m || (KEEP.test(m[2]) && fs.existsSync(path.resolve(root, m[2])))) continue;
+      const out = path.resolve(root, m[2]);
+      if (!out.startsWith(root + path.sep)) continue;
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, e.getData());
+    }
+    const deps = next.index.dependencies || {};
+    const type = deps['fabric-loader'] ? 'fabric' : deps['quilt-loader'] ? 'quilt' : deps.neoforge ? 'neoforge' : deps.forge ? 'forge' : 'vanilla';
+    let lv = deps['fabric-loader'] || deps['quilt-loader'] || deps.neoforge || deps.forge || null;
+    if (type === 'forge' && lv && !lv.startsWith(deps.minecraft + '-')) lv = `${deps.minecraft}-${lv}`;
+    const changed = deps.minecraft !== inst.versionId || type !== inst.loader?.type || lv !== inst.loader?.version;
+    instances.save({ ...instances.get(instanceId), versionId: deps.minecraft, loader: { type, version: lv }, launchVersionId: changed ? null : inst.launchVersionId,
+      modpack: { ...inst.modpack, projectId: next.version.project_id, versionId, version: next.index.versionId || next.version.version_number } });
+    try {
+      const mods = await installedProjects(path.join(root, 'mods'));
+      const record = readRecord(inst);
+      for (const [pid, r] of Object.entries(mods)) record[pid] = { pack: true, ...(record[pid] || {}), file: r.file, versionId: r.versionId, type: 'mod' };
+      for (const [pid, r] of Object.entries(record)) if (r.type === 'mod' && !fs.existsSync(path.join(root, 'mods', r.file)) && !fs.existsSync(path.join(root, 'mods', r.file + '.disabled'))) delete record[pid];
+      writeRecord(inst, record);
+    } catch {}
+    return instances.get(instanceId);
+  } finally {
+    push('task', { id: 'modpack', done: true });
+  }
 }
 
 /** Hash-based update check via Modrinth for all mods/packs in an instance. */
@@ -291,4 +372,4 @@ async function syncModules(instanceId, onProgress) {
   return report;
 }
 
-module.exports = { search, project, versions, version, tags, install, installModpack, checkUpdates, applyUpdate, modules, moduleAvailability, syncModules, bestVersion };
+module.exports = { readRecord, modpackVersions, updateModpack, search, project, versions, version, tags, install, installModpack, checkUpdates, applyUpdate, modules, moduleAvailability, syncModules, bestVersion };

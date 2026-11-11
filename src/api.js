@@ -16,6 +16,9 @@ const servers = require('./servers');
 const skins = require('./skins');
 const importers = require('./importers');
 const discord = require('./discord');
+const curseforge = require('./curseforge');
+const friends = require('./friends');
+const files = require('./files');
 
 const DATA = path.join(__dirname, '..', 'data');
 
@@ -29,11 +32,24 @@ function assertKnownPath(p) {
   if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Solaris folders.');
   return r;
 }
+/** Scan newly installed jars in the background and warn if something looks like malware. */
+function autoScan(instanceId, jars) {
+  if (settings.get().autoScanMods === false || !jars.length) return;
+  setImmediate(() => {
+    for (const j of jars) {
+      if (!fs.existsSync(j)) continue;
+      const findings = instances.scanFile(j);
+      if (findings.length) push('safety:flagged', { instanceId, file: path.basename(j), findings });
+    }
+  });
+}
+const modsPath = (id, list) => list.filter((x) => /\.jar$/i.test(x.file || '')).map((x) => path.join(instances.get(id).gameDir, 'mods', x.file));
 const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Close all running games before ${what}.`); };
 
 module.exports = (getWin) => ({
   // ---------- app / window ----------
   'app:info': () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
+  'app:restart': () => { app.isQuitting = true; app.relaunch(); app.quit(); },
   'win:minimize': () => getWin()?.minimize(),
   'win:maximize': () => { const w = getWin(); if (w) w.isMaximized() ? w.unmaximize() : w.maximize(); },
   'win:close': () => getWin()?.close(),
@@ -51,6 +67,7 @@ module.exports = (getWin) => ({
   'settings:set': (patch) => {
     const s = settings.set(patch);
     if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin, args: ['--hidden'] });
+    if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Solaris to apply the GPU acceleration change.' });
     if ('discordRpc' in patch || 'discordClientId' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
     return s;
   },
@@ -80,7 +97,9 @@ module.exports = (getWin) => ({
   'instances:addFiles': async (id, files, kind) => {
     const packs = files.filter((f) => /\.mrpack$/i.test(f));
     for (const f of packs) await modrinth.installModpack({ file: f });
-    return { ...instances.addFiles(id, files.filter((f) => !/\.mrpack$/i.test(f)), kind), modpacks: packs.length };
+    const r = { ...instances.addFiles(id, files.filter((f) => !/\.mrpack$/i.test(f)), kind), modpacks: packs.length };
+    autoScan(id, modsPath(id, files.map((f) => ({ file: path.basename(f) }))));
+    return r;
   },
   'instances:duplicates': (id) => instances.duplicates(id),
   'instances:scan': (id) => instances.scan(id),
@@ -95,8 +114,9 @@ module.exports = (getWin) => ({
   },
   'instances:importFile': async (file) => {
     if (/\.mrpack$/i.test(file)) return modrinth.installModpack({ file });
+    if (/\.zip$/i.test(file) && curseforge.isCurseForgePack(file)) return curseforge.installModpack({ file });
     if (/\.(solpack|zip)$/i.test(file)) return instances.importPack(file);
-    throw new Error('Unsupported file. Use .solpack or .mrpack');
+    throw new Error('Unsupported file. Use .mrpack, a CurseForge modpack .zip or .solpack');
   },
   'instances:checkUpdates': (id, kind) => modrinth.checkUpdates(id, kind),
   'instances:applyUpdate': (id, kind, file, versionId) => modrinth.applyUpdate(id, kind, file, versionId),
@@ -127,6 +147,8 @@ module.exports = (getWin) => ({
   // ---------- accounts ----------
   'accounts:list': () => accounts.list(),
   'accounts:addOffline': (name) => accounts.addOffline(name),
+  'accounts:checkOfflineName': (name) => accounts.checkOfflineName(name),
+  'accounts:refreshProfile': () => accounts.refreshProfile(),
   'accounts:startMicrosoft': (opts) => accounts.startMicrosoft(opts || {}),
   'accounts:microsoftAvailable': () => accounts.microsoftAvailable(),
   'accounts:cancelMicrosoft': () => accounts.cancelMicrosoft(),
@@ -138,7 +160,55 @@ module.exports = (getWin) => ({
   'modrinth:project': (id) => modrinth.project(id),
   'modrinth:versions': (id, o) => modrinth.versions(id, o),
   'modrinth:tags': () => modrinth.tags(),
-  'modrinth:install': (instanceId, o) => modrinth.install(instanceId, o),
+  'modrinth:install': async (instanceId, o) => { const r = await modrinth.install(instanceId, o); autoScan(instanceId, modsPath(instanceId, r)); return r; },
+  'modpack:versions': (id) => (instances.get(id).modpack?.source === 'curseforge' ? curseforge.modpackVersions(id) : modrinth.modpackVersions(id)),
+  'modpack:update': (id, versionId) => {
+    if (launch.isBusy(id)) throw new Error('Close the game before updating the modpack.');
+    return instances.get(id).modpack?.source === 'curseforge' ? curseforge.updateModpack(id, versionId) : modrinth.updateModpack(id, versionId);
+  },
+
+  // ---------- CurseForge ----------
+  'curseforge:available': () => curseforge.available(),
+  'curseforge:search': (q) => curseforge.search(q),
+  'curseforge:project': (id) => curseforge.project(id),
+  'curseforge:files': (id, o) => curseforge.files(id, o),
+  'curseforge:install': async (instanceId, o) => { const r = await curseforge.install(instanceId, o); autoScan(instanceId, modsPath(instanceId, r)); return r; },
+  'curseforge:installModpack': (o) => curseforge.installModpack(o),
+  'curseforge:setKey': async (k) => {
+    const prev = settings.get().curseforgeKey;
+    settings.set({ curseforgeKey: String(k || '').trim() });
+    if (!k) return settings.get();
+    try { await curseforge.search({ query: 'jei', limit: 1 }); return settings.get(); }
+    catch (e) {
+      settings.set({ curseforgeKey: prev });
+      throw new Error(/HTTP 40[13]/.test(e.message) ? 'CurseForge didn’t accept that key — check that you copied the whole key from console.curseforge.com.' : 'Couldn’t reach CurseForge to check the key: ' + e.message.slice(0, 80));
+    }
+  },
+
+  // ---------- friends ----------
+  'friends:list': () => friends.list(),
+  'friends:add': (n) => friends.add(n),
+  'friends:remove': (u) => friends.remove(u),
+  'friends:note': (u, n) => friends.setNote(u, n),
+  'friends:skin': (u) => friends.skin(u),
+
+  // ---------- instance files & logs ----------
+  'files:list': (id, rel) => files.list(id, rel),
+  'files:read': (id, rel) => files.read(id, rel),
+  'files:write': (id, rel, t) => files.write(id, rel, t),
+  'files:trash': (id, rels) => files.trash(id, rels),
+  'files:rename': (id, rel, n) => files.rename(id, rel, n),
+  'files:mkdir': (id, rel, n) => files.mkdir(id, rel, n),
+  'files:open': (id, rel) => files.open(id, rel),
+  'files:reveal': (id, rel) => files.reveal(id, rel),
+  'files:logs': (id) => files.logs(id),
+
+  // ---------- safety ----------
+  'safety:scanAll': async () => {
+    try { return await instances.scanAll((d, t) => { if (d % 5 === 0 || d === t) push('task', { id: 'scan', label: 'Scanning mods for malware', progress: d / Math.max(1, t), detail: `${d}/${t}` }); }); }
+    finally { push('task', { id: 'scan', done: true }); }
+  },
+  'safety:disable': (id, file) => instances.setEnabled(id, 'mods', [path.basename(file)], false),
   'modrinth:installModpack': (o) => modrinth.installModpack(o),
 
   // ---------- Solaris Client ----------
@@ -182,6 +252,7 @@ module.exports = (getWin) => ({
 
   // ---------- java ----------
   'java:detect': () => java.detect(),
+  'java:test': (p) => java.test(p),
   'java:install': (component) => java.ensureRuntime(component, (d, t) => push('task', { id: 'java', label: `Installing ${component}`, progress: d / t, detail: `${d}/${t}` })).then((p) => { push('task', { id: 'java', done: true }); return p; }),
 
   // ---------- import ----------
@@ -190,6 +261,9 @@ module.exports = (getWin) => ({
   'import:mmcScan': (dir) => importers.scanMultiMC(dir),
   'import:mmc': (dir, keys) => importers.importMultiMC(dir, keys),
   'import:folder': (dir, o) => importers.importFolder(dir, o),
+  'import:cfScan': (dir) => importers.scanCurseForge(dir || undefined),
+  'import:cf': (keys, dir) => importers.importCurseForge(keys, dir || undefined),
+  'import:cfDir': () => importers.curseforgeDir(),
 
   // ---------- storage & diagnostics ----------
   'storage:usage': async () => {

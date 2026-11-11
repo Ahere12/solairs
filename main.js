@@ -6,11 +6,46 @@ let tray = null;
 let hiddenForGame = false;
 let quitWhenGamesClose = false; // window was closed while a game was running
 
+// GPU acceleration can be turned off in Settings → Performance (read before the app is ready; never creates folders).
+try {
+  const { paths } = require('./src/util');
+  if (!paths.missingDataDir()) {
+    const fs = require('fs');
+    const root = process.env.SOLARIS_DATA_DIR || (() => { try { return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'boot.json'), 'utf8')).dataDir; } catch { return null; } })() || paths.defaultRoot();
+    const s = JSON.parse(fs.readFileSync(path.join(root, 'settings.json'), 'utf8'));
+    if (s.hardwareAcceleration === false) app.disableHardwareAcceleration();
+  }
+} catch {}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => showWindow());
-  app.whenReady().then(init);
+  app.whenReady().then(async () => { if (await recoverDataDir()) init(); });
+}
+
+/**
+ * Safer missing-data-folder recovery: if the data folder was moved to a drive that is no longer there,
+ * ask instead of silently starting with an empty launcher (and never create a new empty folder there).
+ */
+async function recoverDataDir() {
+  const { dialog } = require('electron');
+  const { paths } = require('./src/util');
+  for (;;) {
+    const missing = paths.missingDataDir();
+    if (!missing) return true;
+    const { response } = await dialog.showMessageBox({
+      type: 'warning', title: 'Solaris data folder not found', noLink: true, defaultId: 0, cancelId: 3,
+      message: 'Solaris can’t find its data folder',
+      detail: `Your instances, settings and accounts were moved to:\n${missing}\n\nThat folder isn’t there right now — maybe a USB or external drive is unplugged, or the folder was renamed.`,
+      buttons: ['Try again', 'Choose the folder…', 'Use the default folder', 'Quit'],
+    });
+    if (response === 1) {
+      const r = await dialog.showOpenDialog({ title: 'Where is your Solaris data folder?', properties: ['openDirectory'] });
+      if (r.filePaths[0]) paths.setRoot(r.filePaths[0]);
+    } else if (response === 2) paths.setRoot(paths.defaultRoot());
+    else if (response === 3) { app.quit(); return false; }
+  }
 }
 
 function showWindow() {

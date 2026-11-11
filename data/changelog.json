@@ -1,5 +1,34 @@
 [
   {
+    "product": "launcher", "version": "1.0.0", "date": "2026-11-11",
+    "title": "CurseForge, friends and a lot more",
+    "groups": [
+      { "area": "Mods & modpacks", "entries": [
+        { "type": "feature", "text": "CurseForge: browse and install mods, modpacks, shaders and resource packs (add your free API key in Settings → Integrations)." },
+        { "type": "feature", "text": "Modpack updates: update a Modrinth or CurseForge modpack, or switch to any version. Your worlds, settings and own mods are kept." },
+        { "type": "feature", "text": "Source badges show where every mod came from: Modrinth, CurseForge, a modpack, or added by you." },
+        { "type": "feature", "text": "Import CurseForge modpack .zip files and CurseForge app instances." }
+      ] },
+      { "area": "Instances", "entries": [
+        { "type": "feature", "text": "New Files, Screenshots and Logs tabs: a built-in file explorer and config editor, per-instance screenshots, and crash logs you can upload to mclo.gs." },
+        { "type": "feature", "text": "Reorder or hide instance tabs in Settings → Appearance." },
+        { "type": "improvement", "text": "Damaged game files are detected automatically and repaired on the next launch." }
+      ] },
+      { "area": "Accounts & safety", "entries": [
+        { "type": "feature", "text": "Friends: follow players, see their real skins, and see when Solaris spots them on a server." },
+        { "type": "feature", "text": "New mods are scanned for malware automatically, plus Scan now in Settings → Privacy & safety." },
+        { "type": "feature", "text": "Discord shows your player head for Microsoft accounts, with privacy switches for what is shared." },
+        { "type": "feature", "text": "Refresh skin button, streamer mode, and warnings for unusual offline usernames." }
+      ] },
+      { "area": "Look & performance", "entries": [
+        { "type": "feature", "text": "Light, dark or match-system mode, a Classic layout, and custom gradients for buttons and the background." },
+        { "type": "feature", "text": "Low-end PC mode and a GPU acceleration switch in Settings → Performance." },
+        { "type": "improvement", "text": "Smarter Java: per-version Java choices, a Test button, and Java that is too old is skipped automatically." },
+        { "type": "fix", "text": "If your moved data folder is missing (e.g. an unplugged drive), Solaris asks what to do instead of starting empty." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.0.0", "date": "2026-11-09",
     "title": "Solaris is here",
     "groups": [

@@ -52,6 +52,24 @@ function addOffline(name) {
   return list();
 }
 
+/** Warnings shown before adding an offline account with an unusual name (it is still allowed). */
+const STAFF = /^(notch|jeb_|dinnerbone|grumm|mojang|minecraft|microsoft|xbox|admin(istrator)?|moderator|mod|owner|staff|helper|server|console|herobrine|system|support|official)$/i;
+async function checkOfflineName(name) {
+  const warnings = [];
+  const n = String(name || '');
+  if (STAFF.test(n)) warnings.push('This name belongs to Mojang/Minecraft staff or looks like a server role. Servers may kick or ban players who impersonate staff.');
+  if (/(admin|moderator|owner|staff|mojang|official)/i.test(n) && !STAFF.test(n)) warnings.push('Names with “admin”, “owner”, “staff” or “official” can look like impersonation on servers.');
+  if (/^_|_$|__/.test(n)) warnings.push('Leading, trailing or double underscores are rejected by some servers.');
+  if (/^\d+$/.test(n)) warnings.push('Names made only of numbers are rejected by some servers and plugins.');
+  if (/^[A-Za-z0-9_]{3,16}$/.test(n)) {
+    try {
+      const r = await getJSON('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(n));
+      if (r?.id) warnings.push(`“${r.name}” is a real Microsoft/Minecraft account. On offline-mode servers you would appear as that player, and you can’t join online-mode servers with an offline account.`);
+    } catch {}
+  }
+  return warnings;
+}
+
 // ---------- Microsoft ----------
 // Flow: Microsoft OAuth (browser + PKCE, or device code) → Xbox Live → XSTS → Minecraft services.
 const SCOPE = 'XboxLive.signin offline_access';
@@ -334,4 +352,19 @@ async function mcProfile() {
   return getJSON('https://api.minecraftservices.com/minecraft/profile', { headers: { Authorization: 'Bearer ' + auth.accessToken } });
 }
 
-module.exports = { list, setActive, remove, addOffline, startMicrosoft, cancelMicrosoft, getLaunchAuth, active, mcProfile, offlineUuid, microsoftAvailable };
+/** Skin refresh: re-read the active Microsoft profile (name + current skin) from Minecraft services. */
+async function refreshProfile() {
+  const prof = await mcProfile();
+  if (!prof) return list();
+  const d = load();
+  const a = d.accounts.find((x) => x.id === d.active);
+  if (a) {
+    const skin = (prof.skins || []).find((x) => x.state === 'ACTIVE') || prof.skins?.[0];
+    a.name = prof.name || a.name;
+    a.skinUrl = skin?.url || a.skinUrl || null;
+    store(d);
+  }
+  return list();
+}
+
+module.exports = { refreshProfile, checkOfflineName, list, setActive, remove, addOffline, startMicrosoft, cancelMicrosoft, getLaunchAuth, active, mcProfile, offlineUuid, microsoftAvailable };

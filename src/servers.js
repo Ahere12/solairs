@@ -78,7 +78,7 @@ async function ping(address, timeout = 5000) {
         finish(result(status, Date.now() - started));
       }
     });
-  }).then((r) => { if (r.online) record(address, r.players.online); return r; });
+  }).then((r) => { if (r.online) { record(address, r.players.online); try { require('./friends').notePlayers(address, r.players.sample); } catch {} } return r; });
 }
 function result(s, latency) {
   return {

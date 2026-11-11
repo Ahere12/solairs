@@ -11,12 +11,33 @@ function miniMarkdown(md) {
   return s.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>');
 }
 
+/** Allow-list sanitiser for CurseForge's HTML descriptions: only basic formatting, https links and images survive. */
+function safeHtml(html) {
+  const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+  const OK = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'A', 'IMG', 'CODE', 'PRE', 'BLOCKQUOTE', 'SPAN', 'DIV', 'HR', 'TABLE', 'TR', 'TD', 'TH', 'TBODY', 'THEAD']);
+  const clean = (node) => {
+    const frag = document.createDocumentFragment();
+    for (const n of [...node.childNodes]) {
+      if (n.nodeType === 3) { frag.appendChild(document.createTextNode(n.textContent)); continue; }
+      if (n.nodeType !== 1) continue;
+      if (!OK.has(n.tagName)) { if (!['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED'].includes(n.tagName)) frag.appendChild(clean(n)); continue; }
+      const el = document.createElement(n.tagName);
+      if (n.tagName === 'A' && /^https?:\/\//i.test(n.getAttribute('href') || '')) { el.setAttribute('href', n.getAttribute('href')); el.setAttribute('target', '_blank'); }
+      if (n.tagName === 'IMG') { const src = n.getAttribute('src') || ''; if (!/^https:\/\//i.test(src)) continue; el.setAttribute('src', src); el.setAttribute('loading', 'lazy'); }
+      el.appendChild(clean(n));
+      frag.appendChild(el);
+    }
+    return frag;
+  };
+  return clean(doc.body);
+}
+
 Pages.browse = {
   TYPES: [['mod', 'Mods'], ['modpack', 'Modpacks'], ['resourcepack', 'Resource Packs'], ['shader', 'Shaders'], ['datapack', 'Datapacks']],
   /** A content-hub card: banner image, overlapping icon, title, downloads, description, author, install. */
   hubCard(p) {
     const banner = p.featured_gallery || (p.gallery && p.gallery[0]) || '';
-    return `<div class="hub-card" data-pid="${esc(p.project_id)}" data-ptype="${esc(p.project_type || '')}">
+    return `<div class="hub-card" data-pid="${esc(p.project_id)}" data-ptype="${esc(p.project_type || '')}" data-src="${esc(p.source || 'modrinth')}">
       <div class="banner ${banner ? '' : 'blank'}" ${banner ? `style="background-image:url('${esc(banner)}')"` : ''}>${p.icon_url ? `<img class="pic" src="${esc(p.icon_url)}" loading="lazy" alt="">` : `<div class="pic"></div>`}</div>
       <div class="body2">
         <div class="info"><div class="t"><b title="${esc(p.title)}">${esc(p.title)}</b><span class="dl">${icon('download')}${fmtNum(p.downloads)}</span></div>
@@ -26,12 +47,12 @@ Pages.browse = {
     </div>`;
   },
   bindHub(root, type, target) {
-    $$('[data-pid]', root).forEach((c) => (c.onclick = (e) => { if (e.target.closest('button')) return; this.details(c.dataset.pid, c.dataset.ptype || type, target); }));
-    $$('[data-quick]', root).forEach((b) => (b.onclick = () => { const c = b.closest('[data-pid]'); this.install(b.dataset.quick, c?.dataset.ptype || type, target); }));
+    $$('[data-pid]', root).forEach((c) => (c.onclick = (e) => { if (e.target.closest('button')) return; (c.dataset.src === 'curseforge' ? this.cfDetails : this.details).call(this, c.dataset.pid, c.dataset.ptype || type, target); }));
+    $$('[data-quick]', root).forEach((b) => (b.onclick = () => { const c = b.closest('[data-pid]'); (c?.dataset.src === 'curseforge' ? this.cfInstall : this.install).call(this, b.dataset.quick, c?.dataset.ptype || type, target); }));
   },
   async render(el, params, ctx) {
     const target = params.instanceId ? State.instances.find((i) => i.id === params.instanceId) : null;
-    const st = { type: params.type || 'mod', query: '', gameVersion: target?.versionId || '', loader: target && target.loader.type !== 'vanilla' ? target.loader.type : '', cats: new Set(), sort: 'relevance', offset: 0, total: 0 };
+    const st = { type: params.type || 'mod', query: '', gameVersion: target?.versionId || '', loader: target && target.loader.type !== 'vanilla' ? target.loader.type : '', cats: new Set(), sort: 'relevance', offset: 0, total: 0, source: params.source || State.settings.browseSource || 'modrinth' };
     let view = localStorage.getItem('browse.view') || 'grid';
     const typeLabel = () => this.TYPES.find(([k]) => k === st.type)[1];
     el.innerHTML = `
@@ -40,7 +61,7 @@ Pages.browse = {
       <div class="hub-bar">
         <h2 id="type-title">${esc(typeLabel())}</h2><span class="cnt" id="count"></span>
         <div class="grow"></div>
-        <span class="chip">${icon('globe')}Modrinth</span>
+        <div class="seg" id="src"><button data-src="modrinth">Modrinth</button><button data-src="curseforge">CurseForge</button></div>
         <div class="seg icons" id="view"><button data-v="grid" title="Grid">${icon('grid')}</button><button data-v="list" title="List">${icon('list')}</button></div>
       </div>
       <div class="hub-filters">
@@ -61,6 +82,9 @@ Pages.browse = {
     $('#f-ver', el).value = st.gameVersion;
     $('#f-loader', el).value = st.loader;
     let tags = null;
+    const drawSrc = () => { $$('#src [data-src]', el).forEach((b) => b.classList.toggle('on', b.dataset.src === st.source)); $('#f-cat', el).classList.toggle('hidden', st.source === 'curseforge'); };
+    $$('#src [data-src]', el).forEach((b) => (b.onclick = () => { st.source = b.dataset.src; saveSettings({ browseSource: st.source }); drawSrc(); search(); }));
+    drawSrc();
     const drawCats = async () => {
       tags = tags || (await api('modrinth:tags').catch(() => ({ categories: [] })));
       const cats = tags.categories.filter((c) => c.project_type === (st.type === 'datapack' ? 'mod' : st.type) && c.header !== 'resolutions');
@@ -75,7 +99,15 @@ Pages.browse = {
       const my = ++seq;
       if (!append) { st.offset = 0; $('#results', el).innerHTML = '<div class="faint">Searching…</div>'; }
       try {
-        const r = await api('modrinth:search', { query: st.query, type: st.type, gameVersion: st.gameVersion, loader: st.loader, categories: [...st.cats], sort: st.sort, offset: st.offset });
+        if (st.source === 'curseforge' && !(await api('curseforge:available'))) {
+          if (my !== seq) return;
+          $('#count', el).textContent = '';
+          $('#more', el).classList.add('hidden');
+          $('#results', el).innerHTML = `<div class="empty" style="grid-column:1/-1">${icon('globe')}<div><b>CurseForge needs an API key</b></div><div class="faint small" style="max-width:460px">CurseForge only lets apps search and download with a key. Get a free key at console.curseforge.com, then paste it in Settings → Integrations.</div><button class="btn primary" id="cf-key">Add API key</button></div>`;
+          $('#cf-key', el).onclick = () => Router.go('settings', { tab: 'integrations' });
+          return;
+        }
+        const r = await api(st.source === 'curseforge' ? 'curseforge:search' : 'modrinth:search', { query: st.query, type: st.type, gameVersion: st.gameVersion, loader: st.loader, categories: [...st.cats], sort: st.sort, offset: st.offset });
         if (my !== seq) return;
         st.total = r.total_hits;
         $('#count', el).textContent = `(${fmtNum(r.total_hits)} results)`;
@@ -126,6 +158,75 @@ Pages.browse = {
       m.$('[data-web]').onclick = () => api('shell:open', `https://modrinth.com/${p.project_type}/${p.slug}`);
       showDesc();
     } catch (e) { m.$('.content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  },
+
+  /* ---------- CurseForge ---------- */
+  async cfDetails(id, type, target) {
+    const m = modal({ title: 'Loading…', wide: true, body: '<div class="faint">Loading project…</div>' });
+    try {
+      const p = await api('curseforge:project', id);
+      m.el.querySelector('header h2').textContent = p.title;
+      m.$('.content').innerHTML = `
+        <div class="row" style="gap:16px;margin-bottom:14px;align-items:flex-start">
+          ${p.icon_url ? `<img src="${esc(p.icon_url)}" style="width:84px;height:84px;border-radius:16px">` : ''}
+          <div class="grow"><div class="muted">${esc(p.description)}</div><div class="row wrap" style="margin-top:8px"><span class="chip src-cf">CurseForge</span><span class="chip">${icon('download')}${fmtNum(p.downloads)}</span><span class="chip">${icon('user')}${esc(p.author)}</span>${p.categories.slice(0, 5).map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</div></div>
+          <div class="stack"><button class="btn primary" data-install>${icon('download')}${T('Install')}</button>${p.url ? `<button class="btn ghost sm" data-web>${icon('globe')}CurseForge page</button>` : ''}</div>
+        </div>
+        ${p.gallery?.length ? `<div class="gallery-strip">${p.gallery.map((g) => `<img src="${esc(g)}" data-full="${esc(g)}" loading="lazy">`).join('')}</div>` : ''}
+        <div class="tabs" style="margin-top:12px"><button class="on" data-dt="desc">Description</button><button data-dt="versions">Files</button></div>
+        <div id="dt"></div>`;
+      const showDesc = () => { m.$('#dt').innerHTML = '<div class="md"></div>'; m.$('#dt .md').appendChild(safeHtml(p.body_html)); };
+      const showVersions = async () => {
+        m.$('#dt').innerHTML = '<div class="faint">Loading files…</div>';
+        const fs = await api('curseforge:files', id, target ? { gameVersion: target.versionId, loader: target.loader.type !== 'vanilla' ? target.loader.type : '' } : {});
+        m.$('#dt').innerHTML = fs.length ? `<div class="list">${fs.map((f) => `<div class="list-row"><div class="info"><div class="title">${esc(f.name)} <span class="chip ${f.type === 'release' ? 'ok' : 'warn'}">${esc(f.type)}</span></div><div class="desc">${esc(f.gameVersions.slice(-4).join(', '))}${f.loaders.length ? ' · ' + esc(f.loaders.join(', ')) : ''} · ${fmtDate(f.date)}</div></div>
+          <button class="btn sm" data-iv="${esc(f.id)}">${T('Install')}</button></div>`).join('')}</div>` : '<div class="empty">No files match this instance.</div>';
+        $$('[data-iv]', m.el).forEach((b) => (b.onclick = () => this.cfInstall(id, type, target, fs.find((x) => x.id === b.dataset.iv))));
+      };
+      $$('[data-dt]', m.el).forEach((b) => (b.onclick = () => { $$('[data-dt]', m.el).forEach((x) => x.classList.toggle('on', x === b)); b.dataset.dt === 'desc' ? showDesc() : showVersions(); }));
+      $$('.gallery-strip img', m.el).forEach((img) => (img.onclick = () => lightbox(img.dataset.full)));
+      m.$('[data-install]').onclick = () => this.cfInstall(id, type, target);
+      if (p.url) m.$('[data-web]').onclick = () => api('shell:open', p.url);
+      showDesc();
+    } catch (e) { m.$('.content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  },
+  async cfInstall(projectId, type, target, file = null) {
+    if (type === 'modpack') {
+      try {
+        toast('Installing modpack — this can take a while', 'info');
+        const inst = await api('curseforge:installModpack', { projectId, fileId: file?.id });
+        await refreshInstances();
+        toast(`Installed ${inst.name}`);
+        Router.go('library', { spotlight: inst.id });
+      } catch (e) { toastErr(e); }
+      return;
+    }
+    let inst = target;
+    if (!inst) {
+      inst = await chooseInstance({
+        title: 'Install into…',
+        filter: (i) => (type !== 'mod' || i.loader.type !== 'vanilla') && (!file || !file.gameVersions.length || file.gameVersions.includes(i.versionId)),
+        note: type === 'mod' ? 'Only modded instances are shown.' : '',
+      });
+      if (!inst) return;
+    }
+    let world;
+    if (type === 'datapack') {
+      const ws = await api('instances:worlds', inst.id);
+      if (!ws.length) return toast('This instance has no worlds yet — play once first.', 'warn');
+      world = await new Promise((res) => {
+        const m = modal({ title: 'Install datapack into world', body: `<div class="list">${ws.map((w) => `<div class="list-row" style="cursor:pointer" data-w="${esc(w.name)}">${icon('world')}<div class="info"><div class="title">${esc(w.name)}</div></div></div>`).join('')}</div>`, onClose: () => res(null) });
+        $$('[data-w]', m.el).forEach((r) => (r.onclick = () => { res(r.dataset.w); m.close(); }));
+      });
+      if (!world) return;
+    }
+    const key = 'install-cf-' + projectId;
+    State.tasks[key] = { label: `Installing into ${inst.name}`, progress: null }; Bus.emit('tasks');
+    try {
+      const r = await api('curseforge:install', inst.id, { projectId, fileId: file?.id, world });
+      toast(`Installed ${r.map((x) => x.file).join(', ')}`);
+    } catch (e) { toastErr(e); }
+    finally { delete State.tasks[key]; Bus.emit('tasks'); }
   },
 
   async install(projectId, type, target, version = null) {

@@ -23,11 +23,10 @@ Pages.instance = {
       $('#icon-btn', el).onclick = () => changeInstanceIcon(inst);
     };
     el.innerHTML = `<div id="ihead" class="inst-hero"></div>
-      <div class="tabs" id="itabs">
-        <button data-t="content">Content</button><button data-t="worlds">Worlds</button><button data-t="console">Console</button><button data-t="settings">Settings</button>
-      </div>
+      <div class="tabs" id="itabs">${instanceTabs().map((t) => `<button data-t="${t.id}">${esc(t.label)}</button>`).join('')}</div>
       <div id="ibody"></div>`;
     head();
+    if (!instanceTabs().some((t) => t.id === tab)) tab = instanceTabs()[0]?.id || 'content';
     const show = (t) => {
       tab = t;
       $$('[data-t]', el).forEach((b) => b.classList.toggle('on', b.dataset.t === t));
@@ -57,6 +56,7 @@ Pages.instance = {
         <div class="search" style="width:220px">${icon('search')}<input type="search" id="cf" placeholder="Filter…"></div>
         <div class="grow"></div>
         <button class="btn sm" id="upd">${icon('refresh')}Check updates</button>
+        ${inst.modpack ? `<button class="btn sm" id="mp-upd">${icon('layers')}Modpack updates</button>` : ''}
         <button class="btn sm" id="tools">${icon('shield')}Tools</button>
         <button class="btn sm" id="addf">${icon('upload')}Add files</button>
         <button class="btn sm primary" id="browse">${icon('browse')}Browse</button>
@@ -73,7 +73,7 @@ Pages.instance = {
         const up = updates && updates.find((u) => u.file === m.file);
         return `<div class="list-row ${m.enabled ? '' : 'disabled'} ${selected.has(m.file) ? 'selected' : ''}" data-i="${i}" data-file="${esc(m.file)}">
           ${m.icon ? `<img class="mod-icon" src="${esc(m.icon)}">` : `<div class="mod-icon">${icon(kind === 'mods' ? 'box' : 'image')}</div>`}
-          <div class="info"><div class="title">${esc(m.name)} ${m.version ? `<span class="faint small">${esc(m.version)}</span>` : ''} ${up?.latest ? `<span class="chip accent">Update → ${esc(up.latest.version)}</span>` : ''}</div><div class="desc">${esc(m.file)}${m.description ? ' · ' + esc(m.description) : ''}</div></div>
+          <div class="info"><div class="title">${esc(m.name)} ${m.version ? `<span class="faint small">${esc(m.version)}</span>` : ''} ${sourceChip(m)} ${up?.latest ? `<span class="chip accent">Update → ${esc(up.latest.version)}</span>` : ''}</div><div class="desc">${esc(m.file)}${m.description ? ' · ' + esc(m.description) : ''}</div></div>
           <span class="faint small">${fmtBytes(m.size)}</span>
           ${up?.latest ? `<button class="btn sm" data-apply="${esc(m.file)}">${icon('download')}Update</button>` : ''}
           <label class="switch" title="${m.enabled ? 'Disable' : 'Enable'}"><input type="checkbox" data-toggle="${esc(m.file)}" ${m.enabled ? 'checked' : ''}><span></span></label>
@@ -142,6 +142,7 @@ Pages.instance = {
       resetUpd();
     };
     updBtn.onclick = checkUpdates;
+    if ($('#mp-upd', body)) $('#mp-upd', body).onclick = () => modpackUpdates(inst, load);
     $('#tools', body).onclick = (e) => contextMenu(e.clientX, e.clientY, [
       { label: 'Find duplicate mods', icon: 'copy', action: async () => {
         const d = await api('instances:duplicates', inst.id);
@@ -185,6 +186,95 @@ Pages.instance = {
     const runId = runs.length ? runs[runs.length - 1][0] : null;
     if (!runId) { body.innerHTML = `<div class="empty">${icon('console')}<div>No logs yet for this session. Launch the game to see live output.</div></div>`; return; }
     return Pages.console.mount(body, runId);
+  },
+
+  /* ---------- files (built-in file explorer) ---------- */
+  async files(body, inst, rel = '') {
+    body.innerHTML = '<div class="faint">Loading…</div>';
+    let r;
+    try { r = await api('files:list', inst.id, rel); } catch (e) { if (rel) return this.files(body, inst, ''); throw e; }
+    const crumbs = [{ name: inst.name, rel: '' }, ...r.rel.split('/').filter(Boolean).map((p, i, a) => ({ name: p, rel: a.slice(0, i + 1).join('/') }))];
+    body.innerHTML = `<div class="sticky-bar">
+        <div class="crumbs">${crumbs.map((c, i) => `<button class="crumb" data-go="${esc(c.rel)}">${i === 0 ? icon('folder') : ''}${esc(c.name)}</button>`).join('<span class="faint">/</span>')}</div>
+        <div class="grow"></div>
+        <button class="btn sm" id="fx-new">${icon('plus')}Folder</button>
+        <button class="btn sm" id="fx-reveal">${icon('folder')}Show in Explorer</button>
+      </div>
+      <div class="list files-list">${r.rel ? `<div class="list-row file-row" data-up>${icon('back')}<div class="info"><div class="title">..</div></div></div>` : ''}
+      ${r.entries.map((e) => `<div class="list-row file-row" data-rel="${esc(e.rel)}" data-dir="${e.dir ? 1 : ''}">
+        <div class="mod-icon">${icon(e.dir ? 'folder' : /\.(png|jpe?g)$/i.test(e.name) ? 'image' : /\.(jar|zip)$/i.test(e.name) ? 'box' : 'file')}</div>
+        <div class="info"><div class="title">${esc(e.name)}</div><div class="desc">${e.dir ? 'Folder' : fmtBytes(e.size)} · ${fmtDate(e.mtime)}</div></div>
+        <button class="icon-btn" data-more="${esc(e.rel)}" title="More">${icon('more')}</button></div>`).join('') || '<div class="empty">This folder is empty.</div>'}</div>`;
+    const go = (p) => this.files(body, inst, p);
+    $$('[data-go]', body).forEach((b) => (b.onclick = () => go(b.dataset.go)));
+    if ($('[data-up]', body)) $('[data-up]', body).onclick = () => go(r.rel.split('/').slice(0, -1).join('/'));
+    $('#fx-reveal', body).onclick = () => (r.rel ? api('files:open', inst.id, r.rel) : api('instances:openFolder', inst.id));
+    $('#fx-new', body).onclick = async () => { const n = await promptDialog('New folder', { placeholder: 'Folder name', ok: 'Create' }); if (n) { try { await api('files:mkdir', inst.id, r.rel, n.trim()); go(r.rel); } catch (e) { toastErr(e); } } };
+    const openEntry = async (e) => {
+      if (e.dir) return go(e.rel);
+      if (/\.(png|jpe?g|gif)$/i.test(e.name)) return lightbox(fileUrl(inst.gameDir + '/' + e.rel));
+      if (/\.(txt|log|gz|json|json5|toml|cfg|conf|properties|ini|ya?ml|mcmeta|md|csv|snbt|xml)$/i.test(e.name)) return this.viewFile(inst, e.rel, () => go(r.rel));
+      api('files:open', inst.id, e.rel);
+    };
+    $$('[data-rel]', body).forEach((row) => {
+      const e = r.entries.find((x) => x.rel === row.dataset.rel);
+      row.ondblclick = () => openEntry(e);
+      row.onclick = (ev) => { if (ev.target.closest('button')) return; if (e.dir) go(e.rel); };
+      const menu = (ev) => contextMenu(ev.clientX, ev.clientY, [
+        { label: e.dir ? 'Open' : 'View / open', icon: 'eye', action: () => openEntry(e) },
+        { label: 'Open with default app', icon: 'external', action: () => api('files:open', inst.id, e.rel) },
+        { label: 'Show in Explorer', icon: 'folder', action: () => api('files:reveal', inst.id, e.rel) },
+        { label: 'Copy path', icon: 'copy', action: () => { api('clipboard:write', inst.gameDir + '\\' + e.rel.replace(/\//g, '\\')); toast('Path copied'); } },
+        { label: 'Rename', icon: 'edit', action: async () => { const n = await promptDialog('Rename', { value: e.name, ok: 'Rename' }); if (n && n !== e.name) { try { await api('files:rename', inst.id, e.rel, n.trim()); go(r.rel); } catch (er) { toastErr(er); } } } },
+        { label: 'Move to Recycle Bin', icon: 'trash', danger: true, action: async () => { if (await confirmDialog(`Move “${e.name}” to the Recycle Bin?`, { danger: true, ok: T('Delete') })) { try { await api('files:trash', inst.id, e.rel); go(r.rel); } catch (er) { toastErr(er); } } } },
+      ]);
+      row.oncontextmenu = (ev) => { ev.preventDefault(); menu(ev); };
+      $('[data-more]', row).onclick = menu;
+    });
+  },
+  async viewFile(inst, rel, onSaved) {
+    let f;
+    try { f = await api('files:read', inst.id, rel); } catch (e) { return toastErr(e); }
+    const editable = !/\.(gz|log)$/i.test(rel) && !f.truncated;
+    const m = modal({ title: rel.split('/').pop(), wide: true,
+      body: `<textarea class="mono file-view" spellcheck="false" ${editable ? '' : 'readonly'}>${esc(f.text)}</textarea>`,
+      footer: `<span class="faint small grow">${fmtBytes(f.size)}${editable ? '' : ' · read-only'}</span>
+        ${/(logs|crash-reports)\//.test(rel) || /hs_err/.test(rel) ? `<button class="btn" data-share>${icon('upload')}Upload to mclo.gs</button>` : ''}
+        <button class="btn" data-copy>${icon('copy')}Copy</button>${editable ? `<button class="btn primary" data-save>${icon('check')}${T('Save')}</button>` : ''}` });
+    if (m.$('[data-share]')) m.$('[data-share]').onclick = () => shareText(f.text);
+    m.$('[data-copy]').onclick = () => { api('clipboard:write', f.text); toast('Copied'); };
+    if (editable) m.$('[data-save]').onclick = async () => { try { await api('files:write', inst.id, rel, m.$('textarea').value); toast('Saved'); m.close(); onSaved && onSaved(); } catch (e) { toastErr(e); } };
+  },
+
+  /* ---------- screenshots (this instance only) ---------- */
+  async screenshots(body, inst) {
+    body.innerHTML = '<div class="faint">Loading screenshots…</div>';
+    const shots = (await api('gallery:list')).filter((s) => s.instanceId === inst.id);
+    body.innerHTML = shots.length ? `<div class="row" style="margin-bottom:10px"><span class="faint small grow">${shots.length} screenshot${shots.length > 1 ? 's' : ''} · press F2 in-game to take one</span><button class="btn sm" id="sh-open">${icon('folder')}Open folder</button></div>
+      <div class="shots-grid">${shots.map((s, i) => `<button class="shot-tile" data-i="${i}"><img src="${esc(fileUrl(s.path))}" loading="lazy" alt=""><span>${fmtDate(s.mtime)}</span></button>`).join('')}</div>`
+      : `<div class="empty">${icon('image')}<div>No screenshots yet — press F2 in-game to take one.</div></div>`;
+    if ($('#sh-open', body)) $('#sh-open', body).onclick = () => api('instances:openFolder', inst.id, 'screenshots');
+    $$('[data-i]', body).forEach((b) => (b.onclick = () => {
+      const s = shots[+b.dataset.i];
+      const lb = lightbox(fileUrl(s.path), `<button class="btn" data-show>${icon('folder')}Show in folder</button><button class="btn danger" data-del>${icon('trash')}${T('Delete')}</button>`);
+      $('[data-show]', lb.el).onclick = () => api('shell:showItem', s.path);
+      $('[data-del]', lb.el).onclick = async () => { await api('gallery:delete', s.path); lb.close(); this.screenshots(body, inst); };
+    }));
+  },
+
+  /* ---------- logs & crash reports ---------- */
+  async logs(body, inst) {
+    body.innerHTML = '<div class="faint">Loading logs…</div>';
+    const list = await api('files:logs', inst.id);
+    body.innerHTML = list.length ? `<p class="faint small" style="margin-top:0">Crash reports and game logs for this instance. Upload one to mclo.gs to get a link you can share when asking for help.</p>
+      <div class="list">${list.map((l) => `<div class="list-row" data-rel="${esc(l.rel)}">
+        <div class="mod-icon" style="color:${l.kind === 'crash' ? 'var(--danger)' : ''}">${icon(l.kind === 'crash' ? 'alert' : 'console')}</div>
+        <div class="info"><div class="title">${esc(l.name)} ${l.kind === 'crash' ? '<span class="chip danger">Crash</span>' : ''}</div><div class="desc">${fmtDate(l.mtime)} · ${timeAgo(l.mtime)} · ${fmtBytes(l.size)}</div></div>
+        <button class="btn sm" data-view="${esc(l.rel)}">${icon('eye')}View</button>
+        <button class="btn sm" data-up="${esc(l.rel)}">${icon('upload')}Upload</button></div>`).join('')}</div>`
+      : `<div class="empty">${icon('console')}<div>No logs or crash reports yet.</div></div>`;
+    $$('[data-view]', body).forEach((b) => (b.onclick = () => this.viewFile(inst, b.dataset.view)));
+    $$('[data-up]', body).forEach((b) => (b.onclick = async () => { try { shareText((await api('files:read', inst.id, b.dataset.up)).text); } catch (e) { toastErr(e); } }));
   },
 
   /* ---------- settings ---------- */
@@ -242,6 +332,45 @@ Pages.instance = {
     };
   },
 };
+
+/** Instance tabs in the user's order (Settings → Appearance → Instance tabs); hidden ones are left out. */
+const INSTANCE_TABS = [['content', 'Content'], ['worlds', 'Worlds'], ['files', 'Files'], ['screenshots', 'Screenshots'], ['logs', 'Logs'], ['console', 'Console'], ['settings', 'Settings']];
+function instanceTabConfig() {
+  const saved = Array.isArray(State.settings?.instanceTabs) ? State.settings.instanceTabs.filter((t) => INSTANCE_TABS.some(([id]) => id === t.id)) : [];
+  for (const [id] of INSTANCE_TABS) if (!saved.some((t) => t.id === id)) saved.push({ id, hidden: false });
+  return saved.map((t) => ({ ...t, label: INSTANCE_TABS.find(([id]) => id === t.id)[1] }));
+}
+function instanceTabs() {
+  const list = instanceTabConfig().filter((t) => !t.hidden || t.id === 'settings'); // Settings can't be hidden (it holds Delete)
+  return list.length ? list : [{ id: 'settings', label: 'Settings' }];
+}
+/** Modpack versions: update to the newest, or switch to any other version of the pack. */
+async function modpackUpdates(inst, onDone) {
+  const m = modal({ title: `${inst.modpack.name} versions`, wide: true, body: '<div class="faint">Checking for modpack updates…</div>' });
+  let r;
+  try { r = await api('modpack:versions', inst.id); } catch (e) { m.$('.content').innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; return; }
+  if (!r.updatable) { m.$('.content').innerHTML = `<div class="empty">${icon('info')}<div>${esc(r.reason)}</div></div>`; return; }
+  const curIdx = r.versions.findIndex((v) => v.id === r.current);
+  const newer = curIdx === -1 ? 0 : curIdx;
+  m.$('.content').innerHTML = `<p class="muted small" style="margin-top:0">${newer > 0 ? `<b style="color:var(--accent)">${newer} newer version${newer > 1 ? 's' : ''} available.</b> ` : curIdx === 0 ? '<b>You have the newest version.</b> ' : ''}Updating replaces the pack’s own mods and configs. Your worlds, settings, screenshots and mods you added yourself are kept; mods you turned off stay off.</p>
+    <div class="list">${r.versions.slice(0, 40).map((v) => `<div class="list-row ${v.id === r.current ? 'selected' : ''}"><div class="info"><div class="title">${esc(v.name || v.number)} <span class="chip ${v.type === 'release' ? 'ok' : 'warn'}">${esc(v.type)}</span>${v.id === r.current ? ' <span class="chip accent">Installed</span>' : ''}</div><div class="desc">${esc((v.gameVersions || []).slice(-3).join(', '))} · ${fmtDate(v.date)}</div></div>
+      ${v.changelog ? `<button class="btn sm ghost" data-cl="${esc(v.id)}">Changelog</button>` : ''}${v.id === r.current ? '' : `<button class="btn sm ${r.versions.indexOf(v) < Math.max(curIdx, 0) || curIdx === -1 ? 'primary' : ''}" data-sw="${esc(v.id)}">${icon('download')}${r.versions.indexOf(v) < curIdx || curIdx === -1 ? 'Update' : 'Switch'}</button>`}</div>`).join('')}</div>`;
+  $$('[data-cl]', m.el).forEach((b) => (b.onclick = () => { const v = r.versions.find((x) => x.id === b.dataset.cl); modal({ title: v.name || v.number, body: `<div class="md">${miniMarkdown(v.changelog)}</div>` }); }));
+  $$('[data-sw]', m.el).forEach((b) => (b.onclick = async () => {
+    const v = r.versions.find((x) => x.id === b.dataset.sw);
+    if (!(await confirmDialog(`Switch ${inst.name} to ${v.name || v.number}?`, { ok: 'Update' }))) return;
+    m.close();
+    try { await api('modpack:update', inst.id, v.id); await refreshInstances(); toast(`${inst.name} is now on ${v.name || v.number}`); onDone && onDone(); }
+    catch (e) { toastErr(e); }
+  }));
+}
+
+/** Small coloured badge: where a mod/pack came from. */
+function sourceChip(m) {
+  const map = { modrinth: ['Modrinth', 'src-mr'], curseforge: ['CurseForge', 'src-cf'], modpack: ['Modpack', 'src-pack'], manual: ['Added by you', 'src-manual'] };
+  const [label, cls] = map[m.source] || map.manual;
+  return `<span class="chip src ${cls}" title="Source: ${esc(label)}${m.via ? ' (' + esc(m.via) + ')' : ''}">${esc(label)}</span>`;
+}
 
 /** Toast for instances:addFiles results (datapacks are explained instead of being copied somewhere useless). */
 function reportAdded(r) {

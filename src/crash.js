@@ -51,6 +51,7 @@ function analyze({ code, lines, gameDir, since }) {
   const desc = (crashReport?.text.match(/^Description: (.+)$/m) || [])[1];
   return {
     code, hex,
+    corrupt: /ZipException|zip END header not found|invalid LOC header|invalid CEN header|Failed to verify.*library|truncated class file|Incompatible magic value/i.test(haystack),
     codeMeaning: KNOWN_CODES[String(code)] || null,
     description: desc || null,
     causes: causes.length ? causes : [{ title: 'Unknown cause', fix: 'Open the Console to read the full log, or share it with “Share log” to get help.' }],

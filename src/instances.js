@@ -116,8 +116,19 @@ function readModMeta(file) {
   metaCache.set(key, meta);
   return meta;
 }
+/** Where each file came from: Modrinth, CurseForge, a modpack, or added by hand. */
+function sourcesOf(inst) {
+  const out = {};
+  for (const [src, file] of [['modrinth', 'modrinth.json'], ['curseforge', 'curseforge.json']]) {
+    const rec = readJSON(path.join(paths.instances(), inst.id, file), {});
+    for (const r of Object.values(rec)) if (r && r.file) out[String(r.file).replace(/\.disabled$/, '')] = r.pack ? { source: 'modpack', via: src } : { source: src };
+  }
+  return out;
+}
 function listContent(id, kind = 'mods') {
-  const dir = path.join(gameDir(get(id)), CONTENT_DIRS[kind] || kind);
+  const inst = get(id);
+  const dir = path.join(gameDir(inst), CONTENT_DIRS[kind] || kind);
+  const sources = sourcesOf(inst);
   let files = []; try { files = fs.readdirSync(dir, { withFileTypes: true }); } catch {}
   return files
     .filter((f) => f.isFile() && /\.(jar|zip|disabled|litemod)$/i.test(f.name) || (f.isDirectory() && kind !== 'mods'))
@@ -126,7 +137,8 @@ function listContent(id, kind = 'mods') {
       const st = fs.statSync(full);
       const enabled = !f.name.endsWith('.disabled');
       const meta = f.isFile() ? readModMeta(full) : {};
-      return { file: f.name, path: full, enabled, size: st.size, mtime: st.mtimeMs, dir: f.isDirectory(), ...meta, name: meta.name || f.name.replace(/\.disabled$/, '').replace(/\.(jar|zip)$/i, '') };
+      const src = sources[f.name.replace(/\.disabled$/, '')] || { source: 'manual' };
+      return { file: f.name, path: full, enabled, size: st.size, mtime: st.mtimeMs, dir: f.isDirectory(), ...src, ...meta, name: meta.name || f.name.replace(/\.disabled$/, '').replace(/\.(jar|zip)$/i, '') };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -197,23 +209,47 @@ const IOCS = [
   { re: /dev\/neko/i, label: 'Known fractureiser package (dev/neko)' },
   { re: /Login Data|Local State|\\Discord\\Local Storage|leveldb.*tokens?/i, label: 'Reads browser/Discord credential stores' },
   { re: /api\.telegram\.org\/bot/i, label: 'Telegram bot exfiltration URL' },
+  { re: /launcher_accounts(_microsoft_store)?\.json|essential[\\/]microsoft_accounts|lunarclient[\\/]settings[\\/]game[\\/]accounts\.json|feather[\\/]accounts\.json/i, label: 'Reads other launchers’ saved Minecraft accounts' },
+  { re: /powershell(\.exe)?["',\s]+-(e|enc|encodedcommand)\b/i, label: 'Runs hidden PowerShell commands' },
+  { re: /Microsoft[\\/]Windows[\\/]Start Menu[\\/]Programs[\\/]Startup|CurrentVersion\\\\Run\b/i, label: 'Adds itself to Windows startup' },
+  { re: /wallet\.dat|Exodus[\\/]exodus\.wallet|\\Electrum\\wallets/i, label: 'Looks for cryptocurrency wallets' },
 ];
+/** Scan one jar for known malware indicators. */
+function scanFile(file) {
+  const findings = new Set();
+  try {
+    const zip = new AdmZip(file);
+    for (const e of zip.getEntries()) {
+      if (/\.(exe|dll|bat|cmd|vbs|ps1|scr)$/i.test(e.entryName) && !/^META-INF\/native|natives?\//i.test(e.entryName)) findings.add('Contains a Windows program/script (' + path.basename(e.entryName) + ')');
+      if (!/\.(class|json|txt|properties)$/i.test(e.entryName) || e.header.size > 4 * 1024 * 1024) continue;
+      const s = e.getData().toString('latin1');
+      for (const ioc of IOCS) if (ioc.re.test(s)) findings.add(ioc.label);
+    }
+  } catch { findings.add('Could not read archive (corrupt or not a jar)'); }
+  return [...findings];
+}
 function scan(id) {
   const results = [];
   for (const m of listContent(id, 'mods')) {
     if (m.dir) continue;
-    const findings = new Set();
-    try {
-      const zip = new AdmZip(m.path);
-      for (const e of zip.getEntries()) {
-        if (!/\.(class|json|txt|properties)$/i.test(e.entryName) || e.header.size > 4 * 1024 * 1024) continue;
-        const s = e.getData().toString('latin1');
-        for (const ioc of IOCS) if (ioc.re.test(s)) findings.add(ioc.label);
-      }
-    } catch { findings.add('Could not read archive (corrupt or not a jar)'); }
-    results.push({ file: m.file, name: m.name, findings: [...findings], ok: findings.size === 0 });
+    const findings = scanFile(m.path);
+    results.push({ file: m.file, name: m.name, findings, ok: findings.length === 0 });
   }
   return results;
+}
+/** Scan every instance (Settings → Privacy & safety → Scan now). Yields between jars so the app stays responsive. */
+async function scanAll(onProgress) {
+  const insts = list();
+  const jobs = insts.flatMap((i) => listContent(i.id, 'mods').filter((m) => !m.dir).map((m) => ({ inst: i, m })));
+  const flagged = [];
+  let n = 0;
+  for (const { inst, m } of jobs) {
+    const findings = scanFile(m.path);
+    if (findings.length) flagged.push({ instanceId: inst.id, instanceName: inst.name, file: m.file, name: m.name, findings });
+    onProgress && onProgress(++n, jobs.length);
+    await new Promise((r) => setImmediate(r));
+  }
+  return { scanned: jobs.length, flagged };
 }
 
 // ---------- worlds & screenshots ----------
@@ -274,4 +310,4 @@ async function importPack(file) {
   return inst;
 }
 
-module.exports = { CONTENT_DIRS, list, get, save, create, update, remove, duplicate, gameDir, listContent, setEnabled, deleteContent, addFiles, duplicates, scan, worlds, screenshots, exportPack, importPack, readModMeta, sha1File, uniqueId };
+module.exports = { scanFile, scanAll, CONTENT_DIRS, list, get, save, create, update, remove, duplicate, gameDir, listContent, setEnabled, deleteContent, addFiles, duplicates, scan, worlds, screenshots, exportPack, importPack, readModMeta, sha1File, uniqueId };

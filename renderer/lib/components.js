@@ -26,7 +26,7 @@ function modal({ title, body = '', footer = '', wide = false, onClose } = {}) {
 function confirmDialog(text, { title = 'Are you sure?', ok = 'Confirm', danger = false } = {}) {
   return new Promise((resolve) => {
     let done = false;
-    const m = modal({ title, body: `<p class="muted">${esc(text)}</p>`, footer: `<button class="btn ghost" data-no>${T('Cancel')}</button><button class="btn ${danger ? 'danger solid' : 'primary'}" data-yes>${esc(ok)}</button>`, onClose: () => { if (!done) resolve(false); } });
+    const m = modal({ title, body: `<p class="muted" style="white-space:pre-line">${esc(text)}</p>`, footer: `<button class="btn ghost" data-no>${T('Cancel')}</button><button class="btn ${danger ? 'danger solid' : 'primary'}" data-yes>${esc(ok)}</button>`, onClose: () => { if (!done) resolve(false); } });
     m.$('[data-no]').onclick = () => m.close();
     m.$('[data-yes]').onclick = () => { done = true; m.close(); resolve(true); };
     m.$('[data-yes]').focus();
@@ -82,7 +82,21 @@ function drawHead(canvas, src) {
   const ctx = canvas.getContext('2d');
   canvas.width = 64; canvas.height = 64;
   const img = new Image();
-  img.onload = () => { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 64, 64); ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 64, 64); };
+  img.onload = () => {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 64, 64);
+    // Like Minecraft, ignore a hat layer that is completely solid (old 64×32 skins such as Notch's fill it with black).
+    let drawHat = true;
+    try {
+      const t = document.createElement('canvas'); t.width = 8; t.height = 8;
+      const tc = t.getContext('2d'); tc.drawImage(img, 40, 8, 8, 8, 0, 0, 8, 8);
+      const px = tc.getImageData(0, 0, 8, 8).data;
+      let opaque = true; for (let i = 3; i < px.length; i += 4) if (px[i] < 128) { opaque = false; break; }
+      if (opaque && img.naturalHeight === 32) drawHat = false;
+    } catch {}
+    if (drawHat) ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 64, 64);
+  };
+  if (/^https:/.test(src)) img.crossOrigin = 'anonymous';
   img.src = src;
 }
 /** 3D snapshot of a skin (one shared off-screen skinview3d viewer, results cached) — used for wardrobe tiles. */
@@ -219,11 +233,17 @@ function showCrash({ instanceId, analysis, runId }) {
   m.$('[data-share]').onclick = () => shareLog(runId);
 }
 async function shareLog(runId) {
-  const ok = await confirmDialog('This uploads the game log publicly to mclo.gs (access tokens are already hidden). Continue?', { title: 'Share log', ok: 'Upload' });
-  if (!ok) return;
+  const lines = State.runs[runId]?.lines?.length ? State.runs[runId].lines : await api('launch:logs', runId).catch(() => []);
+  return shareText(lines.join('\n'));
+}
+/** Upload text (a game log or crash report) to mclo.gs. Asks first unless turned off in Privacy & safety. */
+async function shareText(text) {
+  if (State.settings.confirmLogUpload !== false) {
+    const ok = await confirmDialog('This uploads the log publicly to mclo.gs so you can share the link (access tokens are already hidden; mclo.gs hides IP addresses). Continue?', { title: 'Upload to mclo.gs', ok: 'Upload' });
+    if (!ok) return;
+  }
   try {
-    const lines = State.runs[runId]?.lines?.length ? State.runs[runId].lines : await api('launch:logs', runId);
-    const url = await api('logs:share', lines.join('\n'));
+    const url = await api('logs:share', text);
     toast('Log uploaded — link copied: ' + url);
     api('shell:open', url);
   } catch (e) { toastErr(e); }
@@ -253,7 +273,17 @@ function openAccounts() {
     $$('[data-use]', m.el).forEach((b) => (b.onclick = async () => { await api('accounts:setActive', b.dataset.use); draw(); }));
     $$('[data-rm]', m.el).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this account from Solaris?', { danger: true, ok: 'Remove' })) { await api('accounts:remove', b.dataset.rm); draw(); } }));
     $$('[data-reauth]', m.el).forEach((b) => (b.onclick = () => microsoftLogin(m, draw)));
-    m.$('[data-off]').onclick = async () => { try { await api('accounts:addOffline', m.$('#off-name').value.trim()); toast('Account added'); draw(); } catch (e) { toastErr(e); } };
+    m.$('[data-off]').onclick = async () => {
+      const name = m.$('#off-name').value.trim();
+      const btn = m.$('[data-off]');
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return toast('Username must be 3–16 characters: letters, numbers or _', 'error');
+      btn.disabled = true;
+      // warn about unusual names (staff names, real premium accounts, odd underscores) — still allowed
+      const warnings = await api('accounts:checkOfflineName', name).catch(() => []);
+      btn.disabled = false;
+      if (warnings.length && !(await confirmDialog(`${warnings.map((w) => '• ' + w).join('\n')}\n\nAdd “${name}” anyway?`, { title: 'Unusual offline username', ok: 'Add anyway' }))) return;
+      try { await api('accounts:addOffline', name); toast('Account added'); draw(); } catch (e) { toastErr(e); }
+    };
     m.$('#off-name').onkeydown = (e) => { if (e.key === 'Enter') m.$('[data-off]').click(); };
     if (msOk) m.$('[data-ms]').onclick = () => microsoftLogin(m, draw);
   };
@@ -398,14 +428,25 @@ function openImport() {
   const m = modal({
     title: T('Import'),
     body: `<div class="stack">
-      <button class="btn" data-file style="justify-content:flex-start">${icon('box')}Modpack or shared instance (.mrpack, .solpack)</button>
+      <button class="btn" data-file style="justify-content:flex-start">${icon('box')}Modpack file (Modrinth .mrpack, CurseForge .zip, Solaris .solpack)</button>
       <button class="btn" data-official style="justify-content:flex-start">${icon('download')}Official Minecraft Launcher profiles</button>
       <button class="btn" data-mmc style="justify-content:flex-start">${icon('folder')}MultiMC / Prism Launcher instances folder</button>
+      <button class="btn" data-cfapp style="justify-content:flex-start">${icon('layers')}CurseForge app instances</button>
       <div id="imp-list"></div>
-      <div class="faint small">Tip: you can also drag & drop .mrpack / .solpack files anywhere in Solaris.</div></div>`,
+      <div class="faint small">Tip: you can also drag & drop .mrpack / .zip / .solpack files anywhere in Solaris.</div></div>`,
   });
+  m.$('[data-cfapp]').onclick = async () => {
+    let items = await api('import:cfScan');
+    let dir = null;
+    if (!items.length) {
+      [dir] = await api('dialog:open', { properties: ['openDirectory'], title: 'Select the CurseForge "Instances" folder (curseforge\\minecraft\\Instances)' });
+      if (!dir) return;
+      items = await api('import:cfScan', dir);
+    }
+    pickList(items, (keys) => api('import:cf', keys, dir));
+  };
   m.$('[data-file]').onclick = async () => {
-    const files = await api('dialog:open', { filters: [{ name: 'Packs', extensions: ['mrpack', 'solpack'] }], properties: ['openFile', 'multiSelections'] });
+    const files = await api('dialog:open', { filters: [{ name: 'Modpacks', extensions: ['mrpack', 'zip', 'solpack'] }], properties: ['openFile', 'multiSelections'] });
     m.close();
     for (const f of files) await importFile(f);
   };

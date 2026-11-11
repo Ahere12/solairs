@@ -27,6 +27,13 @@ function getRoot() {
   try { root = fs.realpathSync.native(root); } catch {}
   return root;
 }
+/** The moved data folder from boot.json if it is missing (e.g. an unplugged drive), else null. Never creates it. */
+function missingDataDir() {
+  if (process.env.SOLARIS_DATA_DIR) return null;
+  try { const b = JSON.parse(fs.readFileSync(bootFile(), 'utf8')); if (b.dataDir && !fs.existsSync(b.dataDir)) return b.dataDir; } catch {}
+  return null;
+}
+function defaultRoot() { return path.join(app.getPath('appData'), '.solaris'); }
 function setRoot(dir) {
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(path.dirname(bootFile()), { recursive: true });
@@ -35,7 +42,7 @@ function setRoot(dir) {
 }
 const p = (...a) => path.join(getRoot(), ...a);
 const paths = {
-  getRoot, setRoot,
+  getRoot, setRoot, missingDataDir, defaultRoot,
   versions: () => p('versions'),
   libraries: () => p('libraries'),
   assets: () => p('assets'),

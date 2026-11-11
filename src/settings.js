@@ -24,9 +24,28 @@ const DEFAULTS = {
   resolution: { width: 0, height: 0, fullscreen: false },
   discordRpc: false,
   discordClientId: '',
+  // privacy & safety
+  discordShowInstance: true,
+  discordShowServer: true,
+  discordShowHead: true,
+  autoScanMods: true,
+  confirmLogUpload: true,
+  streamerMode: false,
+  // integrations
+  curseforgeKey: '',
+  browseSource: 'modrinth',
+  // java
+  javaPaths: { 8: '', 17: '', 21: '' },
+  javaAutoInstall: true,
+  // performance & interface
+  hardwareAcceleration: true,
+  lowEndMode: false,
+  layout: 'modern',
+  colorMode: 'dark',
+  instanceTabs: null,
   keybinds: {
     'nav.home': 'Ctrl+1', 'nav.library': 'Ctrl+2', 'nav.browse': 'Ctrl+3', 'nav.solaris': 'Ctrl+4',
-    'nav.servers': 'Ctrl+5', 'nav.skins': 'Ctrl+6', 'nav.console': 'Ctrl+7', 'nav.settings': 'Ctrl+,',
+    'nav.servers': 'Ctrl+5', 'nav.skins': 'Ctrl+6', 'nav.console': 'Ctrl+7', 'nav.friends': 'Ctrl+8', 'nav.settings': 'Ctrl+,',
     'play.selected': 'Ctrl+Enter', 'search.focus': 'Ctrl+K',
   },
   selectedInstance: null,

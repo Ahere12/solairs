@@ -4,6 +4,7 @@ const NAV = [
   { id: 'browse', label: 'Browse', icon: 'browse', key: 'nav.browse' },
   { id: 'servers', label: 'Servers', icon: 'servers', key: 'nav.servers' },
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
+  { id: 'friends', label: 'Friends', icon: 'users', key: 'nav.friends' },
   { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];
@@ -67,6 +68,7 @@ function renderAccountChip() {
     <button class="icon-btn" id="who-accts" title="Accounts">${icon('users')}</button>
     <button class="icon-btn" id="who-settings" title="${esc(T('Settings'))}">${icon('settings')}</button>`;
   renderHead($('#chip-head'), a);
+  chip.classList.toggle('streamer', !!State.settings?.streamerMode);
   $('#who').onclick = openAccounts;
   $('#who-accts').onclick = openAccounts;
   $('#who-settings').onclick = () => Router.go('settings');
@@ -122,6 +124,16 @@ on('task', (t) => {
   renderTasks();
 });
 on('toast', (t) => toast(t.text, t.type || 'info'));
+// Background malware scan of a newly installed mod found something
+on('safety:flagged', ({ instanceId, file, findings }) => {
+  const inst = State.instances.find((i) => i.id === instanceId);
+  const m = modal({ title: 'Suspicious mod found', body: `<div class="crash-cause"><b>${esc(file)}</b>${inst ? `<div class="faint small">in ${esc(inst.name)}</div>` : ''}${findings.map((f) => `<div class="small muted">• ${esc(f)}</div>`).join('')}</div>
+    <p class="muted small">Solaris’s malware scan found signs that this mod may steal accounts or run hidden programs. It’s a heuristic check, so it can be wrong — but if you don’t fully trust where this file came from, turn it off or delete it.</p>`,
+    footer: `<button class="btn ghost" data-keep>Keep it</button><button class="btn" data-off>${icon('eye')}Turn it off</button><button class="btn danger" data-del>${icon('trash')}Delete</button>` });
+  m.$('[data-keep]').onclick = () => m.close();
+  m.$('[data-off]').onclick = async () => { try { await api('safety:disable', instanceId, file); toast(`${file} turned off`); } catch (e) { toastErr(e); } m.close(); };
+  m.$('[data-del]').onclick = async () => { try { await api('instances:deleteContent', instanceId, 'mods', [file]); toast(`${file} moved to the Recycle Bin`); } catch (e) { toastErr(e); } m.close(); };
+});
 on('window:maximized', (m) => ($('#win-max').innerHTML = icon(m ? 'copy' : 'max')));
 
 Bus.on('launch', renderTasks);
@@ -155,7 +167,7 @@ window.addEventListener('mouseup', (e) => { if (e.button === 3) { e.preventDefau
 document.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); showDrop('Drop .mrpack or .solpack to import'); } });
 document.addEventListener('drop', async (e) => {
   e.preventDefault(); hideDrop();
-  const files = [...(e.dataTransfer?.files || [])].map((f) => window.solaris.pathForFile(f)).filter((f) => /\.(mrpack|solpack)$/i.test(f));
+  const files = [...(e.dataTransfer?.files || [])].map((f) => window.solaris.pathForFile(f)).filter((f) => /\.(mrpack|solpack|zip)$/i.test(f));
   if (!files.length) return toast('Drop mods onto an instance page. Here you can drop .mrpack or .solpack files.', 'info');
   for (const f of files) await importFile(f);
 });

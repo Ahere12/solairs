@@ -92,4 +92,15 @@ async function detect() {
   return out;
 }
 
-module.exports = { ensureRuntime, detect, javaVersionOf, javaExe };
+/** "1.8.0_392" → 8, "17.0.9" → 17, "21" → 21 */
+function majorOf(v) { const m = String(v || '').match(/^(\d+)(?:\.(\d+))?/); if (!m) return null; return m[1] === '1' ? +(m[2] || 0) : +m[1]; }
+function isInstalled(component) { const dir = path.join(paths.runtime(), component); return fs.existsSync(path.join(dir, '.solaris-complete')) && fs.existsSync(javaExe(dir)); }
+/** Run `java -version` for the Java test button. */
+async function test(exe) {
+  if (!exe || !fs.existsSync(exe)) throw new Error('That Java file does not exist.');
+  const v = await javaVersionOf(exe);
+  if (!v) throw new Error('That file did not run as Java.');
+  return { ...v, major: majorOf(v.version) };
+}
+
+module.exports = { ensureRuntime, detect, javaVersionOf, javaExe, majorOf, isInstalled, test };

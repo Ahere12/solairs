@@ -8,7 +8,7 @@ Pages.skins = {
     let current = null;
     el.innerHTML = `
       <div class="page-head"><div><h1>${T('Skins')}</h1><div class="sub">Your wardrobe — preview in 3D, then apply to your Microsoft account</div></div>
-        <div class="actions"><button class="btn" id="from-user">${icon('user')}From username</button><button class="btn primary" id="from-file">${icon('upload')}Upload skin</button></div></div>
+        <div class="actions">${acct ? `<button class="btn" id="sk-refresh" title="Reload your current skin from Minecraft">${icon('refresh')}Refresh skin</button>` : ''}<button class="btn" id="from-user">${icon('user')}From username</button><button class="btn primary" id="from-file">${icon('upload')}Upload skin</button></div></div>
       <div class="skins-layout">
         <div class="viewer">
           <canvas id="sv" width="300" height="400"></canvas>
@@ -36,6 +36,7 @@ Pages.skins = {
         viewer.autoRotateSpeed = 0.6;
         viewer.animation = new skinview3d.WalkingAnimation();
         viewer.animation.speed = 0.7;
+        if (State.settings.lowEndMode) { viewer.autoRotate = false; viewer.animation = null; } // low-end mode: still preview
       } catch (e) { console.warn(e); viewer = null; }
     }
     // the default skin Minecraft gives this account when it has no custom one
@@ -116,9 +117,22 @@ Pages.skins = {
     };
     $('#apply', el).onclick = async () => {
       const b = $('#apply', el); b.disabled = true;
-      try { await api('skins:apply', staged); toast('Skin applied! It may take a minute to show in-game.'); current = await api('skins:current'); staged = null; drawWardrobe(); stage(); }
+      try { await api('skins:apply', staged); toast('Skin applied! It may take a minute to show in-game.'); current = await api('skins:current'); staged = null; drawWardrobe(); stage(); refreshSkin(true); }
       catch (e) { toastErr(e); b.disabled = false; }
     };
+    /** Skin refresh: re-read the account's skin from Minecraft and update the 3D view and the sidebar head. */
+    const refreshSkin = async (quiet) => {
+      const b = $('#sk-refresh', el); if (b) b.disabled = true;
+      try {
+        if (acct?.type === 'msa') { State.accounts = await api('accounts:refreshProfile'); Bus.emit('accounts', State.accounts); }
+        current = await api('skins:current');
+        if (el.isConnected && !staged && !previewDefault) show(current?.skin, current?.variant, current?.cape || null);
+        stage();
+        if (!quiet) toast('Skin refreshed');
+      } catch (e) { if (!quiet) toastErr(e); }
+      finally { if (b && b.isConnected) b.disabled = false; }
+    };
+    if ($('#sk-refresh', el)) $('#sk-refresh', el).onclick = () => refreshSkin(false);
     $('#from-file', el).onclick = async () => {
       const variant = (await confirmDialog('Does this skin use slim (3-pixel) arms?', { title: 'Arm model', ok: 'Slim arms' })) ? 'slim' : 'classic';
       try { wardrobe = await api('skins:addFile', variant); if (wardrobe[0]) { staged = wardrobe[0].id; previewDefault = null; show(wardrobe[0].data, wardrobe[0].variant); } drawWardrobe(); stage(); } catch (e) { toastErr(e); }
