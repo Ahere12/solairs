@@ -62,9 +62,12 @@ function contextMenu(x, y, items) {
 const SUN_SVG = `<svg class="sun" viewBox="0 0 100 100"><defs><radialGradient id="sg" cx="40%" cy="40%"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#ff7a1a"/></radialGradient></defs>${Array.from({ length: 12 }, (_, i) => `<rect x="48" y="2" width="4" height="16" rx="2" fill="#ff9f1c" opacity=".85" transform="rotate(${i * 30} 50 50)"/>`).join('')}<circle cx="50" cy="50" r="26" fill="url(#sg)"/></svg>`;
 function instIcon(inst, size = '') {
   const ic = inst?.icon;
+  const mc = typeof McIcons !== 'undefined' ? (ic ? McIcons.url(ic) : McIcons.defaultFor(inst)) : null;
   let inner;
+  if (mc) return `<div class="inst-icon mc ${size}"><img src="${mc}" alt=""></div>`;
   if (!ic) inner = '🧱';
   else if (ic === 'sun') inner = SUN_SVG;
+  else if (ic.startsWith('mc:')) inner = '🧱';
   else if (/^(data:|https?:)/.test(ic)) inner = `<img src="${esc(ic)}" alt="">`;
   else inner = esc(ic);
   return `<div class="inst-icon ${size}">${inner}</div>`;
@@ -286,7 +289,6 @@ async function openNewInstance(preset = {}) {
         <div id="ni-icon" style="cursor:pointer" title="Change icon"></div>
         <label class="field grow">Name<input type="text" id="ni-name" placeholder="My world" value="${esc(preset.name || '')}"></label>
       </div>
-      <div class="emoji-grid hidden" id="ni-emojis">${EMOJIS.map((e) => `<button data-emoji="${e}">${e === 'sun' ? '☀️' : e}</button>`).join('')}</div>
       <div class="row">
         <label class="field grow">Minecraft version<select id="ni-version"><option>Loading…</option></select></label>
         <label class="field" style="padding-top:20px;flex-direction:row;align-items:center"><input type="checkbox" id="ni-snap"> Snapshots &amp; old</label>
@@ -297,11 +299,15 @@ async function openNewInstance(preset = {}) {
     </div>`,
     footer: `<button class="btn ghost" data-import>${icon('upload')}${T('Import')}…</button><div class="grow"></div><button class="btn ghost" data-cancel>${T('Cancel')}</button><button class="btn primary" data-create>${icon('plus')}Create</button>`,
   });
-  let chosenIcon = preset.icon || '🧱', loader = preset.loader || 'vanilla';
+  let loader = preset.loader || 'vanilla';
+  // until the player picks one, the icon follows the loader: grass block for vanilla, crafting table for modded
+  let iconPicked = !!preset.icon;
+  const autoIcon = () => (McIcons.ready() ? (loader === 'vanilla' ? 'mc:grass_block' : 'mc:crafting_table') : '🧱');
+  let chosenIcon = preset.icon || autoIcon();
   const drawIcon = () => (m.$('#ni-icon').innerHTML = instIcon({ icon: chosenIcon }, 'lg'));
   drawIcon();
-  m.$('#ni-icon').onclick = () => m.$('#ni-emojis').classList.toggle('hidden');
-  $$('[data-emoji]', m.el).forEach((b) => (b.onclick = () => { chosenIcon = b.dataset.emoji; drawIcon(); m.$('#ni-emojis').classList.add('hidden'); }));
+  m.$('#ni-icon').onclick = async () => { const ic = await pickIcon(chosenIcon); if (ic) { chosenIcon = ic; iconPicked = true; drawIcon(); } };
+  const syncIcon = () => { if (!iconPicked) { chosenIcon = autoIcon(); drawIcon(); } };
   const versions = await getVersions();
   const fillVersions = () => {
     const snap = m.$('#ni-snap').checked;
@@ -327,7 +333,7 @@ async function openNewInstance(preset = {}) {
     $$('[data-l]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.l === loader));
     fillLoaderVersions();
   };
-  const bindLoader = () => $$('[data-l]', m.el).forEach((b) => (b.onclick = () => { loader = b.dataset.l; $$('[data-l]', m.el).forEach((x) => x.classList.toggle('on', x === b)); fillLoaderVersions(); }));
+  const bindLoader = () => $$('[data-l]', m.el).forEach((b) => (b.onclick = () => { loader = b.dataset.l; $$('[data-l]', m.el).forEach((x) => x.classList.toggle('on', x === b)); fillLoaderVersions(); syncIcon(); }));
   const fillLoaderVersions = () => {
     const wrap = m.$('#ni-lv-wrap');
     wrap.classList.toggle('hidden', loader === 'vanilla');
@@ -426,12 +432,49 @@ function instanceMenu(e, inst) {
     { label: 'Open', icon: 'fwd', action: () => Router.go('instance', { id: inst.id }) },
     { label: inst.pinned ? 'Unpin' : 'Pin to top', icon: 'star', action: async () => { await api('instances:update', inst.id, { pinned: !inst.pinned }); refreshInstances(); } },
     { label: 'Open folder', icon: 'folder', action: () => api('instances:openFolder', inst.id) },
+    { label: 'Change icon…', icon: 'image', action: () => changeInstanceIcon(inst) },
     '-',
     { label: 'Duplicate…', icon: 'copy', action: () => duplicateDialog(inst) },
     { label: 'Share (.solpack)', icon: 'share', action: () => api('instances:export', inst.id).catch(toastErr) },
     '-',
     { label: T('Delete'), icon: 'trash', danger: true, action: () => deleteInstance(inst) },
   ]);
+}
+/* ---------- icon picker: real Minecraft icons (from the player's own game files), emoji, or an image ---------- */
+function pickIcon(current, { allowUpload = false } = {}) {
+  return new Promise((resolve) => {
+    let done = false, tab = 'mc', q = '';
+    const m = modal({ title: 'Choose an icon', wide: true, body: `<div class="row" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button data-pt="mc" class="on">Minecraft</button><button data-pt="emoji">Emoji</button></div><div class="search grow">${icon('search')}<input type="search" id="pi-q" placeholder="Search icons…"></div>${allowUpload ? `<button class="btn sm" data-up>${icon('upload')}Upload image…</button>` : ''}</div><div id="pi-body"></div>`,
+      onClose: () => { if (!done) resolve(null); } });
+    const finish = (v) => { done = true; m.close(); resolve(v); };
+    const draw = () => {
+      const box = m.$('#pi-body');
+      if (tab === 'emoji') {
+        box.innerHTML = `<div class="emoji-grid">${EMOJIS.map((e) => `<button data-v="${e}" class="${e === current ? 'on' : ''}" title="${e === 'sun' ? 'Solaris' : e}">${e === 'sun' ? '☀️' : e}</button>`).join('')}</div>`;
+      } else if (!McIcons.ready()) {
+        box.innerHTML = `<div class="empty">${icon('box')}<div><b>Minecraft icons load from your game files</b></div><div class="faint small" style="max-width:420px;margin:6px auto 12px">Solaris uses the real textures from a Minecraft version you've downloaded. Play any instance once, then come back — or try loading now.</div><button class="btn sm primary" data-load>${icon('refresh')}Load Minecraft icons</button></div>`;
+        m.$('[data-load]').onclick = async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Loading…'; const ok = await McIcons.init({ force: true }); if (ok) Bus.emit('instances', State.instances); else toast('No downloaded Minecraft version found yet — play an instance once first.', 'warn', 6000); draw(); };
+      } else {
+        const list = McIcons.defs.filter(([k, label]) => McIcons.icons[k] && (!q || label.toLowerCase().includes(q) || k.includes(q)));
+        box.innerHTML = list.length ? `<div class="mc-grid">${list.map(([k, label]) => `<button data-v="mc:${k}" class="${current === 'mc:' + k ? 'on' : ''}" title="${esc(label)}"><img src="${McIcons.icons[k]}" alt=""><span>${esc(label)}</span></button>`).join('')}</div><p class="faint small" style="margin-top:10px">Textures come from your own Minecraft ${esc(McIcons.source || '')} files.</p>` : '<div class="empty small">No icons match.</div>';
+      }
+      $$('[data-v]', box).forEach((b) => (b.onclick = () => finish(b.dataset.v)));
+    };
+    $$('[data-pt]', m.el).forEach((b) => (b.onclick = () => { tab = b.dataset.pt; $$('[data-pt]', m.el).forEach((x) => x.classList.toggle('on', x === b)); draw(); }));
+    m.$('#pi-q').oninput = (e) => { q = e.target.value.toLowerCase().trim(); if (tab !== 'mc') { tab = 'mc'; $$('[data-pt]', m.el).forEach((x) => x.classList.toggle('on', x.dataset.pt === 'mc')); } draw(); };
+    if (allowUpload) m.$('[data-up]').onclick = () => finish('__upload__');
+    draw();
+    m.$('#pi-q').focus();
+  });
+}
+async function changeInstanceIcon(inst) {
+  const ic = await pickIcon(inst.icon, { allowUpload: true });
+  if (!ic) return;
+  try {
+    if (ic === '__upload__') await api('instances:setIcon', inst.id);
+    else await api('instances:update', inst.id, { icon: ic });
+    await refreshInstances();
+  } catch (e) { toastErr(e); }
 }
 async function deleteInstance(inst) {
   if (!(await confirmDialog(`"${inst.name}" and its worlds will be moved to the Recycle Bin.`, { title: `Delete ${inst.name}?`, ok: T('Delete'), danger: true }))) return;

@@ -568,3 +568,15 @@ input[type='checkbox'] { accent-color: var(--accent); width: 16px; height: 16px;
   .hub-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 svg.i.big-ic { width: 42px; height: 42px; color: var(--accent); }
+
+/* ---------- real Minecraft icons ---------- */
+.inst-icon.mc { background: var(--panel-3); }
+.inst-icon.mc img { object-fit: contain; padding: 8%; image-rendering: pixelated; }
+.inst-icon.xs.mc img { padding: 0; }
+.mc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; padding: 2px; }
+.mc-grid button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px 8px; border: 2px solid transparent; border-radius: 10px; background: var(--panel-2); cursor: pointer; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.mc-grid button:hover { border-color: var(--border-2); color: var(--text); background: var(--panel-3); }
+.mc-grid button.on { border-color: var(--accent); color: var(--text); }
+.mc-grid img { width: 48px; height: 48px; image-rendering: pixelated; }
+.mc-grid span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qp .inst-icon.mc img { padding: 4%; }

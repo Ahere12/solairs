@@ -20,10 +20,7 @@ Pages.instance = {
         </div>`;
       $('#fold', el).onclick = () => api('instances:openFolder', inst.id);
       $('#more', el).onclick = (e) => instanceMenu(e, inst);
-      $('#icon-btn', el).onclick = (e) => contextMenu(e.clientX, e.clientY, [
-        { label: 'Upload image…', icon: 'image', action: async () => { try { await api('instances:setIcon', inst.id); refreshInstances(); } catch (er) { toastErr(er); } } },
-        ...EMOJIS.slice(0, 10).map((em) => ({ label: em === 'sun' ? 'Solaris' : em, icon: 'star', action: async () => { await api('instances:update', inst.id, { icon: em }); refreshInstances(); } })),
-      ]);
+      $('#icon-btn', el).onclick = () => changeInstanceIcon(inst);
     };
     el.innerHTML = `<div id="ihead" class="inst-hero"></div>
       <div class="tabs" id="itabs">
