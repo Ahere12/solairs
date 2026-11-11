@@ -288,8 +288,12 @@ function cancelMicrosoft() {
   return true;
 }
 
-/** Returns launch credentials for the active account, refreshing Microsoft tokens if needed. */
-async function getLaunchAuth() {
+/**
+ * Returns launch credentials for the active account, refreshing Microsoft tokens if needed.
+ * allowStale (launching only): when Microsoft can't be reached, start with the last session instead of
+ * failing — singleplayer works offline; online servers may refuse the expired session.
+ */
+async function getLaunchAuth({ allowStale = false } = {}) {
   const d = load();
   const a = d.accounts.find((x) => x.id === d.active);
   if (!a) throw new Error('Add an account before playing (Settings → Accounts, or the account menu).');
@@ -301,9 +305,18 @@ async function getLaunchAuth() {
     let ms;
     try {
       ms = await form(MS_TOKEN, { grant_type: 'refresh_token', client_id: cid, refresh_token: s.refresh, scope: SCOPE });
-    } catch {
-      a.needsReauth = true; store(d);
-      throw new Error(`Your Microsoft session for ${a.name} expired. Sign in again from the account menu.`);
+    } catch (e) {
+      // Only an actual rejection from Microsoft (4xx, e.g. invalid_grant) means the session is gone.
+      if (e.status >= 400 && e.status < 500) {
+        a.needsReauth = true; store(d);
+        throw new Error(`Your Microsoft session for ${a.name} expired. Sign in again from the account menu.`);
+      }
+      // Network problem or Microsoft outage: temporary — don't make the player sign in again.
+      if (allowStale && s.mcToken) {
+        push('toast', { type: 'warn', text: 'Can’t reach Microsoft — starting with your last session. Singleplayer works; online servers may not until you’re back online.' });
+        return { name: a.name, uuid: a.uuid, accessToken: s.mcToken, userType: 'msa', xuid: s.xuid || '0', type: 'msa', stale: true };
+      }
+      throw new Error('Can’t reach Microsoft to refresh your sign-in. Check your internet connection and try again.');
     }
     ms.refresh_token = ms.refresh_token || s.refresh;
     const mcData = await minecraftFromMsToken(ms.access_token);

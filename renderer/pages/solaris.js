@@ -2,7 +2,8 @@
 Pages.solaris = {
   async render(el, params, ctx) {
     const modules = await api('solaris:modules');
-    const versions = (await getVersions()).filter((v) => v.type === 'release');
+    const versions = (await getVersions().catch(() => [])).filter((v) => v.type === 'release');
+    if (!versions.length) { el.innerHTML = `<div class="page-head"><div><h1>Solaris Client</h1></div></div><div class="empty">${icon('globe')}<div>Couldn’t load the Minecraft version list — check your internet connection.</div><button class="btn sm" style="margin-top:12px" id="retry">${icon('refresh')}Try again</button></div>`; $('#retry', el).onclick = () => Router.reload(); return; }
     const managed = () => State.instances.filter((i) => i.solarisModules);
     let mc = params.mc || versions[0]?.id;
     let editing = params.instanceId ? State.instances.find((i) => i.id === params.instanceId) : null;

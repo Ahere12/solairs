@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { app, shell, dialog, clipboard } = require('electron');
-const { paths, readJSON, dirSize, getJSON, push } = require('./util');
+const { paths, readJSON, dirSizeAsync, getJSON, push } = require('./util');
 const settings = require('./settings');
 const versions = require('./versions');
 const java = require('./java');
@@ -21,6 +21,16 @@ const DATA = path.join(__dirname, '..', 'data');
 
 function withRunning(list) { return list.map((i) => ({ ...i, running: launch.isRunning(i.id) })); }
 
+/** File actions from the UI are limited to Solaris's own folders (data folder + instance game folders). */
+function assertKnownPath(p) {
+  const r = path.resolve(String(p || ''));
+  const roots = [paths.getRoot(), ...instances.list().map((i) => i.gameDir)].map((x) => path.resolve(x).toLowerCase());
+  const rl = r.toLowerCase();
+  if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Solaris folders.');
+  return r;
+}
+const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Close all running games before ${what}.`); };
+
 module.exports = (getWin) => ({
   // ---------- app / window ----------
   'app:info': () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
@@ -28,8 +38,8 @@ module.exports = (getWin) => ({
   'win:maximize': () => { const w = getWin(); if (w) w.isMaximized() ? w.unmaximize() : w.maximize(); },
   'win:close': () => getWin()?.close(),
   'shell:open': (url) => { if (/^https?:\/\//.test(url)) return shell.openExternal(url); },
-  'shell:openPath': (p) => shell.openPath(p),
-  'shell:showItem': (p) => shell.showItemInFolder(p),
+  'shell:openPath': (p) => shell.openPath(assertKnownPath(p)),
+  'shell:showItem': (p) => shell.showItemInFolder(assertKnownPath(p)),
   'clipboard:write': (t) => clipboard.writeText(String(t)),
   'dialog:open': async (opts) => (await dialog.showOpenDialog(getWin(), opts)).filePaths,
   'dialog:save': async (opts) => (await dialog.showSaveDialog(getWin(), opts)).filePath || null,
@@ -58,7 +68,10 @@ module.exports = (getWin) => ({
   'instances:get': (id) => ({ ...instances.get(id), running: launch.isRunning(id) }),
   'instances:create': (o) => instances.create(o),
   'instances:update': (id, patch) => instances.update(id, patch),
-  'instances:delete': (id) => instances.remove(id),
+  'instances:delete': (id) => {
+    if (launch.isBusy(id)) throw new Error('Close the game before deleting this instance.');
+    return instances.remove(id);
+  },
   'instances:duplicate': (id, o) => instances.duplicate(id, o),
   'instances:openFolder': (id, sub = '') => { const g = instances.get(id).gameDir; const p = path.join(g, sub); fs.mkdirSync(p, { recursive: true }); return shell.openPath(p); },
   'instances:content': (id, kind) => instances.listContent(id, kind),
@@ -76,13 +89,13 @@ module.exports = (getWin) => ({
     const inst = instances.get(id);
     const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${inst.name}.solpack`, filters: [{ name: 'Solaris pack', extensions: ['solpack'] }] })).filePath;
     if (!dest) return null;
-    instances.exportPack(id, dest, include);
+    await instances.exportPack(id, dest, include);
     shell.showItemInFolder(dest);
     return dest;
   },
   'instances:importFile': async (file) => {
     if (/\.mrpack$/i.test(file)) return modrinth.installModpack({ file });
-    if (/\.(solpack|skpack|zip)$/i.test(file)) return instances.importPack(file);
+    if (/\.(solpack|zip)$/i.test(file)) return instances.importPack(file);
     throw new Error('Unsupported file. Use .solpack or .mrpack');
   },
   'instances:checkUpdates': (id, kind) => modrinth.checkUpdates(id, kind),
@@ -161,7 +174,11 @@ module.exports = (getWin) => ({
 
   // ---------- gallery ----------
   'gallery:list': () => instances.screenshots(),
-  'gallery:delete': async (p) => { await shell.trashItem(p); return true; },
+  'gallery:delete': async (p) => {
+    const f = assertKnownPath(p);
+    if (!/\.(png|jpe?g)$/i.test(f)) throw new Error('Only screenshots can be deleted here.');
+    await shell.trashItem(f); return true;
+  },
 
   // ---------- java ----------
   'java:detect': () => java.detect(),
@@ -175,15 +192,18 @@ module.exports = (getWin) => ({
   'import:folder': (dir, o) => importers.importFolder(dir, o),
 
   // ---------- storage & diagnostics ----------
-  'storage:usage': () => {
+  'storage:usage': async () => {
     const dirs = { Instances: paths.instances(), Assets: paths.assets(), Libraries: paths.libraries(), Versions: paths.versions(), 'Java runtimes': paths.runtime(), Natives: paths.natives(), Logs: paths.logs(), Cache: paths.cache() };
-    return Object.entries(dirs).map(([name, dir]) => ({ name, dir, size: dirSize(dir) }));
+    const out = [];
+    for (const [name, dir] of Object.entries(dirs)) out.push({ name, dir, size: await dirSizeAsync(dir) }); // async: never freezes the app
+    return out;
   },
-  'storage:cleanup': () => {
+  'storage:cleanup': async () => {
+    noGamesRunning('cleaning up'); // running games use natives and version files
     let freed = 0;
-    const rm = (p) => { freed += dirSize(p); fs.rmSync(p, { recursive: true, force: true }); };
-    rm(paths.cache());
-    rm(paths.natives());
+    const rm = async (p) => { const sz = await dirSizeAsync(p); try { await fs.promises.rm(p, { recursive: true, force: true }); freed += sz; } catch {} };
+    await rm(paths.cache());
+    await rm(paths.natives());
     // Old logs (>14 days)
     try { for (const f of fs.readdirSync(paths.logs())) { const full = path.join(paths.logs(), f); if (Date.now() - fs.statSync(full).mtimeMs > 14 * 864e5) { freed += fs.statSync(full).size; fs.unlinkSync(full); } } } catch {}
     // Versions not used by any instance (keeping parents of used ones)
@@ -192,12 +212,14 @@ module.exports = (getWin) => ({
       used.add(i.versionId);
       if (i.launchVersionId) { used.add(i.launchVersionId); const j = readJSON(path.join(paths.versions(), i.launchVersionId, i.launchVersionId + '.json'), {}); if (j.inheritsFrom) used.add(j.inheritsFrom); }
     }
-    try { for (const v of fs.readdirSync(paths.versions())) if (!used.has(v)) rm(path.join(paths.versions(), v)); } catch {}
+    try { for (const v of fs.readdirSync(paths.versions())) if (!used.has(v)) await rm(path.join(paths.versions(), v)); } catch {}
     return freed;
   },
-  'storage:repair': () => {
-    // Forces a full re-verification by removing natives + version jars; libraries/assets are re-checked by size at launch.
-    fs.rmSync(paths.natives(), { recursive: true, force: true });
+  'storage:repair': async () => {
+    noGamesRunning('repairing game files');
+    // Natives are re-extracted, and the next launch verifies every game file by checksum (see launch.js).
+    await fs.promises.rm(paths.natives(), { recursive: true, force: true });
+    fs.writeFileSync(paths.file('repair.flag'), new Date().toISOString());
     return true;
   },
   'storage:relocate': async () => {

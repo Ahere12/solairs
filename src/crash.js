@@ -12,7 +12,7 @@ const RULES = [
   { re: /Missing or unsupported mandatory dependencies|Mod .* requires/i,
     title: 'Missing mod dependency (Forge/NeoForge)', fix: 'Install the mods listed as required, matching your Minecraft version.' },
   { re: /Duplicate mods? found|found a duplicate mod|DuplicateModsFoundException/i,
-    title: 'Duplicate mods', fix: 'Two copies of the same mod are installed. Open Content → Duplicates and remove the older one.' },
+    title: 'Duplicate mods', fix: 'Two copies of the same mod are installed. Open the instance → Content → Tools → Find duplicate mods, and remove the older one.' },
   { re: /Mixin (?:apply|transformation) .*failed|MixinApplyError|InvalidInjectionException|Critical injection failure/i,
     title: 'Mod conflict (Mixin failure)', fix: 'A mod is incompatible with this version or with another mod. The mod named in the error is the likely culprit — update or disable it.' },
   { re: /Pixel format not accelerated|GLFW error 65542|WGL: The driver does not appear to support OpenGL|OpenGL 3\.2/i,

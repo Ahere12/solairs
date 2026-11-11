@@ -256,7 +256,7 @@ Pages.settings = {
     box.innerHTML = `<div class="card"><div class="row"><h3 class="grow" style="margin:0">Disk usage</h3><span class="faint small mono" id="ddir"></span></div><div class="bar-chart" id="usage" style="margin-top:14px"><div class="faint">Calculating…</div></div></div>
       <div class="card" style="margin-top:14px">
         <div class="setting"><div class="txt"><div class="t">Clean up</div><div class="d">Removes the download cache, extracted natives, logs older than 14 days and game versions no instance uses.</div></div><div class="ctl"><button class="btn sm" id="clean">${icon('trash')}Clean up</button></div></div>
-        <div class="setting"><div class="txt"><div class="t">Repair game files</div><div class="d">Forces natives to be re-extracted and files re-checked on next launch.</div></div><div class="ctl"><button class="btn sm" id="repair">${icon('refresh')}Repair</button></div></div>
+        <div class="setting"><div class="txt"><div class="t">Repair game files</div><div class="d">On the next launch, every game file is checked by checksum and damaged ones are downloaded again.</div></div><div class="ctl"><button class="btn sm" id="repair">${icon('refresh')}Repair</button></div></div>
         <div class="setting"><div class="txt"><div class="t">Data folder</div><div class="d">Move all instances, versions and settings to another drive. Solaris restarts afterwards.</div></div><div class="ctl"><button class="btn sm" id="open">${icon('folder')}Open</button><button class="btn sm" id="move">Move…</button><button class="btn sm ghost" id="resetdir">Reset location</button></div></div>
         <div class="setting"><div class="txt"><div class="t">Reset settings</div><div class="d">Restore every setting to its default. Instances and accounts are kept.</div></div><div class="ctl"><button class="btn sm danger" id="reset">Reset</button></div></div>
       </div>`;
@@ -265,8 +265,8 @@ Pages.settings = {
     const max = Math.max(...u.map((x) => x.size), 1);
     const total = u.reduce((a, b) => a + b.size, 0);
     if ($('#usage', box)) $('#usage', box).innerHTML = u.sort((a, b) => b.size - a.size).map((x) => `<div class="b"><span>${esc(x.name)}</span><div class="track"><div class="fill" style="width:${(x.size / max) * 100}%"></div></div><span class="faint small" style="text-align:right">${fmtBytes(x.size)}</span></div>`).join('') + `<div class="b"><b>Total</b><span></span><b style="text-align:right">${fmtBytes(total)}</b></div>`;
-    $('#clean', box).onclick = async () => { if (!(await confirmDialog('Remove cached and unused files?', { ok: 'Clean up' }))) return; const freed = await api('storage:cleanup'); toast(`Freed ${fmtBytes(freed)}`); this.storage(box); };
-    $('#repair', box).onclick = async () => { await api('storage:repair'); toast('Files will be repaired on next launch'); };
+    $('#clean', box).onclick = async () => { if (!(await confirmDialog('Remove cached and unused files?', { ok: 'Clean up' }))) return; try { const freed = await api('storage:cleanup'); toast(`Freed ${fmtBytes(freed)}`); this.storage(box); } catch (e) { toastErr(e); } };
+    $('#repair', box).onclick = async () => { try { await api('storage:repair'); toast('Every game file will be checked and re-downloaded if damaged on the next launch'); } catch (e) { toastErr(e); } };
     $('#open', box).onclick = () => api('diag:openData');
     $('#move', box).onclick = async () => { if (await confirmDialog('Copy all Solaris data to a new folder and restart? The old folder is kept until you delete it.', { ok: 'Choose folder' })) api('storage:relocate').catch(toastErr); };
     $('#resetdir', box).onclick = async () => { if (await confirmDialog('Use the default data folder again and restart?')) api('storage:resetDataDir'); };

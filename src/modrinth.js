@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
 const { shell } = require('electron');
-const { paths, getJSON, download, downloadAll, sha1File, push } = require('./util');
+const { paths, getJSON, download, downloadAll, sha1File, push, UA } = require('./util');
 const instances = require('./instances');
 
 const API = 'https://api.modrinth.com/v2';
@@ -50,8 +50,26 @@ async function bestVersion(projectId, inst, projectType = 'mod') {
   return list.find((v) => v.version_type === 'release') || list[0] || null;
 }
 
+/**
+ * project_id → { file, versionId } for every jar/zip already in `dir`, identified by SHA-1 through Modrinth.
+ * This catches content Solaris didn't install itself (modpacks, imports, manual drops), so installing a mod
+ * never adds a second copy of something that is already there (e.g. Fabric API → "Duplicate mods" crash).
+ */
+async function installedProjects(dir) {
+  let files = []; try { files = fs.readdirSync(dir).filter((f) => /\.(jar|zip)(\.disabled)?$/i.test(f)); } catch {}
+  if (!files.length) return {};
+  const byHash = {};
+  for (const f of files) { try { byHash[await sha1File(path.join(dir, f))] = f; } catch {} }
+  try {
+    const res = await getJSON(`${API}/version_files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hashes: Object.keys(byHash), algorithm: 'sha1' }) });
+    const out = {};
+    for (const [h, v] of Object.entries(res || {})) if (byHash[h]) out[v.project_id] = { file: byHash[h], versionId: v.id };
+    return out;
+  } catch { return {}; }
+}
+
 /** Install a project version (and required dependencies) into an instance. */
-async function install(instanceId, { projectId, versionId, projectType = 'mod', world } = {}, seen = new Set()) {
+async function install(instanceId, { projectId, versionId, projectType = 'mod', world } = {}, seen = new Set(), found = {}) {
   const inst = instances.get(instanceId);
   const v = versionId ? await version(versionId) : await bestVersion(projectId, inst, projectType);
   if (!v) throw new Error('No compatible version for ' + inst.versionId + (inst.loader.type !== 'vanilla' ? ' / ' + inst.loader.type : ''));
@@ -63,19 +81,26 @@ async function install(instanceId, { projectId, versionId, projectType = 'mod', 
     if (!world) throw new Error('Choose a world to install the datapack into');
     dir = path.join(inst.gameDir, 'saves', world, 'datapacks');
   }
-  // Remove other versions of the same project we installed before.
+  if (!found[dir]) found[dir] = await installedProjects(dir);
+  // Replace any other version of the same project — whether Solaris installed it or not.
   const record = readRecord(inst);
-  const prev = record[v.project_id];
-  if (prev && prev.file !== f.filename) { try { fs.rmSync(path.join(dir, prev.file), { force: true }); fs.rmSync(path.join(dir, prev.file + '.disabled'), { force: true }); } catch {} }
+  const prev = record[v.project_id] || found[dir][v.project_id];
+  if (prev && prev.file && prev.file !== f.filename) {
+    const base = prev.file.replace(/\.disabled$/, '');
+    try { fs.rmSync(path.join(dir, base), { force: true }); fs.rmSync(path.join(dir, base + '.disabled'), { force: true }); } catch {}
+  }
   await download(f.url, path.join(dir, f.filename), { sha1: f.hashes.sha1 });
+  try { fs.rmSync(path.join(dir, f.filename + '.disabled'), { force: true }); } catch {} // re-installing enables it
   record[v.project_id] = { file: f.filename, versionId: v.id, type: projectType };
+  found[dir][v.project_id] = { file: f.filename, versionId: v.id };
   writeRecord(inst, record);
   const installed = [{ projectId: v.project_id, file: f.filename, version: v.version_number }];
   if (projectType === 'mod') {
     for (const dep of v.dependencies || []) {
       if (dep.dependency_type !== 'required' || !dep.project_id || seen.has(dep.project_id)) continue;
-      if (record[dep.project_id]) continue;
-      try { installed.push(...(await install(instanceId, { projectId: dep.project_id, versionId: dep.version_id || undefined, projectType: 'mod' }, seen))); }
+      const r = record[dep.project_id];
+      if ((r && fs.existsSync(path.join(dir, r.file))) || found[dir][dep.project_id]) continue; // already present (any source)
+      try { installed.push(...(await install(instanceId, { projectId: dep.project_id, versionId: dep.version_id || undefined, projectType: 'mod' }, seen, found))); }
       catch (e) { push('toast', { type: 'warn', text: `Dependency could not be installed: ${e.message}` }); }
     }
   }
@@ -86,7 +111,22 @@ function readRecord(inst) { try { return JSON.parse(fs.readFileSync(recordFile(i
 function writeRecord(inst, r) { fs.writeFileSync(recordFile(inst), JSON.stringify(r, null, 2)); }
 
 /** Install a .mrpack (from a Modrinth version id or a local file) as a new instance. */
-async function installModpack({ versionId, file, name, icon }) {
+/**
+ * Install a .mrpack as a new instance. The progress task is always closed, and a half-installed
+ * instance is removed again if anything fails.
+ */
+async function installModpack(opts) {
+  let created = null;
+  try {
+    return await installModpackInner(opts, (inst) => { created = inst; });
+  } catch (e) {
+    if (created) { try { await instances.remove(created.id); } catch {} }
+    throw e;
+  } finally {
+    push('task', { id: 'modpack', done: true });
+  }
+}
+async function installModpackInner({ versionId, file, name, icon }, onCreated) {
   let mrpack = file;
   if (versionId) {
     const v = await version(versionId);
@@ -96,14 +136,16 @@ async function installModpack({ versionId, file, name, icon }) {
     await download(f.url, mrpack, { sha1: f.hashes.sha1 });
     if (!name) { const p = await project(v.project_id); name = p.title; icon = p.icon_url; }
   }
-  const zip = new AdmZip(mrpack);
-  const index = JSON.parse(zip.readAsText('modrinth.index.json'));
+  let zip, index;
+  try { zip = new AdmZip(mrpack); index = JSON.parse(zip.readAsText('modrinth.index.json')); }
+  catch { throw new Error('This file is not a valid Modrinth modpack (.mrpack).'); }
   const deps = index.dependencies || {};
   const loaderType = deps['fabric-loader'] ? 'fabric' : deps['quilt-loader'] ? 'quilt' : deps.neoforge ? 'neoforge' : deps.forge ? 'forge' : 'vanilla';
   let loaderVersion = deps['fabric-loader'] || deps['quilt-loader'] || deps.neoforge || deps.forge || null;
   if (loaderType === 'forge' && loaderVersion && !loaderVersion.startsWith(deps.minecraft + '-')) loaderVersion = `${deps.minecraft}-${loaderVersion}`;
   const inst = instances.create({ name: name || index.name, versionId: deps.minecraft, loader: { type: loaderType, version: loaderVersion }, icon: icon || null,
     extra: { modpack: { name: index.name, version: index.versionId, versionId: versionId || null } } });
+  onCreated(inst);
   const root = inst.gameDir;
   const tasks = (index.files || []).filter((f) => f.env?.client !== 'unsupported').map((f) => {
     const out = path.resolve(root, f.path);
@@ -120,7 +162,13 @@ async function installModpack({ versionId, file, name, icon }) {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, e.getData());
   }
-  push('task', { id: 'modpack', done: true });
+  // Remember which Modrinth projects the pack contains, so later installs/updates replace instead of duplicating.
+  try {
+    const mods = await installedProjects(path.join(root, 'mods'));
+    const record = readRecord(inst);
+    for (const [pid, r] of Object.entries(mods)) if (!record[pid]) record[pid] = { file: r.file, versionId: r.versionId, type: 'mod' };
+    writeRecord(inst, record);
+  } catch {}
   return inst;
 }
 
@@ -155,11 +203,15 @@ async function applyUpdate(instanceId, kind, file, versionId) {
   const v = await version(versionId);
   const f = v.files.find((x) => x.primary) || v.files[0];
   const dir = path.join(inst.gameDir, instances.CONTENT_DIRS[kind]);
+  const wasDisabled = /\.disabled$/.test(file);
   await download(f.url, path.join(dir, f.filename), { sha1: f.hashes.sha1 });
   if (f.filename !== file) { try { await shell.trashItem(path.join(dir, file)); } catch { fs.rmSync(path.join(dir, file), { force: true }); } }
+  // an update keeps the mod's on/off state
+  let finalName = f.filename;
+  if (wasDisabled) { try { fs.renameSync(path.join(dir, f.filename), path.join(dir, f.filename + '.disabled')); finalName = f.filename + '.disabled'; } catch {} }
   const record = readRecord(inst); record[v.project_id] = { file: f.filename, versionId: v.id, type: kind === 'mods' ? 'mod' : kind };
   writeRecord(inst, record);
-  return f.filename;
+  return finalName;
 }
 
 // ---------- Solaris Client: curated all-in-one module set ----------
@@ -198,11 +250,16 @@ async function moduleAvailability(mc) {
 }
 
 /** Install/update the selected modules in a Solaris-managed instance. */
+/** Quick single check (no retries) so offline launches don't wait on dozens of retried lookups. */
+async function reachable() {
+  try { const r = await fetch(API, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) }); return r.status < 500; } catch { return false; }
+}
 async function syncModules(instanceId, onProgress) {
   const inst = instances.get(instanceId);
   const wanted = [...new Set(['fabric-api', ...(inst.solarisModules || [])])];
   const record = readRecord(inst);
-  const report = { installed: [], updated: [], unavailable: [] };
+  const report = { installed: [], updated: [], unavailable: [], offline: false };
+  if (!(await reachable())) { report.offline = true; return report; }
   let i = 0;
   for (const slug of wanted) {
     onProgress && onProgress(i++ / wanted.length, slug);

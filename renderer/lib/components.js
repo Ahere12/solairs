@@ -164,11 +164,21 @@ function sparkline(points, { w = 600, h = 140 } = {}) {
 /* ---------- launching ---------- */
 async function play(instanceId, opts = {}) {
   if (!State.accounts.active) { openAccounts(); toast('Add an account first', 'warn'); return; }
+  // one game per instance: ignore repeat clicks / shortcuts while it is starting or running
+  if (isRunning(instanceId)) { toast('That instance is already running', 'info'); return; }
+  if (State.launch[instanceId] && !State.launch[instanceId].error) return;
   State.launch[instanceId] = { stage: 'Starting', progress: null };
   Bus.emit('launch', instanceId);
   await saveSettings({ selectedInstance: instanceId });
   try { await api('launch:start', instanceId, opts); }
-  catch (e) { State.launch[instanceId] = { error: e.message }; Bus.emit('launch', instanceId); toastErr(e); setTimeout(() => { delete State.launch[instanceId]; Bus.emit('launch', instanceId); }, 4000); }
+  catch (e) {
+    // the main process already pushed the error state (and clears it after a few seconds)
+    if (!State.launch[instanceId]?.error) {
+      const errState = (State.launch[instanceId] = { error: e.message }); Bus.emit('launch', instanceId);
+      setTimeout(() => { if (State.launch[instanceId] === errState) { delete State.launch[instanceId]; Bus.emit('launch', instanceId); } }, 6000);
+    }
+    toastErr(e);
+  }
 }
 function runsFor(instanceId) { return Object.entries(State.runs).filter(([, r]) => r.instanceId === instanceId && r.running).map(([id]) => id); }
 function stopInstance(instanceId) { for (const runId of runsFor(instanceId)) api('launch:stop', runId); }
@@ -395,7 +405,7 @@ function openImport() {
       <div class="faint small">Tip: you can also drag & drop .mrpack / .solpack files anywhere in Solaris.</div></div>`,
   });
   m.$('[data-file]').onclick = async () => {
-    const files = await api('dialog:open', { filters: [{ name: 'Packs', extensions: ['mrpack', 'solpack', 'skpack'] }], properties: ['openFile', 'multiSelections'] });
+    const files = await api('dialog:open', { filters: [{ name: 'Packs', extensions: ['mrpack', 'solpack'] }], properties: ['openFile', 'multiSelections'] });
     m.close();
     for (const f of files) await importFile(f);
   };
@@ -493,8 +503,9 @@ async function changeInstanceIcon(inst) {
   } catch (e) { toastErr(e); }
 }
 async function deleteInstance(inst) {
+  if (isRunning(inst.id)) return toast(`Close ${inst.name} before deleting it.`, 'warn');
   if (!(await confirmDialog(`"${inst.name}" and its worlds will be moved to the Recycle Bin.`, { title: `Delete ${inst.name}?`, ok: T('Delete'), danger: true }))) return;
-  await api('instances:delete', inst.id);
+  try { await api('instances:delete', inst.id); } catch (e) { return toastErr(e); }
   toast('Instance moved to the Recycle Bin');
   await refreshInstances();
   if (Router.current?.name === 'instance') Router.go('library', {}, { replace: true });

@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, Notification } = require('electron');
 const path = require('path');
 
 let win = null;
 let tray = null;
 let hiddenForGame = false;
+let quitWhenGamesClose = false; // window was closed while a game was running
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -14,6 +15,7 @@ if (!app.requestSingleInstanceLock()) {
 
 function showWindow() {
   if (!win) return;
+  quitWhenGamesClose = false; // the player came back — don't auto-quit any more
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -53,7 +55,14 @@ function init() {
   const startHidden = s.startMinimized || process.argv.includes('--hidden');
   win.once('ready-to-show', () => { if (!startHidden) win.show(); else if (!tray) win.minimize(); });
   win.on('close', (e) => {
-    if (!app.isQuitting && settings.get().minimizeToTray) { e.preventDefault(); win.hide(); }
+    if (app.isQuitting) return;
+    if (settings.get().minimizeToTray) { e.preventDefault(); win.hide(); return; }
+    // A game is running: keep Solaris alive in the tray so play time and logs are still recorded,
+    // then quit by itself once the last game closes.
+    if (require('./src/launch').anyRunning()) {
+      e.preventDefault(); win.hide(); quitWhenGamesClose = true;
+      if (Notification.isSupported()) new Notification({ title: 'Solaris is still running', body: 'It will close by itself when you quit the game. Click the tray icon to reopen it.' }).show();
+    }
   });
   win.on('maximize', () => win.webContents.send('event', 'window:maximized', true));
   win.on('unmaximize', () => win.webContents.send('event', 'window:maximized', false));
@@ -68,17 +77,24 @@ function init() {
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Open Solaris', click: showWindow },
       { type: 'separator' },
-      ...instances.map((i) => ({ label: `Play ${i.name}`, click: () => require('./src/launch').launch(i.id).catch(() => showWindow()) })),
+      ...instances.map((i) => ({ label: `Play ${i.name}`, click: () => require('./src/launch').launch(i.id).catch((e) => { showWindow(); events.emit('send', 'toast', { type: 'error', text: e.message }); }) })),
       { type: 'separator' },
       { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
     ]));
   };
   rebuildTray();
   tray.on('click', showWindow);
-  events.on('send', (ch) => { if (ch === 'launch:started' || ch === 'launch:exited') rebuildTray(); });
+  events.on('send', (ch, payload) => {
+    if (ch === 'launch:started' || ch === 'launch:exited') rebuildTray();
+    // window was closed during play: quit once nothing is running (a game exited, or a launch failed)
+    if ((ch === 'launch:exited' || (ch === 'launch:status' && payload?.error)) && quitWhenGamesClose) setTimeout(() => { if (!require('./src/launch').anyRunning()) { app.isQuitting = true; app.quit(); } }, 1500);
+  });
 
   if (s.discordRpc) discord.idle();
 }
 
-app.on('before-quit', () => { app.isQuitting = true; });
+app.on('before-quit', () => {
+  app.isQuitting = true;
+  try { require('./src/launch').savePlaytimeOnQuit(); } catch {}
+});
 app.on('window-all-closed', () => app.quit());

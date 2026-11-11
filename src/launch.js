@@ -71,15 +71,42 @@ async function ensureVersion(inst) {
   return id;
 }
 
+const starting = new Set(); // instances between "Play" and the game process starting
+
+/** Launch guard: one game per instance at a time, and failures always reach the UI (also for tray launches). */
 async function launch(instanceId, opts = {}) {
+  if (isRunning(instanceId)) throw new Error('This instance is already running.');
+  if (starting.has(instanceId)) throw new Error('This instance is already starting.');
+  starting.add(instanceId);
+  try {
+    return await launchInner(instanceId, opts);
+  } catch (e) {
+    push('launch:status', { instanceId, stage: null, error: e.message });
+    throw e;
+  } finally {
+    starting.delete(instanceId);
+  }
+}
+
+/** Save play time for games still running when Solaris quits (the games themselves keep running). */
+function savePlaytimeOnQuit() {
+  for (const r of running.values()) {
+    try { const cur = instances.get(r.instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + (Date.now() - r.start) }); } catch {}
+  }
+}
+
+async function launchInner(instanceId, opts = {}) {
   let inst = instances.get(instanceId);
   const s = settings.get();
   status(instanceId, 'Signing in');
-  const auth = await accounts.getLaunchAuth();
+  const auth = await accounts.getLaunchAuth({ allowStale: true });
 
   if (inst.solarisModules) {
     status(instanceId, 'Updating Solaris modules');
-    try { await modrinth.syncModules(instanceId, (p, slug) => status(instanceId, 'Updating Solaris modules', p, slug)); }
+    try {
+      const rep = await modrinth.syncModules(instanceId, (p, slug) => status(instanceId, 'Updating Solaris modules', p, slug));
+      if (rep?.offline) push('toast', { type: 'info', text: 'You’re offline — playing with the Solaris modules you already have.' });
+    }
     catch (e) { push('toast', { type: 'warn', text: 'Could not update Solaris modules: ' + e.message }); }
   }
 
@@ -105,7 +132,12 @@ async function launch(instanceId, opts = {}) {
   status(instanceId, 'Checking assets');
   const assetInfo = await versions.assetTasks(version);
   tasks.push(...assetInfo.tasks);
-  await downloadAll(tasks, { concurrency: s.concurrency || 16, onProgress: (d, t) => { if (d % 20 === 0 || d === t) status(instanceId, 'Downloading game files', d / t, `${d}/${t}`); } });
+  // "Repair game files" sets a flag: verify every file by checksum once (normally only sizes are checked).
+  const repairFlag = paths.file('repair.flag');
+  const repairing = fs.existsSync(repairFlag);
+  if (repairing) for (const t of tasks) t.verify = true;
+  await downloadAll(tasks, { concurrency: s.concurrency || 16, onProgress: (d, t) => { if (d % 20 === 0 || d === t) status(instanceId, repairing ? 'Verifying game files' : 'Downloading game files', d / t, `${d}/${t}`); } });
+  if (repairing) { try { fs.unlinkSync(repairFlag); } catch {} }
 
   let clientJar = baseJar;
   if (version.id !== jarId) {
@@ -183,7 +215,16 @@ async function launch(instanceId, opts = {}) {
   };
   proc.stdout.on('data', onData);
   proc.stderr.on('data', onData);
-  proc.on('error', (e) => push('game:log', { runId, instanceId, line: '[Solaris] Failed to start Java: ' + e.message }));
+  proc.on('error', (e) => {
+    push('game:log', { runId, instanceId, line: '[Solaris] Failed to start Java: ' + e.message });
+    // Java never started: 'close' may not fire, so don't leave the instance marked as running.
+    if (!proc.pid && running.has(runId)) {
+      running.delete(runId); logStream.end();
+      push('launch:status', { instanceId, stage: null, error: 'Could not start Java: ' + e.message });
+      push('launch:exited', { runId, instanceId, code: -1, killed: true, duration: 0, analysis: null });
+      if (!running.size) events.emit('window', 'restore');
+    }
+  });
 
   instances.save({ ...instances.get(instanceId), lastPlayed: Date.now() });
   push('launch:started', { runId, instanceId, name: inst.name });
@@ -196,6 +237,7 @@ async function launch(instanceId, opts = {}) {
   });
 
   proc.on('close', (code, signal) => {
+    if (!running.has(runId)) return; // already handled (Java failed to start)
     if (buf) onData('\n');
     logStream.end();
     running.delete(runId);
@@ -235,4 +277,7 @@ function logs(runId) {
 }
 const isRunning = (instanceId) => [...running.values()].some((r) => r.instanceId === instanceId);
 
-module.exports = { launch, stop, list, logs, isRunning, ensureVersion };
+const anyRunning = () => running.size > 0 || starting.size > 0;
+const isBusy = (instanceId) => isRunning(instanceId) || starting.has(instanceId);
+
+module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit };

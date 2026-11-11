@@ -116,7 +116,7 @@ Pages.instance = {
     $('#browse', body).onclick = () => Router.go('browse', { type: kind === 'mods' ? 'mod' : kind === 'shaderpacks' ? 'shader' : 'resourcepack', instanceId: inst.id });
     $('#addf', body).onclick = async () => {
       const files = await api('dialog:open', { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Mods & packs', extensions: ['jar', 'zip', 'mrpack'] }] });
-      if (files.length) { await api('instances:addFiles', inst.id, files, kind); load(); toast(`Added ${files.length} file(s)`); }
+      if (files.length) { try { reportAdded(await api('instances:addFiles', inst.id, files, kind)); } catch (er) { toastErr(er); } load(); }
     };
     const updBtn = $('#upd', body);
     const resetUpd = () => { updBtn.disabled = false; updBtn.innerHTML = `${icon('refresh')}Check updates`; updBtn.onclick = checkUpdates; };
@@ -157,7 +157,7 @@ Pages.instance = {
       } },
       { label: 'Open folder', icon: 'folder', action: () => api('instances:openFolder', inst.id, kind) },
     ]);
-    const onDrop = (e) => { e.preventDefault(); e.stopPropagation(); const files = [...e.dataTransfer.files].map((f) => window.solaris.pathForFile(f)); hideDrop(); api('instances:addFiles', inst.id, files).then((r) => { toast('Added ' + Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${v} ${k}`).join(', ')); load(); if (r.modpacks) refreshInstances(); }).catch(toastErr); };
+    const onDrop = (e) => { e.preventDefault(); e.stopPropagation(); const files = [...e.dataTransfer.files].map((f) => window.solaris.pathForFile(f)); hideDrop(); api('instances:addFiles', inst.id, files).then((r) => { reportAdded(r); load(); if (r.modpacks) refreshInstances(); }).catch(toastErr); };
     // assign (not addEventListener) so switching tabs never stacks duplicate handlers
     body.ondrop = onDrop;
     body.ondragover = (e) => { if (!e.dataTransfer?.types.includes('Files')) return; e.preventDefault(); e.stopPropagation(); showDrop(`Drop to add to ${inst.name}`); };
@@ -242,6 +242,15 @@ Pages.instance = {
     };
   },
 };
+
+/** Toast for instances:addFiles results (datapacks are explained instead of being copied somewhere useless). */
+function reportAdded(r) {
+  const NAMES = { mods: 'mod', resourcepacks: 'resource pack', shaderpacks: 'shader pack', modpacks: 'modpack' };
+  const parts = Object.entries(r || {}).filter(([k, v]) => v && NAMES[k]).map(([k, v]) => `${v} ${NAMES[k]}${v > 1 ? 's' : ''}`);
+  if (parts.length) toast('Added ' + parts.join(', '));
+  if (r?.skippedDatapacks) toast(`Datapacks only work inside a world — install ${r.skippedDatapacks > 1 ? 'them' : 'it'} from Browse → Datapacks and pick a world, or copy into saves/<world>/datapacks.`, 'warn', 9000);
+  if (!parts.length && !r?.skippedDatapacks) toast('Nothing to add — drop .jar mods, resource/shader pack .zip files or .mrpack modpacks.', 'info');
+}
 
 /* drag & drop overlay helpers */
 let dropTimer;

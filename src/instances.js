@@ -59,14 +59,14 @@ async function remove(id) {
   try { await shell.trashItem(dir); } catch { fs.rmSync(dir, { recursive: true, force: true }); }
   return true;
 }
-function duplicate(id, { name, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'saves', 'options.txt'] } = {}) {
+async function duplicate(id, { name, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'saves', 'options.txt'] } = {}) {
   const src = get(id);
   const copy = create({ name: name || `${src.name} (copy)`, versionId: src.versionId, loader: src.loader, icon: src.icon, group: src.group,
     extra: { memory: src.memory, jvmArgs: src.jvmArgs, javaPath: src.javaPath, resolution: src.resolution, solarisModules: src.solarisModules } });
   const from = gameDir(src), to = gameDir(copy);
   for (const item of include) {
     const s = path.join(from, item);
-    if (fs.existsSync(s)) fs.cpSync(s, path.join(to, item), { recursive: true });
+    if (fs.existsSync(s)) await fs.promises.cp(s, path.join(to, item), { recursive: true }); // async: no UI freeze
   }
   return copy;
 }
@@ -161,13 +161,20 @@ function guessKind(file) {
   }
   return null;
 }
-/** Copy dropped / picked files into the instance. Returns counts per kind. */
+/**
+ * Copy dropped / picked files into the instance. Returns counts per kind.
+ * Datapacks only work inside a world, so they are not copied (the UI explains where they go);
+ * they come back as `skippedDatapacks`.
+ */
 function addFiles(id, files, forcedKind) {
   const inst = get(id);
   const added = {};
   for (const f of files) {
-    const kind = forcedKind || guessKind(f);
+    // jars always go to mods; zips are sniffed even when a tab is selected, so a resource pack never lands in mods
+    let kind = /\.jar$/i.test(f) ? 'mods' : forcedKind && forcedKind !== 'mods' ? forcedKind : guessKind(f);
+    if (forcedKind && forcedKind !== 'mods' && /\.zip$/i.test(f) && guessKind(f) === 'datapacks') kind = 'datapacks';
     if (!kind) continue;
+    if (kind === 'datapacks') { added.skippedDatapacks = (added.skippedDatapacks || 0) + 1; continue; }
     const dir = path.join(gameDir(inst), CONTENT_DIRS[kind]);
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(f, path.join(dir, path.basename(f)));
@@ -234,7 +241,7 @@ function screenshots() {
 }
 
 // ---------- share / export ----------
-function exportPack(id, dest, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'options.txt']) {
+async function exportPack(id, dest, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'options.txt']) {
   const inst = get(id);
   const zip = new AdmZip();
   const { gameDir: _g, ...meta } = inst;
@@ -242,24 +249,27 @@ function exportPack(id, dest, include = ['mods', 'config', 'resourcepacks', 'sha
   for (const item of include) {
     const full = path.join(gameDir(inst), item);
     if (!fs.existsSync(full)) continue;
-    if (fs.statSync(full).isDirectory()) zip.addLocalFolder(full, 'minecraft/' + item);
+    if (fs.statSync(full).isDirectory()) await zip.addLocalFolderPromise(full, { zipPath: 'minecraft/' + item });
     else zip.addLocalFile(full, 'minecraft/');
   }
-  zip.writeZip(dest);
+  await zip.writeZipPromise(dest);
   return dest;
 }
-function importPack(file) {
-  const zip = new AdmZip(file);
-  const meta = JSON.parse(zip.readAsText('solaris.json')).instance;
+async function importPack(file) {
+  let zip, meta;
+  try { zip = new AdmZip(file); meta = JSON.parse(zip.readAsText('solaris.json')).instance; } catch {}
+  if (!meta || !meta.versionId) throw new Error('This file is not a Solaris pack (.solpack). To import a modpack use a .mrpack file, or add mods/resource packs from an instance’s Content tab.');
   const inst = create({ name: meta.name, versionId: meta.versionId, loader: meta.loader, icon: meta.icon,
     extra: { memory: meta.memory, jvmArgs: meta.jvmArgs, solarisModules: meta.solarisModules } });
   const root = path.join(paths.instances(), inst.id);
+  let n = 0;
   for (const e of zip.getEntries()) {
     if (e.isDirectory || !e.entryName.startsWith('minecraft/')) continue;
     const out = path.resolve(root, e.entryName);
     if (!out.startsWith(path.resolve(root) + path.sep)) continue; // zip-slip guard
     fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, e.getData());
+    await fs.promises.writeFile(out, e.getData());
+    if (++n % 25 === 0) await new Promise((r) => setImmediate(r)); // let the app breathe on big packs
   }
   return inst;
 }

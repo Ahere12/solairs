@@ -71,20 +71,20 @@ function scanMultiMC(root) {
   }
   return out;
 }
-function importMultiMC(root, keys) {
+async function importMultiMC(root, keys) {
   const out = [];
   for (const p of scanMultiMC(root).filter((x) => keys.includes(x.key))) {
     const inst = instances.create({ name: p.name, versionId: p.versionId, loader: p.loader, extra: { importedFrom: 'MultiMC/Prism' } });
-    if (p.mcDir) fs.cpSync(p.mcDir, inst.gameDir, { recursive: true });
+    if (p.mcDir) await fs.promises.cp(p.mcDir, inst.gameDir, { recursive: true }); // async: no UI freeze
     out.push(inst);
   }
   return out;
 }
 
 /** Generic: copy a .minecraft-like folder into a new instance. */
-function importFolder(folder, { name, versionId, loader }) {
+async function importFolder(folder, { name, versionId, loader }) {
   const inst = instances.create({ name: name || path.basename(folder), versionId, loader, extra: { importedFrom: 'Folder' } });
-  fs.cpSync(folder, inst.gameDir, { recursive: true });
+  await fs.promises.cp(folder, inst.gameDir, { recursive: true });
   return inst;
 }
 

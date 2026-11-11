@@ -159,6 +159,20 @@ function dirSize(dir) {
   walk(dir);
   return total;
 }
+/** Same as dirSize but asynchronous, so big folders never block the main process. */
+async function dirSizeAsync(dir) {
+  let total = 0;
+  const walk = async (d) => {
+    let entries; try { entries = await fs.promises.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) await walk(f);
+      else { try { total += (await fs.promises.stat(f)).size; } catch {} }
+    }
+  };
+  await walk(dir);
+  return total;
+}
 function osName() { return process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux'; }
 
-module.exports = { UA, events, push, paths, readJSON, writeJSON, request, getJSON, download, downloadAll, sha1File, sleep, slugify, dirSize, osName };
+module.exports = { UA, events, push, paths, readJSON, writeJSON, request, getJSON, download, downloadAll, sha1File, sleep, slugify, dirSize, dirSizeAsync, osName };

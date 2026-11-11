@@ -87,8 +87,12 @@ function renderTasks() {
 /* ---------- main-process events ---------- */
 const on = window.solaris.on;
 on('launch:status', (s) => {
-  if (s.error) State.launch[s.instanceId] = { error: s.error };
-  else if (s.stage) State.launch[s.instanceId] = { stage: s.stage, progress: s.progress, detail: s.detail };
+  if (s.error) {
+    const errState = { error: s.error };
+    State.launch[s.instanceId] = errState;
+    // errors clear themselves (covers launches the UI didn't start, e.g. from the tray)
+    setTimeout(() => { if (State.launch[s.instanceId] === errState) { delete State.launch[s.instanceId]; Bus.emit('launch', s.instanceId); } }, 6000);
+  } else if (s.stage) State.launch[s.instanceId] = { stage: s.stage, progress: s.progress, detail: s.detail };
   Bus.emit('launch', s.instanceId);
 });
 on('launch:started', ({ runId, instanceId, name }) => {
@@ -151,7 +155,7 @@ window.addEventListener('mouseup', (e) => { if (e.button === 3) { e.preventDefau
 document.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); showDrop('Drop .mrpack or .solpack to import'); } });
 document.addEventListener('drop', async (e) => {
   e.preventDefault(); hideDrop();
-  const files = [...(e.dataTransfer?.files || [])].map((f) => window.solaris.pathForFile(f)).filter((f) => /\.(mrpack|solpack|skpack)$/i.test(f));
+  const files = [...(e.dataTransfer?.files || [])].map((f) => window.solaris.pathForFile(f)).filter((f) => /\.(mrpack|solpack)$/i.test(f));
   if (!files.length) return toast('Drop mods onto an instance page. Here you can drop .mrpack or .solpack files.', 'info');
   for (const f of files) await importFile(f);
 });
