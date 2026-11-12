@@ -20,7 +20,15 @@ try {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => showWindow());
+  const deeplink = require('./src/deeplink');
+  deeplink.register(app);
+  { const l = deeplink.fromArgv(process.argv); if (l) deeplink.handle(l, false); } // opened through a solaris:// link
+  app.on('second-instance', (_e, argv) => {
+    showWindow();
+    const l = deeplink.fromArgv(argv);
+    if (l) deeplink.handle(l, !!(win && !win.webContents.isLoading()));
+  });
+  app.on('open-url', (e, url) => { e.preventDefault(); showWindow(); deeplink.handle(url, !!(win && !win.webContents.isLoading())); }); // macOS
   app.whenReady().then(async () => { if (await recoverDataDir()) init(); });
 }
 

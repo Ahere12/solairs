@@ -1,5 +1,20 @@
 [
   {
+    "product": "launcher", "version": "1.2.0", "date": "2026-11-12",
+    "title": "Minecraft news, solaris:// links and snowfall",
+    "groups": [
+      { "area": "Home", "entries": [
+        { "type": "feature", "text": "Minecraft news: the latest Java Edition news from Mojang right on Home. Click a card to read the full article." }
+      ] },
+      { "area": "Launcher", "entries": [
+        { "type": "feature", "text": "New animated splash screen while Solaris starts." },
+        { "type": "feature", "text": "solaris:// links open Solaris straight to a Modrinth modpack (solaris://modrinth/<name>) or offer to join a server (solaris://server/<address>). Links never install or launch anything without you." },
+        { "type": "feature", "text": "Snowfall: gentle falling snow, on by itself in December. Switch it in Settings → Appearance." },
+        { "type": "improvement", "text": "Update files are now named Solaris-Setup-x.y.z.exe, so releases upload to GitHub without renaming." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.1.1", "date": "2026-11-12",
     "title": "Sign-in screen, self-updates and Discord buttons",
     "groups": [

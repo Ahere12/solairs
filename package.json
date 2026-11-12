@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Solaris",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",
@@ -30,7 +30,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
@@ -61,8 +62,17 @@
     ],
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "protocols": [
+      {
+        "name": "Solaris link",
+        "schemes": [
+          "solaris"
+        ]
+      }
+    ]
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

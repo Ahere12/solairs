@@ -49,6 +49,8 @@ const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Clo
 module.exports = (getWin) => ({
   // ---------- app / window ----------
   'app:info': () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
+  'news:minecraft': (opts) => require('./news').minecraft(opts || {}),
+  'deeplink:take': () => require('./deeplink').take(),
   'update:state': () => require('./updater').getState(),
   'update:check': () => require('./updater').check(),
   'update:install': () => require('./updater').install(),

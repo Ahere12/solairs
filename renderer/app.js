@@ -189,9 +189,12 @@ document.addEventListener('drop', async (e) => {
   $('#win-close').onclick = () => api('win:close');
   $('.titlebar').ondblclick = (e) => { if (!e.target.closest('button')) api('win:maximize'); };
 
+  Splash.step('Loading settings…');
   [State.settings, State.info] = await Promise.all([api('settings:get'), api('app:info')]);
+  Snow.sync(State.settings);
   applyTheme(State.settings);
   $('#app-ver').textContent = State.info.version ? State.info.version : '';
+  Splash.step('Loading your instances…');
   await Promise.all([refreshInstances(), refreshAccounts(), McIcons.loadCache().catch(() => false)]);
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
   renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
@@ -201,4 +204,6 @@ document.addEventListener('drop', async (e) => {
   if (State.settings.firstRun) await saveSettings({ firstRun: false });
   AuthGate.sync(); // sign-in screen first: the launcher can't be used without an account
   if (State.accounts.active) Updater.whatsNew(); // otherwise shown right after signing in
+  Splash.done();
+  DeepLinks.takePending(); // opened through a solaris:// link
 })();

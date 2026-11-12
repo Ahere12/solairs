@@ -7,7 +7,7 @@ Pages.home = {
       const acct = State.accounts.accounts.find((a) => a.id === State.accounts.active);
       const hour = new Date().getHours();
       const greet = hour < 5 ? 'Up late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-      const show = { packs: look(State.settings, 'homeModpacks'), servers: look(State.settings, 'homeServers'), playtime: look(State.settings, 'homePlaytime'), news: look(State.settings, 'homeNews') };
+      const show = { mcnews: look(State.settings, 'homeMcNews'), packs: look(State.settings, 'homeModpacks'), servers: look(State.settings, 'homeServers'), playtime: look(State.settings, 'homePlaytime'), news: look(State.settings, 'homeNews') };
       const tagline =hour < 5 ? 'The sun will be up soon.' : hour < 12 ? 'A fresh day to build something.' : hour < 18 ? 'Plenty of daylight left.' : 'Golden hour — perfect for a session.';
       el.innerHTML = `
         <div class="dash-head">
@@ -36,15 +36,16 @@ Pages.home = {
           ${show.playtime ? `<div><div class="section-head"><h2>Your Playtime</h2></div><div class="card playtime" id="ptime"></div></div>` : ''}
         </div>` : ''}
 
+        ${show.mcnews ? `<div class="section-head"><h2>Minecraft news</h2><div class="grow"></div><a href="#" id="mc-news-all" class="small">minecraft.net →</a></div><div class="mcn-grid" id="mcnews"><div class="faint small">Loading news…</div></div>` : ''}
         ${show.news ? `<div class="section-head"><h2>What's new in Solaris</h2></div><div class="card" id="news"></div>` : ''}
-        ${!show.packs && !show.servers && !show.playtime && !show.news ? `<p class="faint small" style="margin-top:24px">Home sections are hidden — turn them back on in <a href="#" id="to-look">Settings → Appearance</a>.</p>` : ''}`;
+        ${!show.packs && !show.servers && !show.playtime && !show.news && !show.mcnews ? `<p class="faint small" style="margin-top:24px">Home sections are hidden — turn them back on in <a href="#" id="to-look">Settings → Appearance</a>.</p>` : ''}`;
       $('#to-lib', el).onclick = () => Router.go('library');
       if ($('#to-browse', el)) $('#to-browse', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: 'modpack' }); };
       if ($('#to-servers', el)) $('#to-servers', el).onclick = (e) => { e.preventDefault(); Router.go('servers'); };
       if ($('#to-look', el)) $('#to-look', el).onclick = (e) => { e.preventDefault(); Router.go('settings', { tab: 'appearance' }); };
       if (!insts.length) { $('#first-new', el).onclick = () => openNewInstance(); $('#first-solaris', el).onclick = () => Router.go('solaris'); }
       updateStatus();
-      drawPlaytime(); loadPacks(); loadNews(); loadFeatured();
+      drawPlaytime(); loadPacks(); loadNews(); loadFeatured(); loadMcNews();
     };
     const updateStatus = () => {
       const s = $('#lstatus', el); if (!s) return;
@@ -85,6 +86,16 @@ Pages.home = {
       $('#news', el).innerHTML = `<div class="row" style="margin-bottom:6px"><b>Solaris ${esc(r.version)}</b><span class="faint small">${fmtDate(r.date)}</span><div class="grow"></div><a href="#" id="all-news" class="small">Full changelog →</a></div>${entries.map((e) => `<div class="news-item"><span class="chip ${e.type === 'feature' ? 'accent' : e.type === 'bugfix' ? 'danger' : 'info'}">${esc(e.area)}</span><span class="small">${esc(e.text)}</span></div>`).join('')}`;
       $('#all-news', el).onclick = (e) => { e.preventDefault(); Router.go('changelog'); };
     };
+    const loadMcNews = async () => {
+      const box = $('#mcnews', el); if (!box) return;
+      $('#mc-news-all', el).onclick = (e) => { e.preventDefault(); api('shell:open', 'https://www.minecraft.net/articles'); };
+      try {
+        const items = await api('news:minecraft', { limit: 4 });
+        if (!$('#mcnews', el)) return;
+        box.innerHTML = items.length ? mcNewsCards(items) : '<div class="faint small">No news right now.</div>';
+        bindMcNews(box);
+      } catch { if ($('#mcnews', el)) box.innerHTML = '<div class="faint small">Couldn’t load Minecraft news — check your internet connection.</div>'; }
+    };
     const loadFeatured = async () => {
       const { featured } = await api('servers:list');
       const box = $('#featured', el); if (!box) return;
@@ -103,7 +114,7 @@ Pages.home = {
     ctx.on('launch', (id) => { updateStatus(); if (!State.launch[id] || State.launch[id].error) draw(); });
     ctx.on('runs', draw);
     let lastLook = '';
-    ctx.on('settings', (s) => { const k = ['homeModpacks', 'homeServers', 'homePlaytime', 'homeNews'].map((x) => look(s, x)).join(); if (lastLook && k !== lastLook) draw(); lastLook = k; });
-    lastLook = ['homeModpacks', 'homeServers', 'homePlaytime', 'homeNews'].map((x) => look(State.settings, x)).join();
+    ctx.on('settings', (s) => { const k = ['homeMcNews', 'homeModpacks', 'homeServers', 'homePlaytime', 'homeNews'].map((x) => look(s, x)).join(); if (lastLook && k !== lastLook) draw(); lastLook = k; });
+    lastLook = ['homeMcNews', 'homeModpacks', 'homeServers', 'homePlaytime', 'homeNews'].map((x) => look(State.settings, x)).join();
   },
 };

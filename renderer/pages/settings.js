@@ -53,7 +53,7 @@ const BACKGROUNDS = {
   gradient: { name: 'Your gradient' },
   image: { name: 'Your image' },
 };
-const LOOK_DEFAULTS = { bgStyle: 'glow', bgImage: '', bgDim: 35, bgBlur: 0, panelOpacity: 100, uiScale: 100, cornerStyle: 'rounded', compactSidebar: false, reduceMotion: false, showSideInstances: true, homeModpacks: true, homeServers: true, homePlaytime: true, homeNews: true };
+const LOOK_DEFAULTS = { bgStyle: 'glow', bgImage: '', bgDim: 35, bgBlur: 0, panelOpacity: 100, uiScale: 100, cornerStyle: 'rounded', compactSidebar: false, reduceMotion: false, showSideInstances: true, homeModpacks: true, homeServers: true, homePlaytime: true, homeNews: true, homeMcNews: true, snow: (() => { const d = new Date(); return d.getMonth() === 11 || (d.getMonth() === 0 && d.getDate() <= 6); })() };
 const look = (s, k) => (s?.[k] ?? LOOK_DEFAULTS[k]);
 const fileUrl = (p) => 'file:///' + String(p).replace(/\\/g, '/').replace(/^\/+/, '').split('/').map((seg, i) => (i === 0 && /^[a-z]:$/i.test(seg) ? seg : encodeURIComponent(seg))).join('/');
 function applyLook(s) {
@@ -179,6 +179,7 @@ Pages.settings = {
       ${this.lookToggle('compactSidebar', 'Compact sidebar', 'Show only icons in the sidebar for more room.')}
       ${this.lookToggle('showSideInstances', 'Instances in sidebar', 'List your instances under the menu for one-click access.')}
       ${this.lookToggle('reduceMotion', 'Reduce motion', 'Turn off animations and transitions.')}
+      ${this.lookToggle('snow', 'Snowfall', 'Gentle falling snow over the launcher. On by itself in December.')}
     </div>
 
     <h2>Instance tabs</h2>
@@ -195,6 +196,7 @@ Pages.settings = {
       ${this.lookToggle('homeModpacks', 'Explore modpacks', 'Popular modpacks from Modrinth.')}
       ${this.lookToggle('homeServers', 'Servers', 'Featured servers with live player counts.')}
       ${this.lookToggle('homePlaytime', 'Your Playtime', 'Play time per instance.')}
+      ${this.lookToggle('homeMcNews', 'Minecraft news', 'Latest Java Edition news from Mojang.')}
       ${this.lookToggle('homeNews', "What's new", 'Latest Solaris changelog entries.')}
     </div>
     <div class="row" style="margin-top:14px"><button class="btn sm ghost" id="look-reset">${icon('refresh')}Reset appearance to defaults</button></div>`;
