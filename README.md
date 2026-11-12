@@ -63,7 +63,7 @@ Every player signs in through **one** OAuth app that the Solaris developer owns.
 
 ## Discord Rich Presence
 
-Create an application at discord.com/developers and upload an art asset named `solaris`. Then paste the application ID in **Settings → Integrations**.
+Built in: Solaris uses its own Discord application (ID set in `src/config.js` → `DISCORD_CLIENT_ID`), so players only switch it on or off in **Settings → Integrations**. The Discord application needs an Art Asset named `solaris` (Developer Portal → Rich Presence → Art Assets) for the launcher logo to show.
 
 ## Layout
 
@@ -78,3 +78,13 @@ tools/                   icon generator, smoke test, end-to-end launch test
 Data is stored in `%APPDATA%\.solaris` by default. Set `SOLARIS_DATA_DIR` to use a portable folder.
 
 Solaris is not affiliated with Mojang Studios or Microsoft.
+
+## Releasing an update
+
+Solaris updates itself from GitHub Releases on `Ahere12/solairs` (electron-updater, `src/updater.js`). It checks on start and every 4 hours, downloads in the background (progress card in the sidebar + titlebar chip), then offers **Restart & update**. If the player picks "Later", the update installs when Solaris closes.
+
+1. Bump `version` in `package.json` (e.g. 1.1.0 → 1.2.0).
+2. `npm run dist`
+3. Create a GitHub release with tag `v1.2.0` (published, not a draft) and upload these files from `dist/`: `Solaris Setup 1.2.0.exe`, `Solaris Setup 1.2.0.exe.blockmap`, `latest.yml`.
+
+Players on older versions see the download animation within a few seconds of opening Solaris. To preview the animation without a release, run `SOLARIS_FAKE_UPDATE=1 npm start`.

@@ -160,6 +160,35 @@ function renderHead(el, acct) {
   else { el.innerHTML = ''; el.textContent = (acct.name || '?')[0].toUpperCase(); }
 }
 
+/**
+ * Cape loader with animated-cape support (idea from Silent Client's skinview3d fork, MIT).
+ * An animated cape is a strip of normal 64×32 (2:1) cape frames stacked vertically; frames play every `delay` ms.
+ */
+function loadCape(viewer, src, { delay = 100 } = {}) {
+  if (!viewer) return Promise.resolve(0);
+  clearInterval(viewer._capeTimer); viewer._capeTimer = null;
+  if (!src) { viewer.resetCape(); return Promise.resolve(0); }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = img.naturalWidth, fh = Math.round(w / 2), n = Math.floor(img.naturalHeight / fh);
+      if (n <= 1) { viewer.loadCape(img); resolve(1); return; }
+      const frames = Array.from({ length: n }, (_, i) => {
+        const c = document.createElement('canvas'); c.width = w; c.height = fh;
+        c.getContext('2d').drawImage(img, 0, i * fh, w, fh, 0, 0, w, fh);
+        return c;
+      });
+      let i = 0;
+      viewer.loadCape(frames[0]);
+      viewer._capeTimer = setInterval(() => { i = (i + 1) % n; viewer.loadCape(frames[i]); }, Math.max(16, delay));
+      resolve(n);
+    };
+    img.onerror = () => { viewer.resetCape(); resolve(0); };
+    img.src = src;
+  });
+}
+
 function sparkline(points, { w = 600, h = 140 } = {}) {
   if (!points.length) return `<div class="empty small">No data yet — player counts are recorded each time you view this server.</div>`;
   const xs = points.map((p) => p.t), ys = points.map((p) => p.n);
@@ -268,7 +297,8 @@ function openAccounts() {
         : '<div class="faint small" style="text-align:center;margin-top:8px">Microsoft sign-in isn’t available in this version of Solaris yet. Update Solaris to enable it — you can play offline meanwhile.</div>'}
       <div class="row" style="margin:18px 0 10px"><div class="grow" style="height:1px;background:var(--border)"></div><span class="faint small">or play offline</span><div class="grow" style="height:1px;background:var(--border)"></div></div>
       <div class="row"><input type="text" class="grow" id="off-name" placeholder="Username (3–16 characters)" maxlength="16"><button class="btn" data-off>Add offline</button></div>
-      <div class="faint small" style="margin-top:8px">Offline accounts play singleplayer and offline-mode servers. Online servers and skins need a Microsoft account that owns Minecraft.</div>`;
+      <div class="faint small" style="margin-top:8px">Offline accounts play singleplayer and offline-mode servers. Online servers and skins need a Microsoft account that owns Minecraft.</div>
+      ${active ? `<button class="btn ghost" data-signout style="width:100%;margin-top:16px">${icon('logout')}Sign out</button>` : ''}`;
     $$('[data-head]', m.el).forEach((el) => renderHead(el, accounts.find((a) => a.id === el.dataset.head)));
     $$('[data-use]', m.el).forEach((b) => (b.onclick = async () => { await api('accounts:setActive', b.dataset.use); draw(); }));
     $$('[data-rm]', m.el).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this account from Solaris?', { danger: true, ok: 'Remove' })) { await api('accounts:remove', b.dataset.rm); draw(); } }));
@@ -284,6 +314,7 @@ function openAccounts() {
       if (warnings.length && !(await confirmDialog(`${warnings.map((w) => '• ' + w).join('\n')}\n\nAdd “${name}” anyway?`, { title: 'Unusual offline username', ok: 'Add anyway' }))) return;
       try { await api('accounts:addOffline', name); toast('Account added'); draw(); } catch (e) { toastErr(e); }
     };
+    if (m.$('[data-signout]')) m.$('[data-signout]').onclick = async () => { await api('accounts:setActive', null); m.close(); await refreshAccounts(); };
     m.$('#off-name').onkeydown = (e) => { if (e.key === 'Enter') m.$('[data-off]').click(); };
     if (msOk) m.$('[data-ms]').onclick = () => microsoftLogin(m, draw);
   };

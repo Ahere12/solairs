@@ -1,55 +1,55 @@
-// Minimal Discord Rich Presence over local IPC (no dependencies).
-const net = require('net');
-const path = require('path');
+// Discord Rich Presence through Silent Client's discord-rpc (MIT, github.com/Silent-Client/discord-rpc).
+// Uses Solaris's built-in Discord application (src/config.js). Reconnects by itself when Discord is started later.
+const { Client } = require('silent-discord-rpc');
 const settings = require('./settings');
+const { DISCORD_CLIENT_ID } = require('./config');
 
-let sock = null, ready = false, connecting = null, pendingActivity;
+const RETRY_MS = 20000;
+const BUTTONS = [{ label: 'Get Solaris', url: 'https://github.com/Ahere12/solairs/releases/latest' }];
 
-function pipePath(i) {
-  if (process.platform === 'win32') return `\\\\?\\pipe\\discord-ipc-${i}`;
-  const base = process.env.XDG_RUNTIME_DIR || process.env.TMPDIR || process.env.TMP || '/tmp';
-  return path.join(base, `discord-ipc-${i}`);
-}
-function frame(op, obj) {
-  const data = Buffer.from(JSON.stringify(obj));
-  const h = Buffer.alloc(8);
-  h.writeInt32LE(op, 0); h.writeInt32LE(data.length, 4);
-  return Buffer.concat([h, data]);
-}
-function tryConnect(i, clientId) {
-  return new Promise((resolve, reject) => {
-    const s = net.createConnection(pipePath(i));
-    s.once('connect', () => { s.write(frame(0, { v: 1, client_id: clientId })); resolve(s); });
-    s.once('error', reject);
-  });
-}
+let client = null, ready = false, connecting = null, retryTimer = null, current;
+
+function enabled() { return !!(settings.get().discordRpc && DISCORD_CLIENT_ID); }
+
 async function connect() {
-  const { discordRpc, discordClientId } = settings.get();
-  if (!discordRpc || !discordClientId) return false;
-  if (sock) return ready;
+  if (!enabled()) return false;
+  if (ready) return true;
   if (connecting) return connecting;
   connecting = (async () => {
-    for (let i = 0; i < 10; i++) {
-      try {
-        sock = await tryConnect(i, discordClientId);
-        sock.on('data', (buf) => {
-          try { const msg = JSON.parse(buf.slice(8).toString()); if (msg.evt === 'READY') { ready = true; if (pendingActivity !== undefined) setActivity(pendingActivity); } } catch {}
-        });
-        sock.on('close', () => { sock = null; ready = false; });
-        sock.on('error', () => {});
-        return true;
-      } catch {}
+    const c = new Client({ transport: 'ipc' });
+    c.on('disconnected', () => { if (client === c) { client = null; ready = false; scheduleRetry(); } });
+    try {
+      await c.login({ clientId: DISCORD_CLIENT_ID });
+      client = c; ready = true;
+      return true;
+    } catch {
+      try { c.destroy(); } catch {}
+      scheduleRetry(); // Discord isn't running (yet)
+      return false;
     }
-    return false;
   })();
-  const r = await connecting; connecting = null; return r;
+  try { return await connecting; } finally { connecting = null; }
 }
-async function setActivity(activity) {
-  pendingActivity = activity;
-  if (!(await connect()) || !ready) return;
-  sock.write(frame(1, { cmd: 'SET_ACTIVITY', args: { pid: process.pid, activity: activity || null }, nonce: String(Date.now()) + Math.random() }));
+
+function scheduleRetry() {
+  clearTimeout(retryTimer);
+  if (!enabled() || current === undefined) return;
+  retryTimer = setTimeout(() => { if (!ready) apply(); }, RETRY_MS);
 }
-function idle() { return setActivity({ details: 'In the launcher', assets: { large_image: 'solaris', large_text: 'Solaris Launcher' } }); }
+
+async function apply() {
+  if (!(await connect())) return;
+  try {
+    if (current) await client.setActivity({ ...current, buttons: BUTTONS, instance: false });
+    else await client.clearActivity();
+  } catch (e) { console.warn('[Solaris] Discord presence failed:', e?.message || e); }
+}
+
+/** activity: { details, state, startTimestamp, largeImageKey, largeImageText, smallImageKey, smallImageText } or null */
+function setActivity(activity) { current = activity || null; return apply(); }
+
+function idle() { return setActivity({ details: 'In the launcher', largeImageKey: 'solaris', largeImageText: 'Solaris Launcher' }); }
+
 /**
  * "Playing" presence. Privacy settings decide whether the instance, the server and the player head are shown.
  * For Microsoft accounts the large image is the player's own head (an https image Discord loads itself).
@@ -58,16 +58,21 @@ function playing({ inst, server, start, account, modded }) {
   const s = settings.get();
   const head = s.discordShowHead !== false && account?.type === 'msa' && account.uuid ? `https://mc-heads.net/avatar/${String(account.uuid).replace(/-/g, '')}/128` : null;
   const showInst = s.discordShowInstance !== false;
-  const state = server && s.discordShowServer !== false ? `On ${server}` : `Minecraft ${inst.versionId}${modded ? ' · ' + inst.loader.type : ''}`;
   return setActivity({
     details: showInst ? `Playing ${inst.name}` : 'Playing Minecraft',
-    state,
-    timestamps: { start: Math.floor(start / 1000) },
-    assets: head
-      ? { large_image: head, large_text: s.streamerMode ? 'Minecraft' : account.name, small_image: 'solaris', small_text: 'Solaris Launcher' }
-      : { large_image: 'solaris', large_text: 'Solaris Launcher' },
+    state: server && s.discordShowServer !== false ? `On ${server}` : `Minecraft ${inst.versionId}${modded ? ' · ' + inst.loader.type : ''}`,
+    startTimestamp: start,
+    ...(head
+      ? { largeImageKey: head, largeImageText: s.streamerMode ? 'Minecraft' : account.name, smallImageKey: 'solaris', smallImageText: 'Solaris Launcher' }
+      : { largeImageKey: 'solaris', largeImageText: 'Solaris Launcher' }),
   });
 }
-function disconnect() { try { sock && sock.destroy(); } catch {} sock = null; ready = false; }
+
+function disconnect() {
+  current = undefined;
+  clearTimeout(retryTimer);
+  const c = client; client = null; ready = false;
+  if (c) { c.clearActivity().catch(() => {}).finally(() => { try { c.destroy(); } catch {} }); }
+}
 
 module.exports = { setActivity, idle, playing, disconnect };

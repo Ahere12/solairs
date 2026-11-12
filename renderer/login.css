@@ -1,0 +1,70 @@
+/* ---------- sign-in gate (must be completed before the launcher can be used) ---------- */
+body.gated .titlebar .nav-arrows, body.gated #tb-changelog { visibility: hidden; }
+#auth-gate { position: absolute; inset: 36px 0 0; z-index: 40; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(400px, 0.85fr); gap: var(--gap); padding: 0 var(--gap) var(--gap); background: var(--win); animation: ag-in 0.35s ease both; }
+#auth-gate[hidden] { display: none; }
+#auth-gate.leaving { animation: ag-out 0.36s ease both; pointer-events: none; }
+@keyframes ag-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ag-out { to { opacity: 0; transform: scale(1.015); } }
+
+/* left: brand art + 3D player */
+#auth-gate .ag-art { position: relative; overflow: hidden; border-radius: 16px; border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  background: radial-gradient(70% 55% at 50% 100%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%), radial-gradient(60% 45% at 85% 105%, color-mix(in srgb, var(--accent-2) 30%, transparent), transparent 70%), linear-gradient(180deg, #0a0810 0%, #150c14 60%, #211011 100%); }
+:root[data-theme='dawn'] #auth-gate .ag-art { background: radial-gradient(70% 55% at 50% 100%, color-mix(in srgb, var(--accent) 40%, transparent), transparent 70%), linear-gradient(180deg, #fbf3e7, #f1dcc4); }
+#auth-gate .ag-sun { position: absolute; left: 50%; top: 46%; width: 560px; height: 560px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 30%, transparent) 0 30%, transparent 62%), repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--accent) 10%, transparent) 0deg 5deg, transparent 5deg 15deg);
+  -webkit-mask: radial-gradient(circle, #000 25%, transparent 70%); mask: radial-gradient(circle, #000 25%, transparent 70%); animation: ag-spin 90s linear infinite; }
+@keyframes ag-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+#auth-gate .ag-brand { position: absolute; top: 22px; left: 24px; display: flex; align-items: center; gap: 12px; z-index: 2; }
+#auth-gate .ag-brand img { width: 40px; height: 40px; filter: drop-shadow(0 4px 14px color-mix(in srgb, var(--accent) 50%, transparent)); }
+#auth-gate .ag-brand b { display: block; font-size: 22px; letter-spacing: -0.02em; line-height: 1.1; }
+#auth-gate .ag-brand span { font-size: 12px; color: var(--muted); }
+#auth-gate .ag-stage { position: relative; width: 300px; height: 420px; margin-bottom: 18px; }
+#auth-gate .ag-stage canvas { position: relative; z-index: 1; cursor: grab; }
+#auth-gate.no-skin .ag-stage canvas { visibility: hidden; }
+#auth-gate .ag-floor { position: absolute; left: 50%; bottom: 22px; width: 190px; height: 34px; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent); }
+#auth-gate .ag-name { position: absolute; bottom: 430px; left: 50%; transform: translateX(-50%); z-index: 2; font-family: var(--mono); font-size: 13px; padding: 2px 10px; border-radius: 4px; background: rgba(0, 0, 0, 0.45); color: #fff; }
+#auth-gate .ag-name:empty { display: none; }
+
+/* right: sign-in card */
+#auth-gate .ag-panel { display: flex; flex-direction: column; align-items: center; background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 28px; overflow-y: auto; }
+#auth-gate .ag-card { width: 100%; max-width: 380px; margin: auto 0; }
+#auth-gate h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -0.02em; }
+#auth-gate .ag-card > p.muted { margin: 0 0 22px; }
+#auth-gate .ag-tabs { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 18px; }
+#auth-gate .ag-tabs button { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; border: 0; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; border-radius: 9px; transition: color 0.15s; }
+#auth-gate .ag-tabs button.on { color: var(--text); }
+#auth-gate .ag-tabs button svg { width: 16px; height: 16px; }
+#auth-gate .ag-tab-ink { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 9px; background: var(--panel-3); transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.2, 1); }
+#auth-gate .ag-tabs[data-on='offline'] .ag-tab-ink { transform: translateX(100%); }
+#auth-gate .ag-pane[hidden] { display: none; }
+#auth-gate .ag-pane { animation: fade 0.18s; }
+#auth-gate .ag-pane p { margin: 10px 0 0; }
+#auth-gate .btn.lg { width: 100%; height: 48px; font-size: 15px; border-radius: 12px; }
+#auth-gate .ag-ms { background: #fff; color: #1b1b1b; border: 0; }
+#auth-gate .ag-ms:hover:not(:disabled) { background: #ececec; }
+#auth-gate .ag-perks { list-style: none; padding: 0; margin: 16px 0 4px; display: grid; gap: 7px; font-size: 13px; color: var(--muted); }
+#auth-gate .ag-perks li { display: flex; align-items: center; gap: 8px; }
+#auth-gate .ag-perks svg { width: 15px; height: 15px; color: var(--ok); }
+#auth-gate .ag-field { display: grid; gap: 6px; margin-bottom: 14px; }
+#auth-gate .ag-field > span { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+#auth-gate .ag-input { position: relative; }
+#auth-gate .ag-input input { width: 100%; height: 48px; font-size: 16px; padding-right: 56px; font-family: var(--mono); border-radius: 12px; }
+#auth-gate .ag-input em { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 11.5px; color: var(--faint); }
+#auth-gate .ag-input.ok input { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+
+/* saved (signed-out) accounts */
+#auth-gate .ag-saved:empty { display: none; }
+#auth-gate .ag-label { margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+#auth-gate .ag-acct { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+#auth-gate .ag-acct-use { flex: 1; display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; border: 1px solid var(--border-2); background: var(--panel); border-radius: 12px; cursor: pointer; text-align: left; transition: border-color 0.12s, background 0.12s; }
+#auth-gate .ag-acct-use:hover { border-color: var(--accent); background: var(--panel-2); }
+#auth-gate .ag-acct-use .head { width: 34px; height: 34px; border-radius: 7px; overflow: hidden; display: grid; place-items: center; background: var(--panel-3); font-weight: 700; flex: none; }
+#auth-gate .ag-acct-use .head canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+#auth-gate .ag-acct-use .t { flex: 1; min-width: 0; display: grid; }
+#auth-gate .ag-acct-use small { color: var(--muted); font-size: 12px; }
+#auth-gate .ag-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--faint); font-size: 12px; }
+#auth-gate .ag-or::before, #auth-gate .ag-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+#auth-gate .ag-foot { width: 100%; max-width: 380px; display: flex; justify-content: space-between; gap: 12px; padding-top: 18px; }
+#auth-gate .ag-foot a { color: var(--muted); }
+#auth-gate .ag-foot a:hover { color: var(--accent); }
+@media (max-width: 1100px) { #auth-gate { grid-template-columns: 1fr minmax(380px, 1fr); } }

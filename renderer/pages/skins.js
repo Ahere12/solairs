@@ -12,7 +12,7 @@ Pages.skins = {
       <div class="skins-layout">
         <div class="viewer">
           <canvas id="sv" width="300" height="400"></canvas>
-          <div class="row"><div class="seg"><button data-anim="walk" class="on">Walk</button><button data-anim="idle">Idle</button><button data-anim="run">Run</button></div><button class="icon-btn" id="rot" title="Auto-rotate">${icon('refresh')}</button></div>
+          <div class="row"><div class="seg"><button data-anim="walk" class="on">Walk</button><button data-anim="idle">Idle</button><button data-anim="run">Run</button></div><button class="icon-btn" id="rot" title="Auto-rotate">${icon('refresh')}</button><button class="icon-btn" id="cape-file" title="Preview a cape file (animated capes supported)">${icon('upload')}</button><input type="file" id="cape-input" accept="image/png" hidden></div>
           <div id="stage-info" class="small muted" style="text-align:center"></div>
           <button class="btn primary" id="apply" disabled style="width:100%">${icon('check')}Apply skin</button>
           ${acct?.type === 'msa' ? '' : '<div class="faint small" style="text-align:center">Applying skins and capes needs a Microsoft account. Offline players see their default skin in-game.</div>'}
@@ -45,8 +45,16 @@ Pages.skins = {
       if (!src) { const d = accountDefault(); if (d) { src = d.src; variant = d.model === 'slim' ? 'slim' : 'classic'; } }
       if (viewer) {
         if (src) viewer.loadSkin(src, { model: variant === 'slim' ? 'slim' : 'default' }); else viewer.resetSkin();
-        if (cape !== undefined) cape ? viewer.loadCape(cape) : viewer.resetCape();
+        if (cape !== undefined) loadCape(viewer, cape || null);
       } else if (src) drawSkinFront($('#sv', el), src, variant === 'slim');
+    };
+    $('#cape-file', el).onclick = () => $('#cape-input', el).click();
+    $('#cape-input', el).onchange = (e) => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f || !viewer) return;
+      const r = new FileReader();
+      r.onload = async () => { const n = await loadCape(viewer, r.result); toast(n > 1 ? `Animated cape preview: ${n} frames` : n ? 'Cape preview (only you see this)' : 'That image isn’t a cape texture', n ? 'info' : 'error'); };
+      r.readAsDataURL(f);
     };
     $$('[data-anim]', el).forEach((b) => (b.onclick = () => {
       $$('[data-anim]', el).forEach((x) => x.classList.toggle('on', x === b));
@@ -145,7 +153,7 @@ Pages.skins = {
 
     // Current skin + capes
     current = await api('skins:current').catch(() => null);
-    if (!el.isConnected) return () => { if (viewer) viewer.dispose(); };
+    if (!el.isConnected) return () => { if (viewer) { clearInterval(viewer._capeTimer); viewer.dispose(); } };
     show(current?.skin, current?.variant, current?.cape || null);
     drawWardrobe(); drawDefaults(); stage();
     // game files may finish loading after the page opened (first run)
@@ -162,12 +170,12 @@ Pages.skins = {
             img.src = c.url.replace('http://', 'https://');
           }
           $$('[data-cape]', el).forEach((d) => (d.onclick = async () => {
-            try { await api('skins:setCape', d.dataset.cape || null); $$('[data-cape]', el).forEach((x) => x.classList.toggle('on', x === d)); toast('Cape updated'); const c = capes.find((x) => x.id === d.dataset.cape); if (viewer) c ? viewer.loadCape(c.url.replace('http://', 'https://')) : viewer.resetCape(); }
+            try { await api('skins:setCape', d.dataset.cape || null); $$('[data-cape]', el).forEach((x) => x.classList.toggle('on', x === d)); toast('Cape updated'); const c = capes.find((x) => x.id === d.dataset.cape); if (viewer) loadCape(viewer, c ? c.url.replace('http://', 'https://') : null); }
             catch (e) { toastErr(e); }
           }));
         }
       } catch {}
     }
-    return () => { if (viewer) viewer.dispose(); };
+    return () => { if (viewer) { clearInterval(viewer._capeTimer); viewer.dispose(); } };
   },
 };

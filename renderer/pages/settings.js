@@ -416,7 +416,6 @@ Pages.settings = {
     </div>
     <h2>Other services</h2><div class="card">
       ${this.toggle('discordRpc', 'Discord Rich Presence', 'Show what you are playing on your Discord profile.')}
-      <div class="setting"><div class="txt"><div class="t">Discord application ID</div><div class="d">Create an application at discord.com/developers, upload an art asset named <span class="mono">solaris</span>, and paste its ID here.</div></div><div class="ctl"><input type="text" class="mono" data-text="discordClientId" value="${esc(State.settings.discordClientId)}" style="width:240px" placeholder="123456789012345678"></div></div>
       <div class="setting"><div class="txt"><div class="t">mclo.gs</div><div class="d">Used only when you upload a log or crash report.</div></div><div class="ctl"><span class="chip">On demand</span></div></div>
     </div>`;
     this.bind(box);
@@ -448,10 +447,19 @@ Pages.settings = {
     box.innerHTML = `<div class="card" style="text-align:center;padding:36px">
       <img src="../assets/icon.png" style="width:96px;height:96px">
       <h1 style="margin:10px 0 4px">Solaris</h1><div class="muted">Version ${esc(i.version)} · Electron ${esc(i.electron)} · ${esc(i.platform)}-${esc(i.arch)}</div>
-      <div class="row" style="justify-content:center;margin-top:18px"><button class="btn" id="cl">${icon('changelog')}${T('Changelog')}</button><button class="btn" id="rm">${icon('roadmap')}${T('Roadmap')}</button></div>
+      <div class="row" style="justify-content:center;margin-top:18px"><button class="btn" id="cl">${icon('changelog')}${T('Changelog')}</button><button class="btn" id="rm">${icon('roadmap')}${T('Roadmap')}</button><button class="btn" id="upd">${icon('refresh')}Check for updates</button></div>
       <p class="faint small" style="margin-top:22px">Solaris is not affiliated with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</p></div>`;
     $('#cl', box).onclick = () => Router.go('changelog');
     $('#rm', box).onclick = () => Router.go('roadmap');
+    $('#upd', box).onclick = async (e) => {
+      const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Checking…`;
+      let s = await api('update:check').catch(() => ({}));
+      for (let i = 0; i < 20 && s.status === 'checking'; i++) { await sleep(500); s = await api('update:state').catch(() => ({})); }
+      if (s.status === 'downloading' || s.status === 'ready') toast(`Solaris ${s.version} found — see the sidebar`, 'info');
+      else if (s.status === 'idle') toast('Updates only work in the installed app', 'info');
+      else toast('You have the latest version of Solaris');
+      if (b.isConnected) { b.disabled = false; b.innerHTML = `${icon('refresh')}Check for updates`; }
+    };
   },
 };
 

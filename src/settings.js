@@ -22,8 +22,7 @@ const DEFAULTS = {
   dedicatedGpu: false,
   concurrency: 16,
   resolution: { width: 0, height: 0, fullscreen: false },
-  discordRpc: false,
-  discordClientId: '',
+  discordRpc: true,
   // privacy & safety
   discordShowInstance: true,
   discordShowServer: true,
@@ -57,12 +56,16 @@ let cache;
 function get() {
   if (!cache) {
     const saved = readJSON(file(), {});
+    delete saved.discordClientId; // now built in (src/config.js)
+    // older versions shipped Rich Presence off because players had to paste their own app ID
+    if (saved.discordRpc === false && !saved.discordRpcChosen) delete saved.discordRpc;
     cache = { ...structuredClone(DEFAULTS), ...saved, keybinds: { ...DEFAULTS.keybinds, ...(saved.keybinds || {}) } };
   }
   return cache;
 }
 function set(patch) {
   cache = { ...get(), ...patch };
+  if ('discordRpc' in patch) cache.discordRpcChosen = true;
   if (patch.keybinds) cache.keybinds = { ...DEFAULTS.keybinds, ...patch.keybinds };
   writeJSON(file(), cache);
   return cache;

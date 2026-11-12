@@ -126,6 +126,7 @@ function init() {
   });
 
   if (s.discordRpc) discord.idle();
+  win.webContents.once('did-finish-load', () => require('./src/updater').init());
 }
 
 app.on('before-quit', () => {

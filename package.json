@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Solaris",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",
@@ -52,6 +52,13 @@
       "icon": "assets/icon.png",
       "category": "Game"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Ahere12",
+        "repo": "solairs"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
@@ -59,6 +66,8 @@
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
+    "electron-updater": "^6.8.11",
+    "silent-discord-rpc": "^4.0.1",
     "skinview3d": "^3.4.2"
   },
   "devDependencies": {

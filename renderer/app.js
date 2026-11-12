@@ -150,7 +150,7 @@ Bus.on('settings', (s) => applyTheme(s));
 
 /* ---------- keyboard, mouse, drag & drop ---------- */
 document.addEventListener('keydown', (e) => {
-  if ($('.modal-back') || $('.lightbox')) return; // don't navigate behind an open dialog
+  if ($('.modal-back') || $('.lightbox') || AuthGate.isOpen()) return; // don't navigate behind an open dialog or the sign-in screen
   if (e.altKey && e.key === 'ArrowLeft') { Router.back(); return; }
   if (e.altKey && e.key === 'ArrowRight') { Router.forward(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) && !e.ctrlKey) return;
@@ -163,10 +163,11 @@ document.addEventListener('keydown', (e) => {
   else if (action === 'play.selected' && State.settings.selectedInstance) play(State.settings.selectedInstance);
   else if (action === 'search.focus') { if (!['library', 'browse'].includes(Router.current?.name)) Router.go('browse'); setTimeout(() => Bus.emit('search-focus'), 50); }
 });
-window.addEventListener('mouseup', (e) => { if (e.button === 3) { e.preventDefault(); Router.back(); } if (e.button === 4) { e.preventDefault(); Router.forward(); } });
-document.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); showDrop('Drop .mrpack or .solpack to import'); } });
+window.addEventListener('mouseup', (e) => { if (AuthGate.isOpen()) return; if (e.button === 3) { e.preventDefault(); Router.back(); } if (e.button === 4) { e.preventDefault(); Router.forward(); } });
+document.addEventListener('dragover', (e) => { if (!AuthGate.isOpen() && e.dataTransfer?.types.includes('Files')) { e.preventDefault(); showDrop('Drop .mrpack or .solpack to import'); } });
 document.addEventListener('drop', async (e) => {
   e.preventDefault(); hideDrop();
+  if (AuthGate.isOpen()) return;
   const files = [...(e.dataTransfer?.files || [])].map((f) => window.solaris.pathForFile(f)).filter((f) => /\.(mrpack|solpack|zip)$/i.test(f));
   if (!files.length) return toast('Drop mods onto an instance page. Here you can drop .mrpack or .solpack files.', 'info');
   for (const f of files) await importFile(f);
@@ -197,8 +198,7 @@ document.addEventListener('drop', async (e) => {
   // real Minecraft icons from the player's own game files (cached after the first time)
   if (!McIcons.ready()) McIcons.init().then((ok) => { if (ok) { Bus.emit('instances', State.instances); renderAccountChip(); } }).catch(() => {});
   Router.go('home');
-  if (State.settings.firstRun) {
-    await saveSettings({ firstRun: false });
-    if (!State.accounts.accounts.length) setTimeout(openAccounts, 400);
-  }
+  if (State.settings.firstRun) await saveSettings({ firstRun: false });
+  AuthGate.sync(); // sign-in screen first: the launcher can't be used without an account
+  if (State.accounts.active) Updater.whatsNew(); // otherwise shown right after signing in
 })();

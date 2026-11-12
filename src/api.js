@@ -49,6 +49,9 @@ const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Clo
 module.exports = (getWin) => ({
   // ---------- app / window ----------
   'app:info': () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
+  'update:state': () => require('./updater').getState(),
+  'update:check': () => require('./updater').check(),
+  'update:install': () => require('./updater').install(),
   'app:restart': () => { app.isQuitting = true; app.relaunch(); app.quit(); },
   'win:minimize': () => getWin()?.minimize(),
   'win:maximize': () => { const w = getWin(); if (w) w.isMaximized() ? w.unmaximize() : w.maximize(); },
@@ -68,7 +71,7 @@ module.exports = (getWin) => ({
     const s = settings.set(patch);
     if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin, args: ['--hidden'] });
     if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Solaris to apply the GPU acceleration change.' });
-    if ('discordRpc' in patch || 'discordClientId' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
+    if ('discordRpc' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
     return s;
   },
   'settings:reset': () => settings.reset(),
@@ -147,6 +150,7 @@ module.exports = (getWin) => ({
   // ---------- accounts ----------
   'accounts:list': () => accounts.list(),
   'accounts:addOffline': (name) => accounts.addOffline(name),
+  'accounts:offlineUuid': (name) => accounts.offlineUuid(String(name || '')),
   'accounts:checkOfflineName': (name) => accounts.checkOfflineName(name),
   'accounts:refreshProfile': () => accounts.refreshProfile(),
   'accounts:startMicrosoft': (opts) => accounts.startMicrosoft(opts || {}),

@@ -1,5 +1,23 @@
 [
   {
+    "product": "launcher", "version": "1.1.1", "date": "2026-11-12",
+    "title": "Sign-in screen, self-updates and Discord buttons",
+    "groups": [
+      { "area": "Launcher", "entries": [
+        { "type": "feature", "text": "New sign-in screen: sign in with Microsoft or pick an offline name before you start, with a live 3D preview of your player." },
+        { "type": "feature", "text": "Solaris now updates itself: new versions download in the background with a progress animation, then install with one click." },
+        { "type": "feature", "text": "“What’s new” pops up once after each update." },
+        { "type": "bugfix", "text": "No more “Update failed” message when there simply isn’t a new version yet." }
+      ] },
+      { "area": "Discord", "entries": [
+        { "type": "feature", "text": "Rich Presence works out of the box — no application ID to paste. It now uses Silent Client’s discord-rpc, shows a “Get Solaris” button and reconnects by itself when you open Discord later." }
+      ] },
+      { "area": "Skins", "entries": [
+        { "type": "feature", "text": "Animated capes in the 3D viewer, and a button to preview your own cape file (idea from Silent Client’s skinview3d)." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.0.0", "date": "2026-11-11",
     "title": "CurseForge, friends and a lot more",
     "groups": [
