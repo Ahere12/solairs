@@ -365,6 +365,39 @@ async function microsoftLogin(parent, redraw, method = 'browser') {
   const off = awaitLogin(m, redraw);
 }
 
+/* ---------- install feedback ---------- */
+/** Projects installed this session, per instance — so cards keep showing "Installed". */
+const InstalledHere = {
+  map: new Map(),
+  add(instId, pid) { if (!this.map.has(instId)) this.map.set(instId, new Set()); this.map.get(instId).add(String(pid)); },
+  has(instId, pid) { return !!this.map.get(instId)?.has(String(pid)); },
+};
+/**
+ * Runs an install and turns its button into a clear state: spinner while installing, then a green
+ * "Installed" with a check and a little pop — so it feels installed. Failure puts the button back.
+ */
+async function installFeedback(btn, run) {
+  if (!btn || btn.classList.contains('busy')) return run();
+  const html = btn.innerHTML, card = btn.closest('.hub-card, .module, .list-row');
+  btn.disabled = true; btn.classList.add('busy');
+  btn.innerHTML = `${icon('refresh', 'spin')}${btn.classList.contains('sm') ? '' : 'Installing…'}`;
+  let res = false;
+  try { res = await run(); } catch {}
+  btn.classList.remove('busy');
+  if (res) {
+    const pid = card?.dataset.pid; if (pid && res.id) InstalledHere.add(res.id, pid);
+    installFeedback.mark(btn, res.name);
+    if (card) { card.classList.remove('just-installed'); void card.offsetWidth; card.classList.add('just-installed'); }
+  } else { btn.disabled = false; btn.innerHTML = html; }
+  return res;
+}
+installFeedback.mark = (btn, where) => {
+  if (!btn) return;
+  btn.classList.add('installed'); btn.disabled = true;
+  btn.innerHTML = `${icon('check')}${T('Installed')}`;
+  if (where) btn.title = `Installed in ${where}`;
+};
+
 /* ---------- OptiFine ---------- */
 /** Asks for an OptiFine installer .jar the player downloaded from optifine.net and imports it. */
 async function importOptiFine() {

@@ -46,3 +46,42 @@
 .together .card .row { flex-wrap: wrap; min-width: 0; }
 .together .card .row input { min-width: 0; flex: 1 1 140px; }
 #host-status .mono { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- install feedback ---------- */
+.btn.busy { cursor: progress; filter: saturate(0.7); }
+.btn.installed, .btn.installed:disabled { background: color-mix(in srgb, var(--ok) 18%, var(--panel)); color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 55%, transparent); opacity: 1; cursor: default; filter: none; }
+.btn.installed svg.i { animation: inst-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+@keyframes inst-pop { from { transform: scale(0) rotate(-30deg); } }
+.just-installed { animation: inst-glow 1.4s ease-out; }
+@keyframes inst-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 70%, transparent); border-color: var(--ok); } 100% { box-shadow: 0 0 0 14px transparent; } }
+
+/* ---------- Host page ---------- */
+.hs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.hs-card { display: grid; gap: 12px; padding: 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel); cursor: pointer; transition: border-color .15s, transform .15s; }
+.hs-card:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.hs-card.online { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.hs-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hs-ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, var(--panel-2)); color: var(--accent); flex: none; }
+.hs-card.online .hs-ic { background: color-mix(in srgb, var(--ok) 16%, var(--panel-2)); color: var(--ok); }
+.hs-addr { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: 9px; background: var(--panel-2); font-size: 13px; }
+.hs-addr .mono { flex: 1; min-width: 0; }
+.hs-addr svg.i { width: 15px; height: 15px; color: var(--muted); flex: none; }
+.hs-foot { display: flex; align-items: center; gap: 8px; }
+.hs-foot .faint svg.i { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.hs-empty { display: grid; justify-items: center; gap: 22px; padding: 30px 10px; }
+.hs-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; }
+.hs-steps > div { display: grid; gap: 4px; padding: 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel); }
+.hs-steps b { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(120deg, var(--accent), var(--accent-2)); color: var(--accent-ink); font-family: var(--display); }
+.hs-steps span { font-weight: 700; font-family: var(--display); font-size: 15px; margin-top: 6px; }
+.hs-steps small { color: var(--muted); font-size: 12.5px; }
+.hs-detail { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .hs-detail { grid-template-columns: 1fr; } .hs-steps { grid-template-columns: 1fr; } }
+.hs-console { height: 380px; min-height: 0; }
+.hs-console .w { color: var(--warn); } .hs-console .e { color: var(--danger); } .hs-console .s { color: var(--accent); }
+.hs-share { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hs-share.live { border-color: color-mix(in srgb, var(--ok) 50%, var(--border)); background: color-mix(in srgb, var(--ok) 7%, var(--panel)); }
+.hs-big { font-size: 18px; font-weight: 600; }
+.hs-live-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ok); animation: hc-pulse 1.8s ease-out infinite; flex: none; }
+.hs-head { width: 24px; height: 24px; border-radius: 5px; image-rendering: pixelated; }
+.card h3 svg.i { width: 16px; height: 16px; vertical-align: -3px; }
+.sc-hint { position: relative; z-index: 1; margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; } .sc-hint .kbd { min-width: 0; cursor: default; font-size: 11.5px; padding: 2px 8px; }

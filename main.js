@@ -102,7 +102,7 @@ function init() {
     if (settings.get().minimizeToTray) { e.preventDefault(); win.hide(); return; }
     // A game is running: keep Solaris alive in the tray so play time and logs are still recorded,
     // then quit by itself once the last game closes.
-    if (require('./src/launch').anyRunning()) {
+    if (require('./src/launch').anyRunning() || require('./src/hostserver').anyRunning()) {
       e.preventDefault(); win.hide(); quitWhenGamesClose = true;
       if (Notification.isSupported()) new Notification({ title: 'Solaris is still running', body: 'It will close by itself when you quit the game. Click the tray icon to reopen it.' }).show();
     }
@@ -140,8 +140,17 @@ function init() {
   });
 }
 
-app.on('before-quit', () => {
+let serversStopped = false;
+app.on('before-quit', (e) => {
   app.isQuitting = true;
   try { require('./src/launch').savePlaytimeOnQuit(); } catch {}
+  // Hosted servers must save their worlds: stop them properly before Solaris exits (at most 40 s).
+  let host; try { host = require('./src/hostserver'); } catch {}
+  if (host && host.anyRunning() && !serversStopped) {
+    e.preventDefault();
+    host.stopAll();
+    const t0 = Date.now();
+    const wait = setInterval(() => { if (!host.anyRunning() || Date.now() - t0 > 40000) { clearInterval(wait); serversStopped = true; app.quit(); } }, 300);
+  }
 });
 app.on('window-all-closed', () => app.quit());

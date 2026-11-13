@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { paths, readJSON, writeJSON, getJSON, request } = require('./util');
 const accounts = require('./accounts');
+const settings = require('./settings');
 
 const indexFile = () => path.join(paths.skins(), 'wardrobe.json');
 const load = () => readJSON(indexFile(), []);
@@ -33,8 +34,8 @@ async function texturesFor(uuid) {
 }
 async function addFromUsername(username) {
   let prof;
-  try { prof = await getJSON(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(username)}`); }
-  catch { throw new Error(`No Minecraft player named "${username}"`); }
+  prof = await require('./util').profileByName(username);
+  if (!prof) throw new Error(`No Minecraft player named "${username}"`);
   const t = await texturesFor(prof.id);
   if (!t.skin) throw new Error('That player uses the default skin');
   const r = await request(t.skin.replace('http://', 'https://'));
@@ -61,17 +62,50 @@ async function current() {
   } catch { return { variant: 'classic', skin: null, cape: null }; }
 }
 
+/**
+ * Wear a wardrobe skin.
+ * Microsoft accounts: upload to Mojang, then check Mojang's profile really shows the new skin (so "applied" is true).
+ * Offline accounts: Mojang can't hold a skin for them — remember it, and launches hand it to the game through
+ * CustomSkinLoader's local skin folder (see offlineSkinFor / launch.js).
+ */
 async function apply(id) {
   const s = load().find((x) => x.id === id);
   if (!s) throw new Error('Skin not found');
   const auth = await accounts.getLaunchAuth();
-  if (auth.type !== 'msa') throw new Error('Skins can only be uploaded for Microsoft accounts. Offline accounts use the default skin in-game.');
+  if (auth.type !== 'msa') {
+    const a = accounts.active();
+    const map = { ...(settings.get().offlineSkins || {}), [a.id]: id };
+    settings.set({ offlineSkins: map });
+    return { offline: true, name: s.name };
+  }
+  const headers = { Authorization: 'Bearer ' + auth.accessToken };
+  const before = await getJSON('https://api.minecraftservices.com/minecraft/profile', { headers }).catch(() => null);
+  const beforeUrl = (before?.skins || []).find((x) => x.state === 'ACTIVE')?.url || null;
   const fd = new FormData();
   fd.append('variant', s.variant);
   fd.append('file', new Blob([fs.readFileSync(path.join(paths.skins(), s.file))], { type: 'image/png' }), 'skin.png');
-  const r = await fetch('https://api.minecraftservices.com/minecraft/profile/skins', { method: 'POST', headers: { Authorization: 'Bearer ' + auth.accessToken }, body: fd });
-  if (!r.ok) throw new Error(`Skin upload failed (HTTP ${r.status})${r.status === 429 ? ' — too many changes, wait a minute.' : ''}`);
-  return true;
+  const r = await fetch('https://api.minecraftservices.com/minecraft/profile/skins', { method: 'POST', headers, body: fd });
+  if (r.status === 401) throw new Error('Your Microsoft sign-in expired. Sign in again from the account menu, then apply the skin.');
+  if (r.status === 429) throw new Error('Too many skin changes — Mojang allows a few per minute. Wait a minute and try again.');
+  if (!r.ok) throw new Error(`Mojang didn’t accept the skin (HTTP ${r.status}). Try again in a moment.`);
+  let prof = null; try { prof = await r.json(); } catch {}
+  for (let i = 0; i < 4; i++) {
+    const nowUrl = (prof?.skins || []).find((x) => x.state === 'ACTIVE')?.url || null;
+    if (nowUrl && nowUrl !== beforeUrl) return { ok: true, name: s.name, url: nowUrl };
+    await new Promise((res) => setTimeout(res, 1200));
+    prof = await getJSON('https://api.minecraftservices.com/minecraft/profile', { headers }).catch(() => null);
+  }
+  // Same texture as before (re-applying the skin you already wear) also counts as applied.
+  if (beforeUrl && (prof?.skins || []).some((x) => x.state === 'ACTIVE' && x.url === beforeUrl)) return { ok: true, name: s.name, url: beforeUrl, same: true };
+  throw new Error('Mojang didn’t confirm the new skin yet. Press Refresh skin in a minute to check.');
+}
+
+/** The wardrobe skin chosen for an offline account (absolute PNG path + name), or null. */
+function offlineSkinFor(accountId) {
+  const id = (settings.get().offlineSkins || {})[accountId];
+  const s = id && load().find((x) => x.id === id);
+  const f = s && path.join(paths.skins(), s.file);
+  return f && fs.existsSync(f) ? { file: f, variant: s.variant, name: s.name } : null;
 }
 async function capes() {
   const prof = await accounts.mcProfile();
@@ -88,4 +122,4 @@ async function setCape(capeId) {
   return true;
 }
 
-module.exports = { list, addFile, addFromUsername, remove, rename, current, apply, capes, setCape };
+module.exports = { offlineSkinFor, list, addFile, addFromUsername, remove, rename, current, apply, capes, setCape };

@@ -90,14 +90,40 @@ async function ensureVersion(inst) {
 }
 
 /**
+ * Offline accounts can't have a Mojang skin. If the player picked one in the wardrobe, hand it to the game through
+ * CustomSkinLoader's local skin folder (installed from Modrinth into modded instances when missing).
+ */
+async function offlineSkin(inst, auth, gameDir) {
+  if (auth.type !== 'offline') return;
+  const acct = accounts.active();
+  const skin = acct && require('./skins').offlineSkinFor(acct.id);
+  if (!skin) return;
+  if (!['fabric', 'quilt', 'forge', 'neoforge'].includes(inst.loader?.type)) {
+    push('toast', { type: 'info', text: 'Offline skins need a modded instance (Fabric, Quilt, Forge or NeoForge) — this one shows the default skin.' });
+    return;
+  }
+  try {
+    const mods = path.join(gameDir, 'mods');
+    const has = fs.existsSync(mods) && fs.readdirSync(mods).some((f) => /customskinloader/i.test(f) && f.endsWith('.jar'));
+    if (!has) {
+      status(inst.id, 'Adding CustomSkinLoader for your offline skin');
+      await modrinth.install(inst.id, { projectId: 'customskinloader', projectType: 'mod' });
+    }
+    const dir = path.join(gameDir, 'CustomSkinLoader', 'LocalSkin', 'skins');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(skin.file, path.join(dir, auth.name + '.png'));
+  } catch (e) { push('toast', { type: 'warn', text: 'Couldn’t set up your offline skin: ' + e.message }); }
+}
+
+/**
  * World hosting through e4mc (Solaris Client "Host for friends"): e4mc prints the public address in chat when the
  * player uses Open to LAN. Solaris picks it up from the game log so the player can copy or share it.
  */
 const hosting = new Map(); // runId -> { address, instanceId, name, since }
 function hostingFromLog(line, { runId, instanceId, name }) {
-  if (!/\[CHAT\]/.test(line)) return;
-  const on = line.match(/Local game hosted on domain \[([A-Za-z0-9.-]+\.[A-Za-z]{2,})\]/);
+  const on = line.match(/Domain assigned: ([A-Za-z0-9.-]+\.[A-Za-z]{2,})/) || (/\[CHAT\]/.test(line) && line.match(/Local game hosted on domain \[([A-Za-z0-9.-]+\.[A-Za-z]{2,})\]/));
   if (on) {
+    if (hosting.get(runId)?.address === on[1]) return; // the chat line repeats the log line
     const h = { runId, instanceId, name, address: on[1], since: Date.now() };
     hosting.set(runId, h);
     push('host:online', h);
@@ -159,6 +185,7 @@ async function launchInner(instanceId, opts = {}) {
   fs.mkdirSync(inst.gameDir, { recursive: true });
   let gameDir = inst.gameDir;
   try { gameDir = fs.realpathSync.native(gameDir); } catch {}
+  await offlineSkin(inst, auth, gameDir);
 
   const javaPath = await resolveJava(inst, version, (d, t) => status(instanceId, 'Installing Java', d / t, `${d}/${t}`));
   setGpuPreference(javaPath);
@@ -322,4 +349,4 @@ const isRunning = (instanceId) => [...running.values()].some((r) => r.instanceId
 const anyRunning = () => running.size > 0 || starting.size > 0;
 const isBusy = (instanceId) => isRunning(instanceId) || starting.has(instanceId);
 
-module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit, hostingList };
+module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit, hostingList, resolveJava };

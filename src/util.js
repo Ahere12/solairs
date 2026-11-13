@@ -182,4 +182,20 @@ async function dirSizeAsync(dir) {
 }
 function osName() { return process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux'; }
 
-module.exports = { UA, events, push, paths, readJSON, writeJSON, request, getJSON, download, downloadAll, sha1File, sleep, slugify, dirSize, dirSizeAsync, osName };
+/**
+ * Username -> { id, name } (id without dashes), or null when no such player exists.
+ * Mojang's API is rate-limited, so on errors fall back to api.minetools.eu (a public cache of the same data).
+ */
+async function profileByName(name) {
+  try {
+    const r = await getJSON('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(name));
+    if (r?.id) return { id: r.id, name: r.name };
+    return null;
+  } catch (e) {
+    if (e.status === 404 || e.status === 204) return null;
+    try { const m = await getJSON('https://api.minetools.eu/uuid/' + encodeURIComponent(name)); return m?.id ? { id: m.id, name: m.name } : null; }
+    catch { throw new Error('Couldn’t reach Mojang to look up that player. Try again in a moment.'); }
+  }
+}
+
+module.exports = { profileByName, UA, events, push, paths, readJSON, writeJSON, request, getJSON, download, downloadAll, sha1File, sleep, slugify, dirSize, dirSizeAsync, osName };

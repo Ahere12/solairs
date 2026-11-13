@@ -14,8 +14,8 @@ Pages.skins = {
           <canvas id="sv" width="300" height="400"></canvas>
           <div class="row"><div class="seg"><button data-anim="walk" class="on">Walk</button><button data-anim="idle">Idle</button><button data-anim="run">Run</button></div><button class="icon-btn" id="rot" title="Auto-rotate">${icon('refresh')}</button><button class="icon-btn" id="cape-file" title="Preview a cape file (animated capes supported)">${icon('upload')}</button><input type="file" id="cape-input" accept="image/png" hidden></div>
           <div id="stage-info" class="small muted" style="text-align:center"></div>
-          <button class="btn primary" id="apply" disabled style="width:100%">${icon('check')}Apply skin</button>
-          ${acct?.type === 'msa' ? '' : '<div class="faint small" style="text-align:center">Applying skins and capes needs a Microsoft account. Offline players see their default skin in-game.</div>'}
+          <button class="btn primary" id="apply" disabled style="width:100%">${icon('check')}Wear this skin</button>
+          ${acct?.type === 'msa' ? '' : '<div class="faint small" style="text-align:center">Offline: your skin is shown through CustomSkinLoader in modded instances (only you and players with the mod see it). Capes need a Microsoft account.</div>'}
         </div>
         <div>
           <div id="capes-wrap"></div>
@@ -119,16 +119,25 @@ Pages.skins = {
     $$('[data-dm]', el).forEach((b) => (b.onclick = () => { defModel = b.dataset.dm; $$('[data-dm]', el).forEach((x) => x.classList.toggle('on', x === b)); drawDefaults(); }));
     const stage = () => {
       const s = wardrobe.find((x) => x.id === staged);
-      $('#apply', el).disabled = !s || acct?.type !== 'msa';
+      $('#apply', el).disabled = !s || !acct;
       const cap = (n) => n[0].toUpperCase() + n.slice(1);
-      $('#stage-info', el).textContent = s ? `Staged: ${s.name} — press Apply to upload`
+      $('#stage-info', el).textContent = s ? `${s.name} is not on you yet — press “Wear this skin”`
         : previewDefault ? `Previewing Minecraft's default ${cap(previewDefault.name)} skin`
         : current?.skin ? 'Showing your current skin' : acct ? `No custom skin — in-game you appear as ${cap(accountDefault()?.name || 'Steve')}` : '';
     };
     $('#apply', el).onclick = async () => {
       const b = $('#apply', el); b.disabled = true;
-      try { await api('skins:apply', staged); toast('Skin applied! It may take a minute to show in-game.'); current = await api('skins:current'); staged = null; drawWardrobe(); stage(); refreshSkin(true); }
-      catch (e) { toastErr(e); b.disabled = false; }
+      const label = b.innerHTML;
+      b.classList.add('busy'); b.innerHTML = `${icon('refresh', 'spin')}Uploading to Mojang…`;
+      try {
+        const r = await api('skins:apply', staged);
+        if (r.offline) toast(`${r.name} is now your offline skin — it shows in modded instances (Solaris adds CustomSkinLoader when you press Play).`, 'ok', 7000);
+        else toast(`${r.name} is live on your Microsoft account. Rejoin your world or server to see it in-game.`, 'ok', 7000);
+        b.classList.remove('busy'); installFeedback.mark(b); b.innerHTML = `${icon('check')}Wearing it`;
+        setTimeout(() => { if (b.isConnected) { b.classList.remove('installed'); b.innerHTML = label; stage(); } }, 2500);
+        if (!r.offline) current = await api('skins:current');
+        staged = null; drawWardrobe(); stage(); if (!r.offline) refreshSkin(true);
+      } catch (e) { toastErr(e); b.classList.remove('busy'); b.innerHTML = label; b.disabled = false; }
     };
     /** Skin refresh: re-read the account's skin from Minecraft and update the 3D view and the sidebar head. */
     const refreshSkin = async (quiet) => {

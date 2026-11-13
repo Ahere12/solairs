@@ -298,6 +298,10 @@ async function applyUpdate(instanceId, kind, file, versionId) {
 // ---------- Solaris Client: curated all-in-one module set ----------
 const MODULES = [
   { slug: 'fabric-api', name: 'Fabric API', cat: 'Core', required: true, desc: 'Library required by most Fabric mods.' },
+  // In-game client menu like Lunar / Feather: Polyfrost's OneConfig (the OneClient menu) — press Right Shift in game.
+  { slug: 'oneconfig', name: 'Client menu (OneConfig)', cat: 'Core', default: true, desc: 'Press Right Shift in game: one menu for your mods, HUD editor and settings — like Lunar.' },
+  { slug: 'polysprint', name: 'PolySprint', cat: 'HUD & Utility', default: true, desc: 'Toggle sprint and sneak, set up from the Right Shift menu.' },
+  { slug: 'chatting', name: 'Chatting', cat: 'HUD & Utility', default: false, desc: 'Chat tabs, chat search, screenshots of chat and a cleaner chat box.' },
   { slug: 'sodium', name: 'Sodium', cat: 'Performance', default: true, desc: 'Modern rendering engine — huge FPS boost.' },
   { slug: 'lithium', name: 'Lithium', cat: 'Performance', default: true, desc: 'Optimizes game logic, physics and AI.' },
   { slug: 'ferrite-core', name: 'FerriteCore', cat: 'Performance', default: true, desc: 'Cuts memory usage dramatically.' },

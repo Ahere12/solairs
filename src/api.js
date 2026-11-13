@@ -145,6 +145,18 @@ module.exports = (getWin) => ({
   'optifine:import': (file) => require('./optifine').importJar(file),
   'optifine:remove': (id) => require('./optifine').remove(id),
   'host:list': () => launch.hostingList(),
+  // ---------- hosted servers (Host page) ----------
+  'hosted:list': () => require('./hostserver').list(),
+  'hosted:create': (opts) => require('./hostserver').create(opts || {}, (step) => push('task', { id: 'hosted-create', label: 'Creating server', progress: null, detail: step })).finally(() => push('task', { id: 'hosted-create', done: true })),
+  'hosted:start': (id) => require('./hostserver').start(id, launch.resolveJava),
+  'hosted:stop': (id) => require('./hostserver').stop(id),
+  'hosted:command': (id, cmd) => require('./hostserver').command(id, cmd),
+  'hosted:logs': (id) => require('./hostserver').logs(id),
+  'hosted:settings': (id) => require('./hostserver').getSettings(id),
+  'hosted:setSettings': (id, patch) => require('./hostserver').setSettings(id, patch || {}),
+  'hosted:setPublic': (id, on) => require('./hostserver').setPublic(id, on),
+  'hosted:remove': (id) => require('./hostserver').remove(id),
+  'hosted:openFolder': (id) => require('./hostserver').openFolder(id),
   'launch:logs': (runId) => launch.logs(runId),
   'logs:share': async (text) => {
     const r = await getJSON('https://api.mclo.gs/1/log', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ content: text.slice(-10 * 1024 * 1024) }).toString() });

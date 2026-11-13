@@ -1,5 +1,29 @@
 [
   {
+    "product": "launcher", "version": "1.4.0", "date": "2026-11-12",
+    "title": "Host servers, in-game client menu and skins that show up",
+    "groups": [
+      { "area": "Host", "entries": [
+        { "type": "feature", "text": "New Host page: create a Minecraft server on your PC in a few clicks, start it, and share a public address — no port forwarding, no account. Live console, players, kick, settings, whitelist." },
+        { "type": "feature", "text": "Solaris stops your servers properly when you quit, so worlds are saved." }
+      ] },
+      { "area": "Solaris Client", "entries": [
+        { "type": "feature", "text": "In-game client menu like Lunar: press Right Shift for one menu with your mods, a HUD editor and settings (OneConfig by Polyfrost)." },
+        { "type": "feature", "text": "New modules: PolySprint (toggle sprint/sneak) and Chatting (chat tabs and search)." }
+      ] },
+      { "area": "Skins", "entries": [
+        { "type": "bugfix", "text": "“Wear this skin” now checks with Mojang that your skin really changed, and tells you clearly if it didn’t." },
+        { "type": "feature", "text": "Offline accounts can wear skins too — Solaris adds CustomSkinLoader to modded instances so your skin shows in game." }
+      ] },
+      { "area": "Launcher", "entries": [
+        { "type": "feature", "text": "Installing a mod, pack or shader now turns the button green with “Installed” and a check, so you know it worked." },
+        { "type": "improvement", "text": "New icons from Lucide." },
+        { "type": "improvement", "text": "Player look-ups fall back to minetools when Mojang is busy." },
+        { "type": "improvement", "text": "World hosting picks up the e4mc address even when it is hidden in chat." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.3.0", "date": "2026-11-12",
     "title": "New look, OptiFine, hosting for friends and cosmetics",
     "groups": [

@@ -23,8 +23,7 @@ async function add(name) {
   name = String(name || '').trim();
   if (!/^[A-Za-z0-9_]{2,16}$/.test(name)) throw new Error('Enter a Minecraft username (letters, numbers and _).');
   let prof;
-  try { prof = await getJSON('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(name)); }
-  catch { prof = null; }
+  prof = await require('./util').profileByName(name);
   if (!prof?.id) throw new Error(`No Minecraft account is called “${name}”.`);
   const uuid = prof.id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
   return withList((l) => { if (!l.some((f) => f.uuid === uuid)) l.push({ uuid, name: prof.name, added: Date.now(), note: '' }); });

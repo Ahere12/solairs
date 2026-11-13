@@ -48,7 +48,8 @@ Pages.browse = {
   },
   bindHub(root, type, target) {
     $$('[data-pid]', root).forEach((c) => (c.onclick = (e) => { if (e.target.closest('button')) return; (c.dataset.src === 'curseforge' ? this.cfDetails : this.details).call(this, c.dataset.pid, c.dataset.ptype || type, target); }));
-    $$('[data-quick]', root).forEach((b) => (b.onclick = () => { const c = b.closest('[data-pid]'); (c?.dataset.src === 'curseforge' ? this.cfInstall : this.install).call(this, b.dataset.quick, c?.dataset.ptype || type, target); }));
+    $$('[data-quick]', root).forEach((b) => (b.onclick = () => { const c = b.closest('[data-pid]'); installFeedback(b, () => (c?.dataset.src === 'curseforge' ? this.cfInstall : this.install).call(this, b.dataset.quick, c?.dataset.ptype || type, target)); }));
+    if (target) $$('[data-quick]', root).forEach((b) => { if (InstalledHere.has(target.id, b.dataset.quick)) installFeedback.mark(b); });
   },
   async render(el, params, ctx) {
     const target = params.instanceId ? State.instances.find((i) => i.id === params.instanceId) : null;
@@ -150,11 +151,12 @@ Pages.browse = {
         m.$('#dt').innerHTML = `<div class="list">${vs.slice(0, 60).map((v) => `<div class="list-row"><div class="info"><div class="title">${esc(v.name || v.version_number)} <span class="chip ${v.version_type === 'release' ? 'ok' : 'warn'}">${esc(v.version_type)}</span></div><div class="desc">${esc(v.game_versions.slice(-4).join(', '))} · ${esc(v.loaders.join(', '))} · ${fmtDate(v.date_published)}</div></div>
           <button class="btn sm ghost" data-cl="${esc(v.id)}">Changelog</button><button class="btn sm" data-iv="${esc(v.id)}">${T('Install')}</button></div>`).join('')}</div>`;
         $$('[data-cl]', m.el).forEach((b) => (b.onclick = () => { const v = vs.find((x) => x.id === b.dataset.cl); modal({ title: `${p.title} ${v.version_number}`, body: `<div class="md">${miniMarkdown(v.changelog || 'No changelog provided.')}</div>` }); }));
-        $$('[data-iv]', m.el).forEach((b) => (b.onclick = () => { const v = vs.find((x) => x.id === b.dataset.iv); this.install(id, p.project_type, target, v); }));
+        $$('[data-iv]', m.el).forEach((b) => (b.onclick = () => { const v = vs.find((x) => x.id === b.dataset.iv); installFeedback(b, () => this.install(id, p.project_type, target, v)); }));
       };
       $$('[data-dt]', m.el).forEach((b) => (b.onclick = () => { $$('[data-dt]', m.el).forEach((x) => x.classList.toggle('on', x === b)); b.dataset.dt === 'desc' ? showDesc() : showVersions(); }));
       $$('.gallery-strip img', m.el).forEach((img) => (img.onclick = () => lightbox(img.dataset.full)));
-      m.$('[data-install]').onclick = () => this.install(id, p.project_type, target);
+      m.$('[data-install]').onclick = (e) => installFeedback(e.currentTarget, () => this.install(id, p.project_type, target));
+      if (target && InstalledHere.has(target.id, id)) installFeedback.mark(m.$('[data-install]'));
       m.$('[data-web]').onclick = () => api('shell:open', `https://modrinth.com/${p.project_type}/${p.slug}`);
       showDesc();
     } catch (e) { m.$('.content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -181,11 +183,11 @@ Pages.browse = {
         const fs = await api('curseforge:files', id, target ? { gameVersion: target.versionId, loader: target.loader.type !== 'vanilla' ? target.loader.type : '' } : {});
         m.$('#dt').innerHTML = fs.length ? `<div class="list">${fs.map((f) => `<div class="list-row"><div class="info"><div class="title">${esc(f.name)} <span class="chip ${f.type === 'release' ? 'ok' : 'warn'}">${esc(f.type)}</span></div><div class="desc">${esc(f.gameVersions.slice(-4).join(', '))}${f.loaders.length ? ' · ' + esc(f.loaders.join(', ')) : ''} · ${fmtDate(f.date)}</div></div>
           <button class="btn sm" data-iv="${esc(f.id)}">${T('Install')}</button></div>`).join('')}</div>` : '<div class="empty">No files match this instance.</div>';
-        $$('[data-iv]', m.el).forEach((b) => (b.onclick = () => this.cfInstall(id, type, target, fs.find((x) => x.id === b.dataset.iv))));
+        $$('[data-iv]', m.el).forEach((b) => (b.onclick = () => installFeedback(b, () => this.cfInstall(id, type, target, fs.find((x) => x.id === b.dataset.iv)))));
       };
       $$('[data-dt]', m.el).forEach((b) => (b.onclick = () => { $$('[data-dt]', m.el).forEach((x) => x.classList.toggle('on', x === b)); b.dataset.dt === 'desc' ? showDesc() : showVersions(); }));
       $$('.gallery-strip img', m.el).forEach((img) => (img.onclick = () => lightbox(img.dataset.full)));
-      m.$('[data-install]').onclick = () => this.cfInstall(id, type, target);
+      m.$('[data-install]').onclick = (e) => installFeedback(e.currentTarget, () => this.cfInstall(id, type, target));
       if (p.url) m.$('[data-web]').onclick = () => api('shell:open', p.url);
       showDesc();
     } catch (e) { m.$('.content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -198,8 +200,8 @@ Pages.browse = {
         await refreshInstances();
         toast(`Installed ${inst.name}`);
         Router.go('library', { spotlight: inst.id });
-      } catch (e) { toastErr(e); }
-      return;
+        return true;
+      } catch (e) { toastErr(e); return false; }
     }
     let inst = target;
     if (!inst) {
@@ -224,8 +226,9 @@ Pages.browse = {
     State.tasks[key] = { label: `Installing into ${inst.name}`, progress: null }; Bus.emit('tasks');
     try {
       const r = await api('curseforge:install', inst.id, { projectId, fileId: file?.id, world });
-      toast(`Installed ${r.map((x) => x.file).join(', ')}`);
-    } catch (e) { toastErr(e); }
+      toast(`Installed ${r.map((x) => x.file).join(', ')} in ${inst.name}`);
+      return inst;
+    } catch (e) { toastErr(e); return false; }
     finally { delete State.tasks[key]; Bus.emit('tasks'); }
   },
 
@@ -240,8 +243,8 @@ Pages.browse = {
         await refreshInstances();
         toast(`Installed ${inst.name}`);
         Router.go('library', { spotlight: inst.id });
-      } catch (e) { toastErr(e); }
-      return;
+        return true;
+      } catch (e) { toastErr(e); return false; }
     }
     let inst = target;
     if (!inst) {
@@ -267,8 +270,9 @@ Pages.browse = {
     State.tasks[key] = { label: `Installing into ${inst.name}`, progress: null }; Bus.emit('tasks');
     try {
       const r = await api('modrinth:install', inst.id, { projectId, versionId: version?.id, projectType: type, world });
-      toast(`Installed ${r.map((x) => x.file).join(', ')}`);
-    } catch (e) { toastErr(e); }
+      toast(`Installed ${r.map((x) => x.file).join(', ')} in ${inst.name}`);
+      return inst;
+    } catch (e) { toastErr(e); return false; }
     finally { delete State.tasks[key]; Bus.emit('tasks'); }
   },
 };

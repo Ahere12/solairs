@@ -63,7 +63,7 @@ async function checkOfflineName(name) {
   if (/^\d+$/.test(n)) warnings.push('Names made only of numbers are rejected by some servers and plugins.');
   if (/^[A-Za-z0-9_]{3,16}$/.test(n)) {
     try {
-      const r = await getJSON('https://api.mojang.com/users/profiles/minecraft/' + encodeURIComponent(n));
+      const r = await require('./util').profileByName(n);
       if (r?.id) warnings.push(`“${r.name}” is a real Microsoft/Minecraft account. On offline-mode servers you would appear as that player, and you can’t join online-mode servers with an offline account.`);
     } catch {}
   }
