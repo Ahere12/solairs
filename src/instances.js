@@ -54,9 +54,13 @@ function update(id, patch) {
   if (patch.versionId || patch.loader) next.launchVersionId = null;
   return save(next);
 }
+/** Deletes an instance permanently (not to the Recycle Bin). Refuses paths outside the instances folder. */
 async function remove(id) {
-  const dir = path.join(paths.instances(), id);
-  try { await shell.trashItem(dir); } catch { fs.rmSync(dir, { recursive: true, force: true }); }
+  const base = path.resolve(paths.instances());
+  const dir = path.resolve(base, String(id));
+  if (!id || path.dirname(dir) !== base) throw new Error('Invalid instance');
+  await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  if (fs.existsSync(dir)) throw new Error('Some files are still in use — close Minecraft and anything using this folder, then try again.');
   return true;
 }
 async function duplicate(id, { name, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'saves', 'options.txt'] } = {}) {

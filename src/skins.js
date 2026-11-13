@@ -53,9 +53,26 @@ function rename(id, patch) { const d = load(); const s = d.find((x) => x.id === 
 async function current() {
   const a = accounts.active();
   if (!a) return null;
+  if (a.type !== 'msa') {
+    // Offline: the "current" skin is the one picked in the wardrobe (shown in game through CustomSkinLoader).
+    const o = offlineSkinFor(a.id);
+    return o ? { variant: o.variant === 'slim' ? 'slim' : 'classic', skin: toData(o.file), cape: null, url: null, offline: true } : { variant: 'classic', skin: null, cape: null, url: null };
+  }
   try {
-    const t = await texturesFor(a.uuid);
-    const out = { variant: t.slim ? 'slim' : 'classic', skin: null, cape: null };
+    // Microsoft accounts: read the live profile (the session server caches skins for about a minute,
+    // which made a successful change look like it hadn't worked).
+    let t = null;
+    if (a.type === 'msa') {
+      try {
+        const auth = await accounts.getLaunchAuth();
+        const p = await getJSON('https://api.minecraftservices.com/minecraft/profile', { headers: { Authorization: 'Bearer ' + auth.accessToken } });
+        const sk = (p.skins || []).find((x) => x.state === 'ACTIVE');
+        const cp = (p.capes || []).find((x) => x.state === 'ACTIVE');
+        t = { skin: sk?.url || null, slim: sk?.variant === 'SLIM', cape: cp?.url || null };
+      } catch {}
+    }
+    if (!t) t = await texturesFor(a.uuid);
+    const out = { variant: t.slim ? 'slim' : 'classic', skin: null, cape: null, url: t.skin || null };
     if (t.skin) { const r = await request(t.skin.replace('http://', 'https://')); out.skin = 'data:image/png;base64,' + Buffer.from(await r.arrayBuffer()).toString('base64'); }
     if (t.cape) { const r = await request(t.cape.replace('http://', 'https://')); out.cape = 'data:image/png;base64,' + Buffer.from(await r.arrayBuffer()).toString('base64'); }
     return out;
@@ -91,13 +108,27 @@ async function apply(id) {
   let prof = null; try { prof = await r.json(); } catch {}
   for (let i = 0; i < 4; i++) {
     const nowUrl = (prof?.skins || []).find((x) => x.state === 'ACTIVE')?.url || null;
-    if (nowUrl && nowUrl !== beforeUrl) return { ok: true, name: s.name, url: nowUrl };
+    if (nowUrl && nowUrl !== beforeUrl) { remember(id, nowUrl); return { ok: true, name: s.name, url: nowUrl }; }
     await new Promise((res) => setTimeout(res, 1200));
     prof = await getJSON('https://api.minecraftservices.com/minecraft/profile', { headers }).catch(() => null);
   }
   // Same texture as before (re-applying the skin you already wear) also counts as applied.
-  if (beforeUrl && (prof?.skins || []).some((x) => x.state === 'ACTIVE' && x.url === beforeUrl)) return { ok: true, name: s.name, url: beforeUrl, same: true };
+  if (beforeUrl && (prof?.skins || []).some((x) => x.state === 'ACTIVE' && x.url === beforeUrl)) { remember(id, beforeUrl); return { ok: true, name: s.name, url: beforeUrl, same: true }; }
   throw new Error('Mojang didn’t confirm the new skin yet. Press Refresh skin in a minute to check.');
+}
+
+/** Remembers which wardrobe skin a Microsoft account wears (matched by Mojang texture URL). */
+function remember(id, url) {
+  const a = accounts.active(); if (!a) return;
+  settings.set({ wornSkins: { ...(settings.get().wornSkins || {}), [a.id]: { id, url } } });
+}
+/** Wardrobe skin id the active account is wearing right now, or null. */
+function wearingId(currentUrl) {
+  const a = accounts.active(); if (!a) return null;
+  if (a.type !== 'msa') return (settings.get().offlineSkins || {})[a.id] || null;
+  const w = (settings.get().wornSkins || {})[a.id];
+  const norm = (u) => String(u || '').replace(/^http:/, 'https:');
+  return w && currentUrl && norm(w.url) === norm(currentUrl) ? w.id : null;
 }
 
 /** The wardrobe skin chosen for an offline account (absolute PNG path + name), or null. */
@@ -122,4 +153,4 @@ async function setCape(capeId) {
   return true;
 }
 
-module.exports = { offlineSkinFor, list, addFile, addFromUsername, remove, rename, current, apply, capes, setCape };
+module.exports = { wearingId, offlineSkinFor, list, addFile, addFromUsername, remove, rename, current, apply, capes, setCape };

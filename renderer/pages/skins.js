@@ -3,6 +3,7 @@ Pages.skins = {
     const acct = State.accounts.accounts.find((a) => a.id === State.accounts.active);
     let wardrobe = await api('skins:list');
     let staged = null; // wardrobe skin id staged for Apply
+    let wearing = null; // wardrobe skin id the account wears right now
     let previewDefault = null; // default skin being previewed ({ name, model })
     let defModel = 'wide';
     let current = null;
@@ -74,7 +75,7 @@ Pages.skins = {
         const c = document.createElement('canvas'); c.className = 'flat'; img.replaceWith(c); drawSkinFront(c, src, slim);
       });
     };
-    const tile = (attrs, name, sub, extra = '') => `<div class="skin-tile" ${attrs}>${extra}<div class="skin-shot"><img alt=""></div><div class="n">${esc(name)}</div><div class="faint small">${sub}</div></div>`;
+    const tile = (attrs, name, sub, extra = '', bottom = '') => `<div class="skin-tile" ${attrs}>${extra}<div class="skin-shot"><img alt=""></div><div class="n">${esc(name)}</div><div class="faint small">${sub}</div>${bottom}</div>`;
 
     const drawWardrobe = () => {
       const box = $('#wardrobe', el);
@@ -82,16 +83,18 @@ Pages.skins = {
       const curSrc = current?.skin || def?.src;
       const curSlim = current?.skin ? current.variant === 'slim' : def?.model === 'slim';
       box.innerHTML = (curSrc ? tile('data-current', 'Current', current?.skin ? (curSlim ? 'Slim' : 'Classic') : `Default · ${def.name[0].toUpperCase() + def.name.slice(1)}`) : '') +
-        wardrobe.map((s) => tile(`data-skin="${esc(s.id)}"`, s.name, `<span data-variant="${esc(s.id)}" style="cursor:pointer" title="Toggle arm model">${s.variant === 'slim' ? 'Slim arms' : 'Classic arms'}</span>`, `<button class="icon-btn x" data-rm="${esc(s.id)}" title="Remove">${icon('trash')}</button>`)).join('') +
+        wardrobe.map((s) => tile(`data-skin="${esc(s.id)}"`, s.name, `<span data-variant="${esc(s.id)}" style="cursor:pointer" title="Toggle arm model">${s.variant === 'slim' ? 'Slim arms' : 'Classic arms'}</span>`, `<button class="icon-btn x" data-rm="${esc(s.id)}" title="Remove">${icon('trash')}</button>`,
+          wearing === s.id ? `<span class="sk-wearing">${icon('check')}Wearing</span>` : `<button class="btn sm primary sk-wear" data-wear="${esc(s.id)}" ${acct ? '' : 'disabled'}>${icon('skins')}Wear</button>`)).join('') +
         (!wardrobe.length ? `<div class="empty small" style="grid-column:1/-1;padding:24px">${icon('skins')}<div>Upload a skin PNG or grab one from any player's username.</div></div>` : '');
       const cur = $('[data-current]', box);
       if (cur) { paint(cur, curSrc, curSlim); cur.onclick = () => { staged = null; previewDefault = null; show(current?.skin, current?.variant); stage(); mark(); }; }
       for (const s of wardrobe) { const t = $(`[data-skin="${CSS.escape(s.id)}"]`, box); if (t && s.data) paint(t, s.data, s.variant === 'slim'); }
       $$('[data-skin]', box).forEach((t) => (t.onclick = (e) => {
-        if (e.target.closest('[data-rm],[data-variant]')) return;
+        if (e.target.closest('[data-rm],[data-variant],[data-wear]')) return;
         const s = wardrobe.find((x) => x.id === t.dataset.skin);
         staged = s.id; previewDefault = null; show(s.data, s.variant); stage(); mark();
       }));
+      $$('[data-wear]', box).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const s = wardrobe.find((x) => x.id === b.dataset.wear); staged = s.id; previewDefault = null; show(s.data, s.variant); stage(); mark(); wear(b); }));
       $$('[data-rm]', box).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this skin from your wardrobe?', { danger: true, ok: 'Remove' })) { wardrobe = await api('skins:remove', b.dataset.rm); if (staged === b.dataset.rm) staged = null; stage(); drawWardrobe(); } }));
       $$('[data-variant]', box).forEach((b) => (b.onclick = async () => { const s = wardrobe.find((x) => x.id === b.dataset.variant); wardrobe = await api('skins:update', s.id, { variant: s.variant === 'slim' ? 'classic' : 'slim' }); if (staged === s.id) { const n = wardrobe.find((x) => x.id === s.id); show(n.data, n.variant); } drawWardrobe(); }));
       mark();
@@ -125,8 +128,11 @@ Pages.skins = {
         : previewDefault ? `Previewing Minecraft's default ${cap(previewDefault.name)} skin`
         : current?.skin ? 'Showing your current skin' : acct ? `No custom skin — in-game you appear as ${cap(accountDefault()?.name || 'Steve')}` : '';
     };
-    $('#apply', el).onclick = async () => {
-      const b = $('#apply', el); b.disabled = true;
+    $('#apply', el).onclick = () => wear($('#apply', el));
+    /** Wear the staged skin. `b` is the button that shows progress (the big one or a tile's Wear). */
+    const wear = async (b) => {
+      if (!staged) return;
+      b.disabled = true;
       const label = b.innerHTML;
       b.classList.add('busy'); b.innerHTML = `${icon('refresh', 'spin')}Uploading to Mojang…`;
       try {
@@ -136,6 +142,7 @@ Pages.skins = {
         b.classList.remove('busy'); installFeedback.mark(b); b.innerHTML = `${icon('check')}Wearing it`;
         setTimeout(() => { if (b.isConnected) { b.classList.remove('installed'); b.innerHTML = label; stage(); } }, 2500);
         if (!r.offline) current = await api('skins:current');
+        wearing = await api('skins:wearing', current?.url || null).catch(() => null);
         staged = null; drawWardrobe(); stage(); if (!r.offline) refreshSkin(true);
       } catch (e) { toastErr(e); b.classList.remove('busy'); b.innerHTML = label; b.disabled = false; }
     };
@@ -164,6 +171,7 @@ Pages.skins = {
 
     // Current skin + capes
     current = await api('skins:current').catch(() => null);
+    wearing = await api('skins:wearing', current?.url || null).catch(() => null);
     if (!el.isConnected) return () => { if (viewer) { clearInterval(viewer._capeTimer); viewer.dispose(); } };
     show(current?.skin, current?.variant, current?.cape || null);
     drawWardrobe(); drawDefaults(); stage();

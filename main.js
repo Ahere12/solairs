@@ -149,6 +149,7 @@ app.on('before-quit', (e) => {
   if (host && host.anyRunning() && !serversStopped) {
     e.preventDefault();
     host.stopAll();
+    try { require('./src/playit').stopAgent(); } catch {}
     const t0 = Date.now();
     const wait = setInterval(() => { if (!host.anyRunning() || Date.now() - t0 > 40000) { clearInterval(wait); serversStopped = true; app.quit(); } }, 300);
   }

@@ -627,9 +627,9 @@ async function changeInstanceIcon(inst) {
 }
 async function deleteInstance(inst) {
   if (isRunning(inst.id)) return toast(`Close ${inst.name} before deleting it.`, 'warn');
-  if (!(await confirmDialog(`"${inst.name}" and its worlds will be moved to the Recycle Bin.`, { title: `Delete ${inst.name}?`, ok: T('Delete'), danger: true }))) return;
+  if (!(await confirmDialog(`"${inst.name}", its worlds, mods and screenshots will be deleted forever. This can’t be undone.`, { title: `Delete ${inst.name}?`, ok: 'Delete forever', danger: true }))) return;
   try { await api('instances:delete', inst.id); } catch (e) { return toastErr(e); }
-  toast('Instance moved to the Recycle Bin');
+  toast(`${inst.name} deleted`);
   await refreshInstances();
   if (Router.current?.name === 'instance') Router.go('library', {}, { replace: true });
 }
