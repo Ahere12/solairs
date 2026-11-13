@@ -57,3 +57,10 @@
 .wn-entry { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 13.5px; }
 .wn-entry .chip { flex: none; min-width: 52px; text-align: center; }
 svg.i.spin { animation: uc-spin 0.9s linear infinite; }
+
+/* release notes link + dialog */
+.uc-notes { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 8px; border: 0; background: none; color: var(--accent); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.uc-notes[hidden] { display: none; }
+.uc-notes svg.i { width: 13px; height: 13px; }
+.uc-notes:hover { text-decoration: underline; }
+.uc-notes-body { white-space: pre-line; font-size: 13.5px; line-height: 1.55; max-height: 55vh; overflow: auto; }

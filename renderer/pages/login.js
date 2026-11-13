@@ -24,6 +24,7 @@ const AuthGate = {
     this.msOk = await api('accounts:microsoftAvailable').catch(() => false);
     this.setTab(this.tab || (this.msOk ? 'microsoft' : 'offline'));
     this.drawSaved();
+    await loadSkinview();
     this.startViewer();
     const input = $('#ag-off', this.el);
     input.value = '';

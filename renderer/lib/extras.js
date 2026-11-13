@@ -100,3 +100,26 @@ function mcNewsCards(items) {
 function bindMcNews(root) {
   $$('[data-link]', root).forEach((b) => (b.onclick = () => { if (b.dataset.link) api('shell:open', b.dataset.link); }));
 }
+
+/* ---------- world hosting (e4mc via Solaris Client) ---------- */
+const Hosting = {
+  list: [],
+  init() {
+    window.solaris.on('host:online', (h) => { this.list = [...this.list.filter((x) => x.runId !== h.runId), h]; this.render(); toast(`Your world is online at ${h.address}`, 'ok', 6000); });
+    window.solaris.on('host:offline', (h) => { this.list = this.list.filter((x) => x.runId !== h.runId); this.render(); });
+    api('host:list').then((l) => { this.list = l || []; this.render(); }).catch(() => {});
+  },
+  invite(address) { return `solaris://server/${address}`; },
+  render() {
+    const card = $('#host-card'); if (!card) return;
+    const h = this.list[this.list.length - 1];
+    card.hidden = !h;
+    if (!h) { card.innerHTML = ''; Bus.emit('hosting', this.list); return; }
+    card.innerHTML = `<div class="hc-top"><span class="hc-dot"></span><div class="hc-txt"><b>Hosting ${esc(h.name)}</b><small class="mono">${esc(h.address)}</small></div></div>
+      <div class="hc-btns"><button class="btn sm" data-copy>${icon('copy')}Address</button><button class="btn sm primary" data-invite>${icon('users')}Invite link</button></div>`;
+    $('[data-copy]', card).onclick = () => { api('clipboard:write', h.address); toast('Address copied — friends add it as a server'); };
+    $('[data-invite]', card).onclick = () => { api('clipboard:write', this.invite(h.address)); toast('Invite link copied — friends with Solaris can click it to join'); };
+    Bus.emit('hosting', this.list);
+  },
+};
+Hosting.init();

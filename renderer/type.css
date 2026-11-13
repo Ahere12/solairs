@@ -1,0 +1,28 @@
+/* ---------- typography: bundled fonts (SIL Open Font License, see fonts/OFL-*.txt) ---------- */
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Outfit'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('fonts/outfit-latin-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Outfit'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('fonts/outfit-latin-ext-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+:root {
+  --font: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --display: 'Outfit', 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+}
+body { font-feature-settings: 'cv11', 'ss01'; letter-spacing: -0.003em; }
+
+/* headings & big labels use the display face */
+h1, h2, h3, .page-head h1, .hero h1, .titlebar .brand span:not(.ver), #splash b, #auth-gate h1, #auth-gate .ag-brand b,
+.dash-head h1, .section-head h2, .update-card .uc-txt b, #update-screen h2, .mcn-body b, .playtime .big, .hc-txt b { font-family: var(--display); }
+h1, .page-head h1 { font-weight: 700; letter-spacing: -0.025em; }
+h2 { font-weight: 650; letter-spacing: -0.01em; }
+
+/* Play buttons: clean, bold, not shouty */
+.big-play .pt b { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: 0.01em; text-transform: none; }
+.big-play .pt small { font-weight: 500; opacity: 0.78; }
+.btn.play { font-family: var(--display); font-size: 17px; font-weight: 700; letter-spacing: 0.01em; text-transform: none; }
+.btn { font-weight: 650; }
+.nav-item span { font-weight: 600; }
+
+/* new logo art: gentle float instead of spinning rays */
+.hero .sunburst, .hero-strip .sunburst { animation: logo-float 7s ease-in-out infinite; filter: drop-shadow(0 10px 40px color-mix(in srgb, var(--accent) 35%, transparent)); }
+@keyframes logo-float { 0%, 100% { transform: translateY(-50%) rotate(0deg); } 50% { transform: translateY(calc(-50% - 8px)) rotate(3deg); } }

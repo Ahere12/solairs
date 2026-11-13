@@ -320,13 +320,18 @@ Pages.instance = {
       title: 'Change version',
       body: `<div class="stack"><label class="field">Minecraft version<select id="cv-v">${versions.filter((v) => v.type === 'release' || v.id === inst.versionId).map((v) => `<option ${v.id === inst.versionId ? 'selected' : ''}>${esc(v.id)}</option>`).join('')}</select></label>
         <label class="field">Loader<select id="cv-l">${Object.entries(LOADER_NAMES).map(([k, v]) => `<option value="${k}" ${k === inst.loader.type ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <div id="cv-of" class="hidden"><div class="row"><button class="btn sm" data-of-get>${icon('globe')}Get OptiFine</button><button class="btn sm primary" data-of-imp>${icon('upload')}Import OptiFine…</button></div><div class="faint small" style="margin-top:6px">OptiFine is for vanilla play — it doesn’t run Fabric or Forge mods.</div></div>
         <p class="faint small">The newest stable loader version is used. Mods are not changed automatically — use Check updates afterwards.</p></div>`,
       footer: `<button class="btn ghost" data-c>${T('Cancel')}</button><button class="btn primary" data-s>${T('Save')}</button>`,
     });
     m.$('[data-c]').onclick = () => m.close();
+    const ofShow = () => m.$('#cv-of').classList.toggle('hidden', m.$('#cv-l').value !== 'optifine');
+    m.$('#cv-l').onchange = ofShow; ofShow();
+    m.$('[data-of-get]').onclick = () => api('shell:open', 'https://optifine.net/downloads');
+    m.$('[data-of-imp]').onclick = async () => { const info = await importOptiFine(); if (info) m.$('#cv-v').value = info.mc; };
     m.$('[data-s]').onclick = async () => {
       const mc = m.$('#cv-v').value, l = m.$('#cv-l').value;
-      if (l !== 'vanilla') { const lv = await api('loaders:versions', l, mc); if (!lv.length) return toast(`${LOADER_NAMES[l]} is not available for ${mc}`, 'error'); }
+      if (l !== 'vanilla') { const lv = await api('loaders:versions', l, mc); if (!lv.length) return toast(l === 'optifine' ? `Import OptiFine for ${mc} first (Get OptiFine → Import OptiFine…)` : `${LOADER_NAMES[l]} is not available for ${mc}`, 'error'); }
       await api('instances:update', inst.id, { versionId: mc, loader: { type: l, version: null } });
       m.close(); await refreshInstances(); Router.reload(); toast('Version changed');
     };

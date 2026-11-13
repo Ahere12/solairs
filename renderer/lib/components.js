@@ -59,7 +59,8 @@ function contextMenu(x, y, items) {
 }
 
 /* ---------- visuals ---------- */
-const SUN_SVG = `<svg class="sun" viewBox="0 0 100 100"><defs><radialGradient id="sg" cx="40%" cy="40%"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#ff7a1a"/></radialGradient></defs>${Array.from({ length: 12 }, (_, i) => `<rect x="48" y="2" width="4" height="16" rx="2" fill="#ff9f1c" opacity=".85" transform="rotate(${i * 30} 50 50)"/>`).join('')}<circle cx="50" cy="50" r="26" fill="url(#sg)"/></svg>`;
+// Solaris logo (assets/logo.svg) for hero art and sun-icon instances
+const SUN_SVG = `<svg class="sun" viewBox="0 0 512 512"><defs><radialGradient id="lgcore" cx="38%" cy="34%" r="75%"><stop offset="0" stop-color="#fff1b8"/><stop offset="0.35" stop-color="#ffc24a"/><stop offset="0.75" stop-color="#ff7a1f"/><stop offset="1" stop-color="#f2432f"/></radialGradient><radialGradient id="lghalo" cx="50%" cy="50%" r="50%"><stop offset="0.6" stop-color="#ff8a1c" stop-opacity="0.45"/><stop offset="1" stop-color="#ff5a2a" stop-opacity="0"/></radialGradient><linearGradient id="lgring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffd59a"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="1" stop-color="#ffb35c"/></linearGradient><radialGradient id="lgplanet" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffd27a"/></radialGradient><clipPath id="lgtop"><path d="M0 0H512V142L0 370Z"/></clipPath></defs><circle cx="256" cy="256" r="214" fill="url(#lghalo)"/><circle cx="256" cy="256" r="148" fill="url(#lgcore)"/><g transform="rotate(-24 256 256)"><ellipse cx="256" cy="256" rx="228" ry="70" fill="none" stroke="#8a2410" stroke-opacity="0.55" stroke-width="30"/><ellipse cx="256" cy="256" rx="228" ry="70" fill="none" stroke="url(#lgring)" stroke-width="20"/></g><circle cx="256" cy="256" r="148" fill="url(#lgcore)" clip-path="url(#lgtop)"/><circle cx="451" cy="208" r="29" fill="#8a2410" fill-opacity="0.55"/><circle cx="451" cy="208" r="24" fill="url(#lgplanet)"/></svg>`;
 function instIcon(inst, size = '') {
   const ic = inst?.icon;
   const mc = typeof McIcons !== 'undefined' ? (ic ? McIcons.url(ic) : McIcons.defaultFor(inst)) : null;
@@ -104,7 +105,8 @@ const SkinShots = {
   viewer: null, cache: new Map(), chain: Promise.resolve(),
   key(src, slim) { let h = 2166136261; for (let i = 0; i < src.length; i++) h = Math.imul(h ^ src.charCodeAt(i), 16777619); return (slim ? 's' : 'w') + (h >>> 0) + ':' + src.length; },
   render(src, slim) {
-    if (!src || !window.skinview3d) return Promise.resolve(null);
+    if (!src) return Promise.resolve(null);
+    if (!window.skinview3d) return loadSkinview().then((ok) => (ok ? this.render(src, slim) : null));
     const k = this.key(src, slim);
     if (this.cache.has(k)) return this.cache.get(k);
     const p = (this.chain = this.chain.then(async () => {
@@ -363,6 +365,15 @@ async function microsoftLogin(parent, redraw, method = 'browser') {
   const off = awaitLogin(m, redraw);
 }
 
+/* ---------- OptiFine ---------- */
+/** Asks for an OptiFine installer .jar the player downloaded from optifine.net and imports it. */
+async function importOptiFine() {
+  const [file] = await api('dialog:open', { title: 'Choose the OptiFine .jar you downloaded', properties: ['openFile'], filters: [{ name: 'OptiFine', extensions: ['jar'] }] }).catch(() => []);
+  if (!file) return null;
+  try { const info = await api('optifine:import', file); toast(`OptiFine ${info.edition.replace(/_/g, ' ')} for Minecraft ${info.mc} imported`); return info; }
+  catch (e) { toastErr(e); return null; }
+}
+
 /* ---------- new instance dialog ---------- */
 const EMOJIS = ['🧱', '⛏️', '🗡️', '🏹', '🛡️', '🌲', '🌋', '🏰', '🐉', '🧪', '💎', '🔥', '❄️', '🌙', '⭐', '🚀', '🧭', '🌸', '🍄', '🐺', '🐝', '⚙️', '🎮', '🏝️', '🌊', '👾', 'sun'];
 let versionCache = null;
@@ -403,7 +414,7 @@ async function openNewInstance(preset = {}) {
   };
   fillVersions();
   m.$('#ni-snap').onchange = () => { fillVersions(); refreshLoaders(); };
-  const loaderTypes = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge', 'legacyfabric'];
+  const loaderTypes = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge', 'legacyfabric', 'optifine'];
   const support = {};
   const refreshLoaders = async () => {
     const mc = m.$('#ni-version').value;
@@ -413,22 +424,29 @@ async function openNewInstance(preset = {}) {
       try { support[l] = await api('loaders:versions', l, mc); } catch { support[l] = []; }
       if (m.$('#ni-version').value !== mc) return;
       const b = m.$(`[data-l="${l}"]`);
-      if (b && support[l].length) { b.disabled = false; b.style.opacity = ''; }
+      // OptiFine is imported by the player, so it stays selectable for release versions even before an import
+      if (b && (support[l].length || (l === 'optifine' && versions.find((v) => v.id === mc)?.type === 'release'))) { b.disabled = false; b.style.opacity = ''; }
       else if (b) b.title = `Not available for ${mc}`;
     }));
-    if (loader !== 'vanilla' && !support[loader]?.length) loader = 'vanilla';
+    if (loader !== 'vanilla' && loader !== 'optifine' && !support[loader]?.length) loader = 'vanilla';
     $$('[data-l]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.l === loader));
     fillLoaderVersions();
   };
   const bindLoader = () => $$('[data-l]', m.el).forEach((b) => (b.onclick = () => { loader = b.dataset.l; $$('[data-l]', m.el).forEach((x) => x.classList.toggle('on', x === b)); fillLoaderVersions(); syncIcon(); }));
   const fillLoaderVersions = () => {
     const wrap = m.$('#ni-lv-wrap');
-    wrap.classList.toggle('hidden', loader === 'vanilla');
     const list = support[loader] || [];
+    wrap.classList.toggle('hidden', loader === 'vanilla' || (loader === 'optifine' && !list.length));
     m.$('#ni-lv').innerHTML = list.slice(0, 200).map((v) => `<option value="${esc(v.version)}">${esc(v.label || v.version)}${v.recommended ? ' ★ recommended' : v.stable === false ? ' (beta)' : ''}</option>`).join('');
     const pick = list.find((v) => v.recommended) || list.find((v) => v.stable) || list[0];
     if (pick) m.$('#ni-lv').value = pick.version;
     m.$('#ni-note').textContent = loader === 'forge' || loader === 'neoforge' ? `${LOADER_NAMES[loader]} runs its official installer on first launch (needs a minute).` : '';
+    if (loader === 'optifine') {
+      const mc = m.$('#ni-version').value;
+      m.$('#ni-note').innerHTML = `${list.length ? '' : `<div>No OptiFine for ${esc(mc)} imported yet.</div>`}<div class="row" style="margin-top:6px"><button class="btn sm" data-of-get>${icon('globe')}Get OptiFine</button><button class="btn sm primary" data-of-imp>${icon('upload')}Import OptiFine…</button></div><div class="faint small" style="margin-top:6px">Download the OptiFine .jar for ${esc(mc)} from optifine.net, then import it. OptiFine doesn’t allow other apps to download it for you.</div>`;
+      m.$('[data-of-get]').onclick = () => api('shell:open', 'https://optifine.net/downloads');
+      m.$('[data-of-imp]').onclick = async () => { const info = await importOptiFine(); if (info) { if (info.mc !== mc) { m.$('#ni-version').value = info.mc; await refreshLoaders(); } else { support.optifine = await api('loaders:versions', 'optifine', mc); fillLoaderVersions(); } } };
+    }
   };
   m.$('#ni-version').onchange = refreshLoaders;
   refreshLoaders();
@@ -440,7 +458,7 @@ async function openNewInstance(preset = {}) {
     const versionId = m.$('#ni-version').value;
     if (!versionId || versionId === 'Loading…') return toast('Pick a Minecraft version first', 'warn');
     const name = m.$('#ni-name').value.trim() || `${LOADER_NAMES[loader]} ${versionId}`;
-    if (loader !== 'vanilla' && !m.$('#ni-lv').value) return toast(`Pick a ${LOADER_NAMES[loader]} version first`, 'warn');
+    if (loader !== 'vanilla' && !m.$('#ni-lv').value) return toast(loader === 'optifine' ? 'Import OptiFine for this version first' : `Pick a ${LOADER_NAMES[loader]} version first`, 'warn');
     btn.disabled = true;
     try {
       const inst = await api('instances:create', { name, versionId, loader: { type: loader, version: loader === 'vanilla' ? null : m.$('#ni-lv').value }, icon: chosenIcon });

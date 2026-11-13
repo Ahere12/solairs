@@ -141,6 +141,10 @@ module.exports = (getWin) => ({
   },
   'launch:stop': (runId) => launch.stop(runId),
   'launch:list': () => launch.list(),
+  'optifine:list': (mc) => require('./optifine').list(mc),
+  'optifine:import': (file) => require('./optifine').importJar(file),
+  'optifine:remove': (id) => require('./optifine').remove(id),
+  'host:list': () => launch.hostingList(),
   'launch:logs': (runId) => launch.logs(runId),
   'logs:share': async (text) => {
     const r = await getJSON('https://api.mclo.gs/1/log', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ content: text.slice(-10 * 1024 * 1024) }).toString() });

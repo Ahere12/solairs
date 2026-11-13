@@ -28,6 +28,8 @@ Pages.skins = {
 
     // 3D viewer (skinview3d), with a 2D fallback.
     let viewer = null;
+    await loadSkinview();
+    if (!el.isConnected) return;
     if (window.skinview3d) {
       try {
         viewer = new skinview3d.SkinViewer({ canvas: $('#sv', el), width: 300, height: 400 });

@@ -18,6 +18,7 @@ const LOADERS = [
   { id: 'forge', name: 'Forge' },
   { id: 'neoforge', name: 'NeoForge' },
   { id: 'legacyfabric', name: 'Legacy Fabric' },
+  { id: 'optifine', name: 'OptiFine' },
 ];
 
 async function text(url) { const r = await request(url); if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`); return r.text(); }
@@ -30,6 +31,7 @@ function neoMc(v) {
 
 /** List loader versions available for a Minecraft version. Empty array = unsupported. */
 async function listVersions(type, mc) {
+  if (type === 'optifine') return require('./optifine').list(mc); // imported by the player
   try {
     if (type === 'fabric' || type === 'quilt' || type === 'legacyfabric') {
       const list = await getJSON(`${META[type]}/versions/loader/${encodeURIComponent(mc)}`);
@@ -84,6 +86,7 @@ function runInstaller(java, jar, args, onLog) {
  */
 async function install(type, mc, loaderVersion, { java, onLog } = {}) {
   if (type === 'vanilla') { await getVersionJson(mc); return mc; }
+  if (type === 'optifine') return require('./optifine').install(mc, loaderVersion, { java, onLog });
   await getVersionJson(mc);
   if (META[type]) {
     const json = await getJSON(`${META[type]}/versions/loader/${encodeURIComponent(mc)}/${encodeURIComponent(loaderVersion)}/profile/json`);

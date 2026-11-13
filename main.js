@@ -92,7 +92,7 @@ function init() {
     width: 1320, height: 840, minWidth: 1040, minHeight: 660,
     frame: false, backgroundColor: '#0d0b12', show: false, icon,
     title: 'Solaris',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, v8CacheOptions: 'bypassHeatCheck' },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   const startHidden = s.startMinimized || process.argv.includes('--hidden');
@@ -133,8 +133,11 @@ function init() {
     if ((ch === 'launch:exited' || (ch === 'launch:status' && payload?.error)) && quitWhenGamesClose) setTimeout(() => { if (!require('./src/launch').anyRunning()) { app.isQuitting = true; app.quit(); } }, 1500);
   });
 
-  if (s.discordRpc) discord.idle();
-  win.webContents.once('did-finish-load', () => require('./src/updater').init());
+  // Background work starts after the window is up, so it doesn't slow down opening Solaris.
+  win.webContents.once('did-finish-load', () => {
+    setTimeout(() => { if (settings.get().discordRpc) discord.idle(); }, 1500);
+    setTimeout(() => require('./src/updater').init(), 3000);
+  });
 }
 
 app.on('before-quit', () => {

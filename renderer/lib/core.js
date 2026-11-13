@@ -3,6 +3,34 @@ const api = (name, ...args) => window.solaris.call(name, ...args);
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/**
+ * Stale-while-revalidate cache for network data on screens shown at startup (Home):
+ * draws the last copy instantly, then refreshes it in the background when it is older than `ttl` ms.
+ */
+const SWR = {
+  read(k) { try { return JSON.parse(localStorage.getItem('solaris.swr.' + k)); } catch { return null; } },
+  write(k, d) { try { localStorage.setItem('solaris.swr.' + k, JSON.stringify({ t: Date.now(), d })); } catch {} },
+  async load(k, ttl, fetcher, draw) {
+    const c = this.read(k);
+    if (c) draw(c.d, true);
+    if (c && Date.now() - c.t < ttl) return c.d;
+    try { const d = await fetcher(); this.write(k, d); draw(d, false); return d; }
+    catch (e) { if (!c) throw e; return c.d; }
+  },
+};
+
+/** skinview3d (~470 KB) is loaded only when a 3D skin view is first needed, not at startup. */
+let skinviewLoading = null;
+function loadSkinview() {
+  if (window.skinview3d) return Promise.resolve(true);
+  return (skinviewLoading = skinviewLoading || new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = '../node_modules/skinview3d/bundles/skinview3d.bundle.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => { skinviewLoading = null; resolve(false); };
+    document.head.appendChild(s);
+  }));
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const debounce = (fn, ms = 250) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
@@ -12,7 +40,7 @@ const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   library: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   browse: '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  sun: '<circle cx="12" cy="12" r="5.2"/><ellipse cx="12" cy="12" rx="10.6" ry="3.4" transform="rotate(-24 12 12)"/><circle cx="20.6" cy="9.4" r="1.3" fill="currentColor"/>',
   servers: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
   skins: '<path d="M8 3h8l4 4-3 3v11H7V10L4 7z"/>',
   gallery: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
@@ -86,7 +114,7 @@ const timeAgo = (t) => {
   return '';
 };
 const fmtDate = (d) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T12:00:00' : d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-const LOADER_NAMES = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge', legacyfabric: 'Legacy Fabric' };
+const LOADER_NAMES = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge', legacyfabric: 'Legacy Fabric', optifine: 'OptiFine' };
 
 /* Minecraft § formatting / chat component → HTML */
 const MC_COLORS = { 0: '#000', 1: '#00a', 2: '#0a0', 3: '#0aa', 4: '#a00', 5: '#a0a', 6: '#fa0', 7: '#aaa', 8: '#555', 9: '#55f', a: '#5f5', b: '#5ff', c: '#f55', d: '#f5f', e: '#ff5', f: '#fff' };

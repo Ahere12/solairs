@@ -41,7 +41,10 @@ function init() {
 function notesText(n) {
   if (!n) return '';
   const s = Array.isArray(n) ? n.map((x) => x.note).join('\n') : String(n);
-  return s.replace(/<[^>]+>/g, '').trim().slice(0, 600);
+  // GitHub sends the release description as HTML: keep headings and bullet points as readable lines.
+  return s.replace(/<li[^>]*>/gi, '\n• ').replace(/<\/(p|h\d|ul|ol)>|<br\s*\/?>/gi, '\n').replace(/<h\d[^>]*>/gi, '\n').replace(/\n\s*\n(?=• )/g, '\n')
+    .replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n').trim().slice(0, 3000);
 }
 
 function check() {

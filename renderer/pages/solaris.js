@@ -9,7 +9,7 @@ Pages.solaris = {
     let editing = params.instanceId ? State.instances.find((i) => i.id === params.instanceId) : null;
     let chosen = new Set(editing ? editing.solarisModules : modules.filter((m) => m.default || m.required).map((m) => m.slug));
     let avail = {};
-    const CAT_ICON = { Core: 'layers', Performance: 'zap', Graphics: 'eye', 'HUD & Utility': 'cpu', Visual: 'palette' };
+    const CAT_ICON = { Core: 'layers', Performance: 'zap', Graphics: 'eye', 'HUD & Utility': 'cpu', Visual: 'palette', Social: 'users', Cosmetics: 'skins' };
 
     const draw = () => {
       const cats = [...new Set(modules.map((m) => m.cat))];

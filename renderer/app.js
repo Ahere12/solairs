@@ -57,7 +57,7 @@ function renderSidePlay() {
   const sub = busy ? launchLabel(sel.id) : `${sel.name} · ${loaderLabel(sel)} ${sel.versionId}`;
   box.innerHTML = `<div class="big-play-wrap"><button class="big-play ${running ? 'stop' : ''}" ${running ? `data-stop="${esc(sel.id)}"` : `data-play="${esc(sel.id)}"`} ${busy && !running ? 'disabled' : ''}>
       <span class="pi">${icon(running ? 'stop' : 'play')}</span>
-      <span class="pt"><b>${running ? esc(T('Stop')).toUpperCase() : busy ? '…' : esc(T('Play')).toUpperCase()}</b><small>${esc(sub)}</small></span>
+      <span class="pt"><b>${running ? esc(T('Stop')) : busy ? '…' : esc(T('Play'))}</b><small>${esc(sub)}</small></span>
     </button><button class="big-play-pick" id="bp-pick" title="Choose instance"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button></div>`;
   $('#bp-pick').onclick = async () => { const i = await chooseInstance({ title: 'Select instance' }); if (i) { await saveSettings({ selectedInstance: i.id }); renderSideInstances(); } };
 }

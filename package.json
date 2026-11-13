@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Solaris",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",
@@ -81,6 +81,8 @@
     "skinview3d": "^3.4.2"
   },
   "devDependencies": {
+    "@fontsource-variable/outfit": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0"
   }

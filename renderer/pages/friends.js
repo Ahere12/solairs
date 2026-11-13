@@ -7,6 +7,16 @@ Pages.friends = {
       <div class="page-head"><div><h1>${T('Friends')}</h1><div class="sub">Players you follow${acct ? ` · list for <b>${esc(acct.name)}</b>` : ''}</div></div>
         <div class="actions"><button class="btn" id="fr-status">${icon('refresh')}Check who’s online</button><button class="btn primary" id="fr-add">${icon('plus')}Add friend</button></div></div>
       ${acct?.type !== 'msa' ? `<div class="card notice" style="margin-bottom:12px">${icon('info')}<span>Friends work best with a Microsoft account — your list is saved per account, and friends can only see you on online-mode servers with a Microsoft account.</span></div>` : ''}
+      <h2 style="margin-top:0">Play together</h2>
+      <div class="together">
+        <div class="card"><h3>${icon('globe')}Host your world</h3><p>No port forwarding. In a Solaris Client instance, press <b>Esc → Open to LAN → Start LAN World</b>. Solaris shows the address here and in the sidebar so you can send it.</p>
+          <div id="host-status" class="row"></div></div>
+        <div class="card"><h3>${icon('users')}Join a friend</h3><p>Got an address or a <span class="mono">solaris://server/…</span> invite link? Paste it here — or just click the link.</p>
+          <div class="row"><input type="text" id="fr-join-addr" class="grow" placeholder="abc.e4mc.link or play.server.net" spellcheck="false"><button class="btn primary" id="fr-join">${icon('play')}Join</button></div></div>
+        <div class="card"><h3>${icon('sun')}In-game friends</h3><p>Turn on <b>World Host</b> in the Solaris Client to see friends online and join their worlds from inside Minecraft (1.21.5 and older).</p>
+          <div class="row"><button class="btn sm" id="fr-client">${icon('sun')}Open Solaris Client</button></div></div>
+      </div>
+      <h2>Friends</h2>
       <div class="search" style="max-width:320px;margin-bottom:12px">${icon('search')}<input type="search" id="fr-q" placeholder="${T('Search')}…"></div>
       <div class="friends-grid" id="fr-list"><div class="faint">Loading…</div></div>
       <p class="faint small" style="margin-top:14px">Minecraft: Java Edition has no official friends service, so “online” means Solaris saw the player in the live player list of a server it checked (Discover, My servers and Favourites). Big servers only show some of their players.</p>`;
@@ -41,6 +51,23 @@ Pages.friends = {
     };
     const load = async () => { list = await api('friends:list'); if (el.isConnected) draw(); };
     $('#fr-q', el).oninput = (e) => { q = e.target.value.toLowerCase(); draw(); };
+    const drawHost = () => {
+      const box = $('#host-status', el); if (!box) return;
+      const h = Hosting.list[Hosting.list.length - 1];
+      box.innerHTML = h
+        ? `<span class="chip ok">Online</span><span class="mono small ellipsis grow" title="${esc(h.address)}">${esc(h.address)}</span><button class="btn sm primary" id="fr-invite">${icon('copy')}Invite link</button>`
+        : '<span class="faint small">Not hosting right now.</span>';
+      if (h) $('#fr-invite', box).onclick = () => { api('clipboard:write', Hosting.invite(h.address)); toast('Invite link copied'); };
+    };
+    drawHost();
+    ctx.on('hosting', drawHost);
+    $('#fr-client', el).onclick = () => Router.go('solaris');
+    $('#fr-join', el).onclick = () => {
+      let a = $('#fr-join-addr', el).value.trim().replace(/^solaris:\/\/server\//i, '').replace(/\/+$/, '');
+      if (!/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(a)) return toast('Enter a server address like abc.e4mc.link', 'error');
+      Pages.servers.join(a);
+    };
+    $('#fr-join-addr', el).onkeydown = (e) => { if (e.key === 'Enter') $('#fr-join', el).click(); };
     $('#fr-add', el).onclick = async () => {
       const n = await promptDialog('Add friend', { placeholder: 'Minecraft username', ok: 'Add' });
       if (!n) return;

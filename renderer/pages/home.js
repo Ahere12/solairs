@@ -71,12 +71,16 @@ Pages.home = {
     };
     const loadPacks = async () => {
       const box = $('#packs', el); if (!box) return;
+      const show = (packs) => {
+        featuredPacks = packs;
+        const b = $('#packs', el); if (!b) return;
+        b.innerHTML = packs.map((p) => Pages.browse.hubCard({ ...p, project_type: 'modpack' })).join('');
+        Pages.browse.bindHub(b, 'modpack', null);
+      };
+      if (featuredPacks) return show(featuredPacks); // redraw within this visit: no new request
       try {
-        featuredPacks = featuredPacks || (await api('modrinth:search', { query: '', type: 'modpack', sort: 'downloads', offset: 0 })).hits.slice(0, 4);
-        if (!$('#packs', el)) return;
-        box.innerHTML = featuredPacks.map((p) => Pages.browse.hubCard({ ...p, project_type: 'modpack' })).join('');
-        Pages.browse.bindHub(box, 'modpack', null);
-      } catch (e) { box.innerHTML = `<div class="faint small">Couldn't reach Modrinth (${esc(e.message)})</div>`; }
+        await SWR.load('home-packs', 6 * 3600e3, async () => (await api('modrinth:search', { query: '', type: 'modpack', sort: 'downloads', offset: 0 })).hits.slice(0, 4), show);
+      } catch (e) { if ($('#packs', el)) $('#packs', el).innerHTML = `<div class="faint small">Couldn't reach Modrinth (${esc(e.message)})</div>`; }
     };
     const loadNews = async () => {
       const log = await api('data:changelog');
@@ -90,10 +94,11 @@ Pages.home = {
       const box = $('#mcnews', el); if (!box) return;
       $('#mc-news-all', el).onclick = (e) => { e.preventDefault(); api('shell:open', 'https://www.minecraft.net/articles'); };
       try {
-        const items = await api('news:minecraft', { limit: 4 });
-        if (!$('#mcnews', el)) return;
-        box.innerHTML = items.length ? mcNewsCards(items) : '<div class="faint small">No news right now.</div>';
-        bindMcNews(box);
+        await SWR.load('home-mcnews', 3600e3, () => api('news:minecraft', { limit: 4 }), (items) => {
+          const b = $('#mcnews', el); if (!b) return;
+          b.innerHTML = items.length ? mcNewsCards(items) : '<div class="faint small">No news right now.</div>';
+          bindMcNews(b);
+        });
       } catch { if ($('#mcnews', el)) box.innerHTML = '<div class="faint small">Couldn’t load Minecraft news — check your internet connection.</div>'; }
     };
     const loadFeatured = async () => {
@@ -102,11 +107,13 @@ Pages.home = {
       box.innerHTML = featured.slice(0, 5).map((s, n) => `<div class="srv-row" data-addr="${esc(s.address)}"><img class="fav" alt=""><div class="grow" style="min-width:0"><div class="row" style="gap:8px"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</b><span class="chip">${esc(s.region)}</span></div><span class="pc">${icon('users')}<span class="n">—</span></span></div><span class="rank">#${n + 1}</span><button class="btn sm" data-join="${esc(s.address)}">Join</button></div>`).join('');
       $$('[data-join]', box).forEach((b) => (b.onclick = () => Pages.servers.join(b.dataset.join)));
       for (const row of $$('[data-addr]', box)) {
-        api('servers:ping', row.dataset.addr).then((r) => {
+        const show = (r) => {
+          if (!row.isConnected) return;
           if (!r.online) { $('.n', row).textContent = 'offline'; return; }
           $('.n', row).textContent = fmtNum(r.players.online);
           if (r.favicon) $('.fav', row).src = r.favicon;
-        }).catch(() => {});
+        };
+        SWR.load('ping-' + row.dataset.addr, 120e3, async () => { const r = await api('servers:ping', row.dataset.addr); return { online: r.online, players: { online: r.players?.online || 0 }, favicon: r.favicon || null }; }, show).catch(() => {});
       }
     };
     draw();

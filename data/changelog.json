@@ -1,5 +1,30 @@
 [
   {
+    "product": "launcher", "version": "1.3.0", "date": "2026-11-12",
+    "title": "New look, OptiFine, hosting for friends and cosmetics",
+    "groups": [
+      { "area": "Look & feel", "entries": [
+        { "type": "feature", "text": "New Solaris logo and new fonts (Plus Jakarta Sans and Outfit) — including a cleaner Play button." },
+        { "type": "improvement", "text": "Faster start: Home shows modpacks, news and player counts from last time instantly, and the 3D skin viewer only loads when you need it." }
+      ] },
+      { "area": "Solaris Client", "entries": [
+        { "type": "feature", "text": "Optional cosmetics: Capes (see OptiFine, LabyMod and MinecraftCapes capes), 3D Skin Layers, Wavey Capes, Emotecraft and Ears." },
+        { "type": "feature", "text": "Host for friends: with e4mc, Open to LAN puts your world online without port forwarding. Solaris shows the address and an invite link." },
+        { "type": "feature", "text": "New modules like Feather and OneClient: EvergreenHUD (FPS, CPS, keystrokes), Controlling, FastQuit, Chat Heads, World Host, More Culling and more." },
+        { "type": "bugfix", "text": "AppleSkin’s settings page works again (Cloth Config is added automatically)." }
+      ] },
+      { "area": "Friends", "entries": [
+        { "type": "feature", "text": "Play together: host your world, join a friend by address or invite link, and see when you are hosting." }
+      ] },
+      { "area": "OptiFine", "entries": [
+        { "type": "feature", "text": "OptiFine for vanilla instances: download OptiFine from optifine.net, import it, and Solaris installs it. Pick OptiFine when creating an instance or in Change version." }
+      ] },
+      { "area": "Updates", "entries": [
+        { "type": "feature", "text": "See the release notes of a new version while it downloads, before you restart." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.2.0", "date": "2026-11-12",
     "title": "Minecraft news, solaris:// links and snowfall",
     "groups": [

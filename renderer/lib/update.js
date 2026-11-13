@@ -42,8 +42,11 @@ const Updater = {
             <span class="uc-pct"></span>
           </div>
           <div class="uc-bar"><div></div></div>
-          <div class="uc-meta"><span class="uc-size"></span><span class="uc-speed"></span></div>`;
+          <div class="uc-meta"><span class="uc-size"></span><span class="uc-speed"></span></div>
+          <button class="uc-notes" hidden>${icon('changelog')}What’s in this update</button>`;
+        $('.uc-notes', card).onclick = () => this.showNotes();
       }
+      $('.uc-notes', card).hidden = !s.notes;
       $('.fg', card).style.strokeDashoffset = String(C * (1 - pct / 100));
       $('.uc-ver', card).textContent = `Solaris ${s.version || ''}`;
       $('.uc-pct', card).textContent = `${Math.floor(pct)}%`;
@@ -63,9 +66,11 @@ const Updater = {
             <div class="uc-ring done"><svg viewBox="0 0 44 44"><circle class="fg" cx="22" cy="22" r="19"/></svg>${icon('check', 'uc-sun')}</div>
             <div class="uc-txt"><b>Update ready</b><small>Solaris ${esc(s.version || '')}</small></div>
           </div>
+          ${s.notes ? `<button class="uc-notes">${icon('changelog')}What’s in this update</button>` : ''}
           <button class="btn primary sm uc-go">${icon('download')}Restart & update</button>
           <button class="uc-later">Later — install when I close Solaris</button>`;
         $('.uc-go', card).onclick = () => this.install();
+        if ($('.uc-notes', card)) $('.uc-notes', card).onclick = () => this.showNotes();
         $('.uc-later', card).onclick = () => { card.hidden = true; };
       }
     } else if (s.status === 'error') {
@@ -77,6 +82,18 @@ const Updater = {
       card.dataset.mode = '';
     }
     if (s.status === 'downloading') chip.onclick = () => { $('#update-card').hidden = false; $('#update-card').classList.remove('flash'); void card.offsetWidth; card.classList.add('flash'); };
+  },
+
+  /** Release notes of the update being downloaded (from the GitHub release). */
+  showNotes() {
+    const s = this.state;
+    const m = modal({
+      title: `Solaris ${s.version || ''} — release notes`,
+      body: `<div class="uc-notes-body">${esc(s.notes || 'No release notes.')}</div>`,
+      footer: s.status === 'ready' ? `<button class="btn ghost" data-x>Later</button><button class="btn primary" data-go>${icon('download')}Restart & update</button>` : `<button class="btn primary" data-x>OK</button>`,
+    });
+    m.$('[data-x]').onclick = () => m.close();
+    if (m.$('[data-go]')) m.$('[data-go]').onclick = () => { m.close(); this.install(); };
   },
 
   async install() {

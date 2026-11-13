@@ -75,11 +75,11 @@ async function ensureVersion(inst) {
   if (type !== 'vanilla' && !lv) {
     status(inst.id, `Finding ${type} version`);
     const list = await loaders.listVersions(type, inst.versionId);
-    if (!list.length) throw new Error(`${type} is not available for Minecraft ${inst.versionId}`);
+    if (!list.length) throw new Error(type === 'optifine' ? `Import OptiFine for Minecraft ${inst.versionId} first: download it from optifine.net, then use “Import OptiFine…” on the instance page.` : `${type} is not available for Minecraft ${inst.versionId}`);
     lv = (list.find((x) => x.recommended) || list.find((x) => x.stable) || list[0]).version;
   }
   let javaPath = null;
-  if (type === 'forge' || type === 'neoforge') {
+  if (type === 'forge' || type === 'neoforge' || type === 'optifine') {
     const base = await versions.resolveVersion(inst.versionId);
     javaPath = await resolveJava(inst, base, (d, t) => status(inst.id, 'Installing Java', d / t));
   }
@@ -88,6 +88,30 @@ async function ensureVersion(inst) {
   instances.save({ ...instances.get(inst.id), launchVersionId: id, loader: { type, version: lv } });
   return id;
 }
+
+/**
+ * World hosting through e4mc (Solaris Client "Host for friends"): e4mc prints the public address in chat when the
+ * player uses Open to LAN. Solaris picks it up from the game log so the player can copy or share it.
+ */
+const hosting = new Map(); // runId -> { address, instanceId, name, since }
+function hostingFromLog(line, { runId, instanceId, name }) {
+  if (!/\[CHAT\]/.test(line)) return;
+  const on = line.match(/Local game hosted on domain \[([A-Za-z0-9.-]+\.[A-Za-z]{2,})\]/);
+  if (on) {
+    const h = { runId, instanceId, name, address: on[1], since: Date.now() };
+    hosting.set(runId, h);
+    push('host:online', h);
+    if (Notification.isSupported()) {
+      const n = new Notification({ title: 'Your world is online', body: `Friends can join at ${h.address} — click to copy` });
+      n.on('click', () => { require('electron').clipboard.writeText(h.address); });
+      n.show();
+    }
+  } else if (/Local game no longer publicly hosted/.test(line) && hosting.has(runId)) {
+    hosting.delete(runId);
+    push('host:offline', { runId, instanceId });
+  }
+}
+function hostingList() { return [...hosting.values()]; }
 
 const starting = new Set(); // instances between "Play" and the game process starting
 
@@ -230,6 +254,7 @@ async function launchInner(instanceId, opts = {}) {
       run.lines.push(line); if (run.lines.length > 8000) run.lines.shift();
       logStream.write(line + '\n');
       push('game:log', { runId, instanceId, line });
+      hostingFromLog(line, { runId, instanceId, name: inst.name });
     }
   };
   proc.stdout.on('data', onData);
@@ -255,6 +280,7 @@ async function launchInner(instanceId, opts = {}) {
     if (buf) onData('\n');
     logStream.end();
     running.delete(runId);
+    if (hosting.delete(runId)) push('host:offline', { runId, instanceId });
     const duration = Date.now() - run.start;
     try { const cur = instances.get(instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + duration }); } catch {}
     const killed = run.killed || signal === 'SIGTERM';
@@ -296,4 +322,4 @@ const isRunning = (instanceId) => [...running.values()].some((r) => r.instanceId
 const anyRunning = () => running.size > 0 || starting.size > 0;
 const isBusy = (instanceId) => isRunning(instanceId) || starting.has(instanceId);
 
-module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit };
+module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit, hostingList };

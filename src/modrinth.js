@@ -318,7 +318,28 @@ const MODULES = [
   { slug: 'not-enough-animations', name: 'Not Enough Animations', cat: 'Visual', default: false, desc: 'Third-person animations for eating, maps and more.' },
   { slug: 'cull-leaves', name: 'Cull Leaves', cat: 'Performance', default: false, desc: 'Faster leaf rendering in forests.' },
   { slug: 'dynamic-fps', name: 'Dynamic FPS', cat: 'Performance', default: true, desc: 'Lowers FPS when the game is in the background.' },
+  { slug: 'moreculling', name: 'More Culling', cat: 'Performance', default: false, desc: 'Skips more hidden block faces for extra FPS.' },
+  { slug: 'krypton', name: 'Krypton', cat: 'Performance', default: false, desc: 'Optimizes the networking stack — smoother multiplayer.' },
+  // HUD like Feather / OneClient (EvergreenHUD is Polyfrost's, the OneClient team)
+  { slug: 'evergreenhud', name: 'EvergreenHUD', cat: 'HUD & Utility', default: true, desc: 'FPS, CPS, keystrokes, coordinates, armour and more — movable HUD widgets.' },
+  { slug: 'controlling', name: 'Controlling', cat: 'HUD & Utility', default: true, desc: 'Search your key binds and find conflicts.' },
+  { slug: 'fastquit', name: 'FastQuit', cat: 'HUD & Utility', default: true, desc: 'Leave worlds instantly — saving continues in the background.' },
+  { slug: 'shulkerboxtooltip', name: 'Shulker Box Tooltip', cat: 'HUD & Utility', default: false, desc: 'See what is inside shulker boxes by hovering.' },
+  { slug: 'xaeros-minimap', name: "Xaero's Minimap", cat: 'HUD & Utility', default: false, desc: 'Minimap with waypoints.' },
+  // Social & multiplayer
+  { slug: 'e4mc', name: 'e4mc — Host for friends', cat: 'Social', default: true, desc: 'Open to LAN puts your world online — no port forwarding. Solaris shows the address to share.' },
+  { slug: 'world-host', name: 'World Host', cat: 'Social', default: false, desc: 'In-game friends list: see friends online and join their worlds (Minecraft 1.21.5 and older).' },
+  { slug: 'chat-heads', name: 'Chat Heads', cat: 'Social', default: true, desc: 'Player heads next to chat messages.' },
+  { slug: 'no-chat-reports', name: 'No Chat Reports', cat: 'Social', default: false, desc: 'Makes your chat messages unreportable to Mojang.' },
+  // Optional cosmetics (off by default)
+  { slug: 'capes', name: 'Capes', cat: 'Cosmetics', default: false, desc: 'See capes from OptiFine, LabyMod, MinecraftCapes and more — and show your own.' },
+  { slug: '3dskinlayers', name: '3D Skin Layers', cat: 'Cosmetics', default: false, desc: 'Renders the outer skin layer in 3D.' },
+  { slug: 'wavey-capes', name: 'Wavey Capes', cat: 'Cosmetics', default: false, desc: 'Capes that wave with physics.' },
+  { slug: 'emotecraft', name: 'Emotecraft', cat: 'Cosmetics', default: false, desc: 'Emotes and dances (others need it to see them).' },
+  { slug: 'ears', name: 'Ears', cat: 'Cosmetics', default: false, desc: 'Ears, tails, wings and more drawn on your skin file.' },
 ];
+// Optional libraries a module needs for its settings screen (e.g. AppleSkin's Mod Menu page needs Cloth Config).
+const COMPANIONS = { appleskin: ['cloth-config'] };
 function modules() { return MODULES; }
 
 async function moduleAvailability(mc) {
@@ -337,7 +358,9 @@ async function reachable() {
 }
 async function syncModules(instanceId, onProgress) {
   const inst = instances.get(instanceId);
-  const wanted = [...new Set(['fabric-api', ...(inst.solarisModules || [])])];
+  const chosen = inst.solarisModules || [];
+  const companions = chosen.includes('modmenu') ? chosen.flatMap((s) => COMPANIONS[s] || []) : [];
+  const wanted = [...new Set(['fabric-api', ...chosen, ...companions])];
   const record = readRecord(inst);
   const report = { installed: [], updated: [], unavailable: [], offline: false };
   if (!(await reachable())) { report.offline = true; return report; }
@@ -361,6 +384,7 @@ async function syncModules(instanceId, onProgress) {
       if (rec[p.id]) { rec[p.id].slug = slug; writeRecord(inst, rec); }
     } catch (e) { report.unavailable.push(slug); }
   }
+  report.unavailable = report.unavailable.filter((s) => !companions.includes(s)); // a missing helper library isn't news
   // Disable modules the user turned off (only ones Solaris installed).
   const fresh = readRecord(inst);
   for (const m of MODULES) {
