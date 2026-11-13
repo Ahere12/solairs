@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Solaris",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",

@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "solaris",
+	"version": "${version}",
+	"name": "Solaris Client",
+	"description": "The Solaris client: press Right Shift for the Solaris menu. FPS, CPS, keystrokes, coordinates, ping and clock HUD you can move, zoom and toggle sprint.",
+	"authors": ["Solaris"],
+	"contact": {
+		"homepage": "https://github.com/Ahere12/solairs",
+		"sources": "https://github.com/Ahere12/solairs"
+	},
+	"license": "MIT",
+	"icon": "assets/solaris/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["app.solaris.client.SolarisClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

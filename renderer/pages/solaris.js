@@ -20,7 +20,7 @@ Pages.solaris = {
           <div class="kicker">All-in-one modpack</div>
           <h1>Solaris Client</h1>
           <div class="desc">One install with ${modules.length} hand-picked modules — boosted frames, smooth zoom, better HUD and more. Solaris keeps every module updated automatically each time you launch.</div>
-          <div class="sc-hint"><span class="kbd">Right Shift</span> in game opens the client menu — mods, HUD editor and settings in one place.</div>
+          <div class="sc-hint"><span class="kbd">Right Shift</span> in game opens the Solaris menu — your HUD, a layout editor, zoom (hold C) and toggle sprint.</div>
           <div class="play-row">
             ${inst ? `${playButton(inst, { size: 'lg' })}<span class="chip warn">Editing ${esc(inst.name)} · ${esc(inst.versionId)}</span><button class="btn" id="done-edit">Create another</button>`
               : `<select id="mc" style="height:50px;min-width:150px">${versions.slice(0, 60).map((v) => `<option ${v.id === mc ? 'selected' : ''}>${esc(v.id)}</option>`).join('')}</select>

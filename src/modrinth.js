@@ -298,9 +298,11 @@ async function applyUpdate(instanceId, kind, file, versionId) {
 // ---------- Solaris Client: curated all-in-one module set ----------
 const MODULES = [
   { slug: 'fabric-api', name: 'Fabric API', cat: 'Core', required: true, desc: 'Library required by most Fabric mods.' },
-  // In-game client menu like Lunar / Feather: Polyfrost's OneConfig (the OneClient menu) — press Right Shift in game.
-  { slug: 'oneconfig', name: 'Client menu (OneConfig)', cat: 'Core', default: true, desc: 'Press Right Shift in game: one menu for your mods, HUD editor and settings — like Lunar.' },
-  { slug: 'polysprint', name: 'PolySprint', cat: 'HUD & Utility', default: true, desc: 'Toggle sprint and sneak, set up from the Right Shift menu.' },
+  // Solaris's own in-game client (client-mod/ in this repo, bundled in assets/mods): Right Shift menu, HUD, zoom.
+  { slug: 'solaris-client', name: 'Solaris Client mod', cat: 'Core', default: true, own: true, desc: 'Our own in-game client: Right Shift menu, movable HUD (FPS, CPS, keystrokes, coordinates, ping, clock), zoom (C) and toggle sprint.' },
+  // Extras from other projects (off by default; OneConfig also uses Right Shift)
+  { slug: 'oneconfig', name: 'OneConfig (Polyfrost)', cat: 'HUD & Utility', default: false, desc: 'Polyfrost’s mod menu. Uses Right Shift too — turn off the Solaris menu key if you use both.' },
+  { slug: 'polysprint', name: 'PolySprint', cat: 'HUD & Utility', default: false, desc: 'Toggle sprint and sneak (Polyfrost).' },
   { slug: 'chatting', name: 'Chatting', cat: 'HUD & Utility', default: false, desc: 'Chat tabs, chat search, screenshots of chat and a cleaner chat box.' },
   { slug: 'sodium', name: 'Sodium', cat: 'Performance', default: true, desc: 'Modern rendering engine — huge FPS boost.' },
   { slug: 'lithium', name: 'Lithium', cat: 'Performance', default: true, desc: 'Optimizes game logic, physics and AI.' },
@@ -313,7 +315,7 @@ const MODULES = [
   { slug: 'iris', name: 'Iris Shaders', cat: 'Graphics', default: false, desc: 'Shader pack support compatible with Sodium.' },
   { slug: 'continuity', name: 'Continuity', cat: 'Graphics', default: false, desc: 'Connected textures for resource packs.' },
   { slug: 'lambdynamiclights', name: 'LambDynamicLights', cat: 'Graphics', default: false, desc: 'Held torches light up the world.' },
-  { slug: 'zoomify', name: 'Zoomify', cat: 'HUD & Utility', default: true, desc: 'Smooth configurable zoom key.' },
+  { slug: 'zoomify', name: 'Zoomify', cat: 'HUD & Utility', default: false, desc: 'Configurable zoom (also on C — the Solaris Client mod already has zoom).' },
   { slug: 'betterf3', name: 'BetterF3', cat: 'HUD & Utility', default: false, desc: 'Customizable, readable F3 debug/coordinates screen.' },
   { slug: 'appleskin', name: 'AppleSkin', cat: 'HUD & Utility', default: true, desc: 'Shows hunger & saturation values.' },
   { slug: 'mouse-tweaks', name: 'Mouse Tweaks', cat: 'HUD & Utility', default: true, desc: 'Better inventory mouse handling.' },
@@ -325,7 +327,7 @@ const MODULES = [
   { slug: 'moreculling', name: 'More Culling', cat: 'Performance', default: false, desc: 'Skips more hidden block faces for extra FPS.' },
   { slug: 'krypton', name: 'Krypton', cat: 'Performance', default: false, desc: 'Optimizes the networking stack — smoother multiplayer.' },
   // HUD like Feather / OneClient (EvergreenHUD is Polyfrost's, the OneClient team)
-  { slug: 'evergreenhud', name: 'EvergreenHUD', cat: 'HUD & Utility', default: true, desc: 'FPS, CPS, keystrokes, coordinates, armour and more — movable HUD widgets.' },
+  { slug: 'evergreenhud', name: 'EvergreenHUD', cat: 'HUD & Utility', default: false, desc: 'FPS, CPS, keystrokes, coordinates, armour and more — movable HUD widgets.' },
   { slug: 'controlling', name: 'Controlling', cat: 'HUD & Utility', default: true, desc: 'Search your key binds and find conflicts.' },
   { slug: 'fastquit', name: 'FastQuit', cat: 'HUD & Utility', default: true, desc: 'Leave worlds instantly — saving continues in the background.' },
   { slug: 'shulkerboxtooltip', name: 'Shulker Box Tooltip', cat: 'HUD & Utility', default: false, desc: 'See what is inside shulker boxes by hovering.' },
@@ -346,10 +348,37 @@ const MODULES = [
 const COMPANIONS = { appleskin: ['cloth-config'] };
 function modules() { return MODULES; }
 
+// ---------- Solaris's own mod (bundled with the launcher) ----------
+const OWN_DIR = path.join(__dirname, '..', 'assets', 'mods');
+/** The bundled Solaris Client mod jar for a Minecraft version, or null (file name: solaris-client-<ver>+<mc>.jar). */
+function ownModFor(mc) {
+  let files = [];
+  try { files = fs.readdirSync(OWN_DIR); } catch {}
+  const f = files.find((x) => x.startsWith('solaris-client-') && x.endsWith(`+${mc}.jar`));
+  return f ? { file: f, path: path.join(OWN_DIR, f), version: f.replace(/^solaris-client-/, '').replace(/\.jar$/, '') } : null;
+}
+function installOwnMod(inst) {
+  const own = ownModFor(inst.versionId);
+  if (!own) return null;
+  const mods = path.join(inst.gameDir, 'mods');
+  fs.mkdirSync(mods, { recursive: true });
+  for (const f of fs.readdirSync(mods)) if (/^solaris-client-.*\.jar(\.disabled)?$/.test(f) && f !== own.file) fs.rmSync(path.join(mods, f), { force: true });
+  const dest = path.join(mods, own.file);
+  if (fs.existsSync(dest + '.disabled')) fs.rmSync(dest + '.disabled', { force: true });
+  const fresh = !fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(own.path).size;
+  if (fresh) fs.copyFileSync(own.path, dest);
+  return { ...own, fresh };
+}
+function disableOwnMod(inst) {
+  const mods = path.join(inst.gameDir, 'mods');
+  try { for (const f of fs.readdirSync(mods)) if (/^solaris-client-.*\.jar$/.test(f)) fs.renameSync(path.join(mods, f), path.join(mods, f + '.disabled')); } catch {}
+}
+
 async function moduleAvailability(mc) {
   const fake = { versionId: mc, loader: { type: 'fabric' } };
   const out = {};
   await Promise.all(MODULES.map(async (m) => {
+    if (m.own) { out[m.slug] = !!ownModFor(mc); return; }
     try { out[m.slug] = !!(await bestVersion(m.slug, fake, 'mod')); } catch { out[m.slug] = false; }
   }));
   return out;
@@ -367,9 +396,15 @@ async function syncModules(instanceId, onProgress) {
   const wanted = [...new Set(['fabric-api', ...chosen, ...companions])];
   const record = readRecord(inst);
   const report = { installed: [], updated: [], unavailable: [], offline: false };
+  // Solaris's own mod first: it's bundled with the launcher, so it installs even offline.
+  if (wanted.includes('solaris-client')) {
+    const r = installOwnMod(inst);
+    if (!r) report.unavailable.push('solaris-client');
+    else if (r.fresh) report.installed.push('Solaris Client mod');
+  } else disableOwnMod(inst);
   if (!(await reachable())) { report.offline = true; return report; }
   let i = 0;
-  for (const slug of wanted) {
+  for (const slug of wanted.filter((s) => s !== 'solaris-client')) {
     onProgress && onProgress(i++ / wanted.length, slug);
     try {
       const p = await project(slug);

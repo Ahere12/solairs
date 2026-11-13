@@ -1,5 +1,17 @@
 [
   {
+    "product": "launcher", "version": "1.6.0", "date": "2026-11-13",
+    "title": "Our own Solaris Client mod",
+    "groups": [
+      { "area": "Solaris Client", "entries": [
+        { "type": "feature", "text": "The Solaris Client now has its own mod, made by Solaris: press Right Shift in game for the Solaris menu." },
+        { "type": "feature", "text": "Movable HUD: FPS, CPS, keystrokes, coordinates with direction, ping and a clock. Drag them anywhere in “Edit HUD layout”." },
+        { "type": "feature", "text": "Hold C to zoom, and turn on toggle sprint from the Solaris menu. Your settings are saved." },
+        { "type": "improvement", "text": "OneConfig, EvergreenHUD, PolySprint and Zoomify are now optional extras (off by default) — the Solaris mod does those jobs." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.5.0", "date": "2026-11-13",
     "title": "Hosting: every server type, playit.gg, backups and more",
     "groups": [
