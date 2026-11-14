@@ -653,7 +653,9 @@ async function installModpack(m, { versionId }, onStep) {
 /** Modpacks whose loader matches this software + Minecraft version (for the create dialog). */
 async function modpackVersions(projectId, software, mc) {
   const vs = await getJSON(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version?loaders=${encodeURIComponent(JSON.stringify([software]))}&game_versions=${encodeURIComponent(JSON.stringify([mc]))}`);
-  return vs.map((v) => ({ id: v.id, name: v.name, number: v.version_number }));
+  // stable releases first (a server shouldn't get a beta or alpha unless that's all there is)
+  const rank = { release: 0, beta: 1, alpha: 2 };
+  return vs.slice().sort((a, b) => (rank[a.version_type] ?? 3) - (rank[b.version_type] ?? 3)).map((v) => ({ id: v.id, name: v.name, number: v.version_number, type: v.version_type }));
 }
 
 module.exports = {

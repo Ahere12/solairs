@@ -1,20 +1,48 @@
-/* Tiny, safe markdown renderer for Modrinth descriptions (escapes first, then formats). */
+/**
+ * Markdown renderer for Modrinth descriptions and changelogs. Modrinth bodies mix Markdown with HTML (<a>, <img>,
+ * <center>, <details> …): Markdown is turned into HTML first, then everything goes through safeHtml's allow-list,
+ * so only basic formatting, https links and https images survive. Returns an HTML string.
+ */
 function miniMarkdown(md) {
-  let s = esc(md || '');
-  s = s.replace(/&lt;img[^&]*?src=&quot;(https:[^&]+?)&quot;[^&]*?&gt;/gi, '<img src="$1">');
-  s = s.replace(/&lt;\/?[a-z][^&]*?&gt;/gi, '');
-  s = s.replace(/!\[([^\]]*)\]\((https:[^)\s]+)\)/g, '<img src="$2" alt="$1">');
-  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-  s = s.replace(/^### (.*)$/gm, '<h3>$1</h3>').replace(/^## (.*)$/gm, '<h2>$1</h2>').replace(/^# (.*)$/gm, '<h1>$1</h1>');
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
-  s = s.replace(/^\s*[-*] (.*)$/gm, '• $1');
-  return s.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>');
+  const blocks = [];
+  const keep = (html) => `\u0000${blocks.push(html) - 1}\u0000`;
+  let s = String(md || '').replace(/\r\n?/g, '\n');
+  // code first, so nothing inside it is formatted
+  s = s.replace(/```([^`\n]+?)```/g, (_m, code) => keep(`<code>${esc(code)}</code>`)); // ```inline``` on one line
+  s = s.replace(/^[ \t]*```[^\n`]*\n([\s\S]*?)\n?[ \t]*```[ \t]*$/gm, (_m, code) => keep(`<pre><code>${esc(code)}</code></pre>`));
+  s = s.replace(/`([^`\n]+)`/g, (_m, code) => keep(`<code>${esc(code)}</code>`));
+  // images (also inside links: badges), then links
+  const TITLE = String.raw`(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?`; // optional "title", 'title' or (title)
+  s = s.replace(new RegExp(String.raw`!\[([^\]]*)\]\(\s*<?(https?:[^)\s>]+)>?` + TITLE + String.raw`\s*\)`, 'g'), (_m, alt, src) => `<img src="${esc(src)}" alt="${esc(alt)}">`);
+  s = s.replace(new RegExp(String.raw`\[((?:[^\[\]]|<img[^>]*>)+)\]\(\s*<?(https?:[^)\s>]+)>?` + TITLE + String.raw`\s*\)`, 'g'), (_m, text, href) => `<a href="${esc(href)}">${text}</a>`);
+  // a link written around another link ([[url](url)](url)): keep the outer one
+  s = s.replace(new RegExp(String.raw`\[<a href="[^"]*">([^<]*)</a>\]\(\s*<?(https?:[^)\s>]+)>?` + TITLE + String.raw`\s*\)`, 'g'), (_m, text, href) => `<a href="${esc(href)}">${text}</a>`);
+  // headings, rules, quotes, lists
+  s = s.replace(/^(#{1,6})\s+(.*?)\s*#*$/gm, (_m, h, t) => `<h${Math.min(4, h.length)}>${t}</h${Math.min(4, h.length)}>`);
+  s = s.replace(/^\s*([-*_])(\s*\1){2,}\s*$/gm, '<hr>');
+  s = s.replace(/^>\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+  s = s.replace(/(?:^[ \t]*[-*+] .*(?:\n|$))+/gm, (list) => `<ul>${list.trim().split('\n').map((l) => `<li>${l.replace(/^[ \t]*[-*+] /, '')}</li>`).join('')}</ul>`);
+  s = s.replace(/(?:^[ \t]*\d+[.)] .*(?:\n|$))+/gm, (list) => `<ol>${list.trim().split('\n').map((l) => `<li>${l.replace(/^[ \t]*\d+[.)] /, '')}</li>`).join('')}</ol>`);
+  // emphasis
+  s = s.replace(/\*{4,}/g, ''); // "****" (an empty bold) shows nothing on Modrinth either
+  // bold may wrap onto the next line, but not across a blank line
+  s = s.replace(/\*\*((?:(?!\n\n)[^*])+?)\*\*|__((?:(?!\n\n)[^_])+?)__/g, (_m, a, b) => `<b>${a || b}</b>`);
+  s = s.replace(/(^|[\s(])\*([^*\s](?:[^*\n]*[^*\s])?)\*(?=[\s).,!?:;]|$)/g, '$1<i>$2</i>'); // *word*, not 2 * 3 * 4
+  s = s.replace(/~~([^~\n]+)~~/g, '<s>$1</s>');
+  // bare links
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)"']+)/g, (_m, pre, url) => `${pre}<a href="${esc(url)}">${esc(url)}</a>`);
+  // paragraphs and line breaks (not right after block tags)
+  s = s.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>').replace(/(<\/(?:h\d|ul|ol|pre|blockquote)>|<hr>)(<br>)+/g, '$1');
+  s = s.replace(/\u0000(\d+)\u0000/g, (_m, i) => blocks[+i]);
+  const box = document.createElement('div');
+  box.appendChild(safeHtml(s));
+  return box.innerHTML;
 }
 
 /** Allow-list sanitiser for CurseForge's HTML descriptions: only basic formatting, https links and images survive. */
 function safeHtml(html) {
   const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
-  const OK = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'A', 'IMG', 'CODE', 'PRE', 'BLOCKQUOTE', 'SPAN', 'DIV', 'HR', 'TABLE', 'TR', 'TD', 'TH', 'TBODY', 'THEAD']);
+  const OK = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'DEL', 'SUB', 'SUP', 'SMALL', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'A', 'IMG', 'CODE', 'PRE', 'BLOCKQUOTE', 'SPAN', 'DIV', 'CENTER', 'DETAILS', 'SUMMARY', 'HR', 'TABLE', 'TR', 'TD', 'TH', 'TBODY', 'THEAD']);
   const clean = (node) => {
     const frag = document.createDocumentFragment();
     for (const n of [...node.childNodes]) {
@@ -23,7 +51,13 @@ function safeHtml(html) {
       if (!OK.has(n.tagName)) { if (!['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED'].includes(n.tagName)) frag.appendChild(clean(n)); continue; }
       const el = document.createElement(n.tagName);
       if (n.tagName === 'A' && /^https?:\/\//i.test(n.getAttribute('href') || '')) { el.setAttribute('href', n.getAttribute('href')); el.setAttribute('target', '_blank'); }
-      if (n.tagName === 'IMG') { const src = n.getAttribute('src') || ''; if (!/^https:\/\//i.test(src)) continue; el.setAttribute('src', src); el.setAttribute('loading', 'lazy'); }
+      if (n.tagName === 'IMG') {
+        const src = n.getAttribute('src') || ''; if (!/^https:\/\//i.test(src)) continue;
+        el.setAttribute('src', src); el.setAttribute('loading', 'lazy');
+        if (n.getAttribute('alt')) el.setAttribute('alt', n.getAttribute('alt'));
+        for (const a of ['width', 'height']) { const v = n.getAttribute(a); if (/^\d{1,4}%?$/.test(v || '')) el.setAttribute(a, v); } // badge / banner sizes
+      }
+      if (n.tagName === 'CENTER' || (n.tagName === 'DIV' && /center/i.test(n.getAttribute('align') || ''))) el.setAttribute('style', 'text-align:center');
       el.appendChild(clean(n));
       frag.appendChild(el);
     }

@@ -1,6 +1,40 @@
 [
   {
     "product": "launcher",
+    "version": "1.8.1",
+    "date": "2026-11-14",
+    "title": "Browse fixes: modpack pages open properly",
+    "groups": [
+      {
+        "area": "Browse",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "Clicking a modpack (or any project with lots of screenshots) opened its page off to the side or completely off the screen. Every project page now opens in the middle."
+          },
+          {
+            "type": "fix",
+            "text": "Project descriptions no longer show raw web code instead of links: links, badges, images, centred text, lists, code and spoilers now look like they do on Modrinth."
+          },
+          {
+            "type": "fix",
+            "text": "All other dialogs in Solaris are kept on screen too, however wide their content is."
+          }
+        ]
+      },
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "Choosing a modpack for a new server now picks its latest stable version instead of a beta."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.8.0",
     "date": "2026-11-14",
     "title": "A bigger Solaris Client, better Discord, hosting and skin fixes",
