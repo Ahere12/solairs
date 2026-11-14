@@ -1,6 +1,90 @@
 [
   {
     "product": "launcher",
+    "version": "1.8.0",
+    "date": "2026-11-14",
+    "title": "A bigger Solaris Client, better Discord, hosting and skin fixes",
+    "groups": [
+      {
+        "area": "Solaris Client",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "8 new HUD pieces: armor with durability, potion effects with time left, speed, reach, combo counter, day counter, memory and server address. Drag them anywhere in “Edit HUD layout”."
+          },
+          {
+            "type": "feature",
+            "text": "New in the Right Shift menu: toggle sneak, no hurt camera shake, no view bobbing and max brightness — turning one off gives you your own setting back."
+          },
+          {
+            "type": "feature",
+            "text": "Pick the accent and HUD text colour, turn the text shadow on or off, and copy your coordinates in one click."
+          },
+          {
+            "type": "improvement",
+            "text": "The menu is now split into HUD, Features and Style, and fits smaller windows."
+          }
+        ]
+      },
+      {
+        "area": "Discord",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Your Discord status follows what you do: the page you’re on in Solaris, the main menu, your singleplayer world, the server you joined, or hosting a world for friends."
+          },
+          {
+            "type": "feature",
+            "text": "Hosting a server shows it on Discord with the player count (like “2 of 10”) and the address to join."
+          },
+          {
+            "type": "improvement",
+            "text": "Privacy settings and streamer mode apply instantly, and Solaris never sends Discord more updates than it allows."
+          }
+        ]
+      },
+      {
+        "area": "Skins",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "You can now wear Minecraft’s default skins (Steve, Alex and the others) — the Wear button used to stay greyed out."
+          },
+          {
+            "type": "fix",
+            "text": "A skin Mojang accepted no longer shows an error when Mojang is slow to update your profile."
+          },
+          {
+            "type": "fix",
+            "text": "The Skins page follows you when you switch accounts, and says when you’re already wearing the selected skin."
+          }
+        ]
+      },
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "A server left running after Solaris closed or updated no longer blocks the next start with “Address already in use” — Solaris closes the old copy first, or tells you what is using the port."
+          },
+          {
+            "type": "fix",
+            "text": "New servers add you to the whitelist and as an operator, so you can’t be locked out of your own server."
+          },
+          {
+            "type": "feature",
+            "text": "When someone is turned away by the whitelist, Solaris tells you and offers “Add to whitelist”."
+          },
+          {
+            "type": "fix",
+            "text": "The Players tab updates when someone joins or leaves, renamed servers update right away, and crash messages say which server stopped."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.7.0",
     "date": "2026-11-13",
     "title": "Solaris on Linux, faster and steadier",

@@ -6,11 +6,21 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 
+import java.util.ArrayList;
+
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffectUtil;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import app.solaris.client.SolarisClient;
 
@@ -94,7 +104,170 @@ public final class Modules {
 		}
 	};
 
-	public static final List<HudModule> HUD = List.of(FPS, CPS, COORDS, PING, CLOCK, KEYSTROKES);
+	public static final HudModule SPEED = new TextModule("speed", "Speed", false, 1.0f, 0.03f) {
+		@Override
+		String text(boolean preview) {
+			return String.format("%.1f m/s", Tracker.speed);
+		}
+	};
+
+	public static final HudModule REACH = new TextModule("reach", "Reach", false, 1.0f, 0.08f) {
+		@Override
+		String text(boolean preview) {
+			boolean fresh = System.currentTimeMillis() - Tracker.reachAt < 3000;
+			return fresh ? String.format("%.2f blocks", Tracker.reach) : "Reach -";
+		}
+	};
+
+	public static final HudModule COMBO = new TextModule("combo", "Combo", false, 1.0f, 0.13f) {
+		@Override
+		String text(boolean preview) {
+			return Tracker.combo == 0 ? "No combo" : Tracker.combo + " combo";
+		}
+	};
+
+	public static final HudModule DAY = new TextModule("day", "Day counter", false, 1.0f, 0.18f) {
+		@Override
+		String text(boolean preview) {
+			if (mc().level == null) return "Day 1";
+			return "Day " + (mc().level.getOverworldClockTime() / 24000L + 1);
+		}
+	};
+
+	public static final HudModule MEMORY = new TextModule("memory", "Memory", false, 1.0f, 0.23f) {
+		@Override
+		String text(boolean preview) {
+			Runtime r = Runtime.getRuntime();
+			long used = r.totalMemory() - r.freeMemory();
+			return String.format("Mem %d%% %.1f/%.1f GB", (int) (used * 100 / r.maxMemory()), used / 1073741824.0, r.maxMemory() / 1073741824.0);
+		}
+	};
+
+	public static final HudModule SERVER = new TextModule("server", "Server address", false, 1.0f, 0.28f) {
+		@Override
+		String text(boolean preview) {
+			ServerData d = mc().getCurrentServer();
+			if (d != null) return d.ip;
+			return mc().hasSingleplayerServer() ? "Singleplayer" : "Main menu";
+		}
+	};
+
+	/** Armor and held item with durability, top to bottom. */
+	public static final HudModule ARMOR = new HudModule("armor", "Armor status", false, 1.0f, 0.35f) {
+		final EquipmentSlot[] slots = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.MAINHAND};
+
+		private List<ItemStack> items() {
+			List<ItemStack> out = new ArrayList<>();
+			LocalPlayer p = mc().player;
+			if (p != null) for (EquipmentSlot s : slots) { ItemStack st = p.getItemBySlot(s); if (!st.isEmpty()) out.add(st); }
+			return out;
+		}
+
+		@Override
+		public int width(Font font) {
+			return 18 + 4 + font.width("0000");
+		}
+
+		@Override
+		public int height(Font font) {
+			return Math.max(1, items().size()) * 17;
+		}
+
+		@Override
+		public void draw(GuiGraphicsExtractor g, Font font, int x, int y, boolean preview) {
+			List<ItemStack> list = items();
+			if (list.isEmpty()) { if (preview) label(g, font, "No armor", x, y); return; }
+			int i = 0;
+			for (ItemStack st : list) {
+				int yy = y + i * 17;
+				g.item(st, x, yy);
+				String t = st.isDamageableItem() ? String.valueOf(st.getMaxDamage() - st.getDamageValue()) : (st.getCount() > 1 ? String.valueOf(st.getCount()) : "");
+				if (!t.isEmpty()) {
+					int color = SolarisClient.CONFIG.textColor;
+					if (st.isDamageableItem()) {
+						float left = 1f - (float) st.getDamageValue() / Math.max(1, st.getMaxDamage());
+						color = left > 0.5f ? 0xFF55FF55 : left > 0.2f ? 0xFFFFFF55 : 0xFFFF5555;
+					}
+					g.text(font, t, x + 20, yy + 5, color, SolarisClient.CONFIG.textShadow);
+				}
+				i++;
+			}
+		}
+	};
+
+	/** Active potion effects with the time left. */
+	public static final HudModule EFFECTS = new HudModule("effects", "Potion effects", false, 1.0f, 0.70f) {
+		private List<String> lines() {
+			List<String> out = new ArrayList<>();
+			LocalPlayer p = mc().player;
+			if (p == null) return out;
+			for (MobEffectInstance e : p.getActiveEffects()) {
+				String name = e.getEffect().value().getDisplayName().getString();
+				String lvl = e.getAmplifier() > 0 ? " " + roman(e.getAmplifier() + 1) : "";
+				out.add(name + lvl + "  " + MobEffectUtil.formatDuration(e, 1f, 20f).getString());
+			}
+			return out;
+		}
+
+		@Override
+		public int width(Font font) {
+			int w = font.width("Speed II  0:00");
+			for (String l : lines()) w = Math.max(w, font.width(l));
+			return w + 6;
+		}
+
+		@Override
+		public int height(Font font) {
+			return Math.max(1, lines().size()) * (font.lineHeight + 4);
+		}
+
+		@Override
+		public void draw(GuiGraphicsExtractor g, Font font, int x, int y, boolean preview) {
+			List<String> ls = lines();
+			if (ls.isEmpty()) { if (preview) label(g, font, "Speed II  1:30", x, y); return; }
+			for (int i = 0; i < ls.size(); i++) label(g, font, ls.get(i), x, y + i * (font.lineHeight + 4));
+		}
+	};
+
+	public static final List<HudModule> HUD = List.of(FPS, CPS, COORDS, PING, CLOCK, KEYSTROKES, ARMOR, EFFECTS, SPEED, REACH, COMBO, DAY, MEMORY, SERVER);
+
+	static String roman(int n) {
+		String[] r = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+		return n < r.length ? r[n] : String.valueOf(n);
+	}
+
+	/** Per-tick measurements: speed, reach of the last hit, combo. */
+	public static final class Tracker {
+		static double speed;
+		static double reach;
+		static long reachAt;
+		static int combo;
+		private static long lastHit;
+		private static Vec3 last;
+
+		public static void tick(Minecraft mc) {
+			LocalPlayer p = mc.player;
+			if (p == null) { last = null; combo = 0; speed = 0; return; }
+			Vec3 now = p.position();
+			if (last != null) {
+				double dx = now.x - last.x, dz = now.z - last.z;
+				double s = Math.sqrt(dx * dx + dz * dz) * 20; // blocks per tick -> per second
+				speed = speed * 0.6 + s * 0.4;
+			}
+			last = now;
+			// a combo ends when you get hit, or after 2 s without landing one
+			if (p.hurtTime > 0 || System.currentTimeMillis() - lastHit > 2000) combo = 0;
+		}
+
+		/** Called when the local player hits an entity: distance from the eyes to the nearest point of its hitbox. */
+		public static void hit(Vec3 eye, AABB box) {
+			Vec3 nearest = new Vec3(Math.max(box.minX, Math.min(eye.x, box.maxX)), Math.max(box.minY, Math.min(eye.y, box.maxY)), Math.max(box.minZ, Math.min(eye.z, box.maxZ)));
+			reach = eye.distanceTo(nearest);
+			reachAt = System.currentTimeMillis();
+			combo++;
+			lastHit = reachAt;
+		}
+	}
 
 	/** Compass direction for a yaw angle. */
 	static String facing(float yaw) {

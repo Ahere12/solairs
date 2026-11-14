@@ -365,7 +365,8 @@ function installOwnMod(inst) {
   for (const f of fs.readdirSync(mods)) if (/^solaris-client-.*\.jar(\.disabled)?$/.test(f) && f !== own.file) fs.rmSync(path.join(mods, f), { force: true });
   const dest = path.join(mods, own.file);
   if (fs.existsSync(dest + '.disabled')) fs.rmSync(dest + '.disabled', { force: true });
-  const fresh = !fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(own.path).size;
+  // compare the bytes, not just the size: a rebuilt jar of the same version can have the same size
+  const fresh = !fs.existsSync(dest) || !fs.readFileSync(dest).equals(fs.readFileSync(own.path));
   if (fresh) fs.copyFileSync(own.path, dest);
   return { ...own, fresh };
 }

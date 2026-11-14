@@ -3,7 +3,7 @@
 	"id": "solaris",
 	"version": "${version}",
 	"name": "Solaris Client",
-	"description": "The Solaris client: press Right Shift for the Solaris menu. FPS, CPS, keystrokes, coordinates, ping and clock HUD you can move, zoom and toggle sprint.",
+	"description": "The Solaris client: press Right Shift for the Solaris menu. Movable HUD (FPS, CPS, keystrokes, coordinates, armor, potion effects, speed, reach, combo, ping, clock and more), zoom, toggle sprint and sneak, no hurt camera, max brightness.",
 	"authors": ["Solaris"],
 	"contact": {
 		"homepage": "https://github.com/Ahere12/solairs",

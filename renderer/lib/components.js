@@ -1,10 +1,17 @@
 /* Reusable UI: toasts, modals, menus, instance icons, player heads, launch helpers, shared dialogs. */
 
-function toast(text, type = 'ok', ms = 3800) {
+/** Small notice in the corner. `action` ({ label, run }) adds a button, e.g. “Add to whitelist”. */
+function toast(text, type = 'ok', ms = 3800, action = null) {
   if (type === 'ok' && State.settings && State.settings.notifications === false) return;
   const t = document.createElement('div');
   t.className = 'toast ' + type;
   t.textContent = text;
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'btn sm toast-act'; b.textContent = action.label;
+    b.onclick = () => { try { action.run(); } catch {} t.remove(); };
+    t.appendChild(b);
+  }
   $('#toasts').appendChild(t);
   setTimeout(() => { t.style.transition = 'opacity .25s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 260); }, ms);
 }

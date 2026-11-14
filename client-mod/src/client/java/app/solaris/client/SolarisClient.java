@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.minecraft.world.InteractionResult;
 
 import app.solaris.client.hud.HudModule;
 import app.solaris.client.hud.Modules;
@@ -41,9 +43,14 @@ public class SolarisClient implements ClientModInitializer {
 
 		HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(MOD_ID, "hud"), SolarisClient::drawHud);
 		ClientTickEvents.END_CLIENT_TICK.register(SolarisClient::tick);
+		// Reach and combo HUD: the local player hit something.
+		AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
+			if (level.isClientSide() && player == Minecraft.getInstance().player) Modules.Tracker.hit(player.getEyePosition(), entity.getBoundingBox());
+			return InteractionResult.PASS;
+		});
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
 			applyFeatures();
-			if (Boolean.getBoolean("solaris.selftest")) selfTestTicks = 0;
+			if (selftest("title")) selfTestTicks = 0;
 		});
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> endZoom(client));
 		LOG.info("Solaris Client ready — press Right Shift in game");
@@ -64,7 +71,34 @@ public class SolarisClient implements ClientModInitializer {
 	// Self-test (only with -Dsolaris.selftest=true): opens the menu and the HUD editor and reports in the log.
 	private static int selfTestTicks = -1;
 
+	/** -Dsolaris.selftest=true runs both tests; =title or =world runs one. */
+	private static boolean selftest(String which) {
+		String v = System.getProperty("solaris.selftest", "");
+		return v.equals("true") || v.equals(which);
+	}
+
+	private static int worldTestTicks = -1, waitTicks = 0;
+
 	private static void selfTest(Minecraft mc) {
+		// In a world: turn on every HUD piece and feature for a few seconds, then turn the features off again.
+		if (selftest("world") && mc.player == null && ++waitTicks % 100 == 0) LOG.info("SOLARIS_SELFTEST waiting for a world, screen: {}", mc.gui.screen() == null ? "none" : mc.gui.screen().getClass().getName());
+		if (selftest("world") && mc.player != null && worldTestTicks < 200) {
+			worldTestTicks++;
+			if (worldTestTicks == 20) {
+				for (HudModule m : Modules.HUD) CONFIG.enabled.put(m.id, true);
+				for (String f : new String[] {"togglesneak", "nohurtcam", "nobob", "bright"}) CONFIG.enabled.put(f, true);
+				applyFeatures();
+				LOG.info("SOLARIS_SELFTEST world: all {} HUD modules and features on (gamma={}, tilt={}, bob={})", Modules.HUD.size(), mc.options.gamma().get(), mc.options.damageTiltStrength().get(), mc.options.bobView().get());
+			}
+			if (worldTestTicks == 60) mc.gui.setScreen(new SolarisMenuScreen(null));
+			if (worldTestTicks == 100) mc.gui.setScreen(new app.solaris.client.screen.HudEditorScreen(null));
+			if (worldTestTicks == 140) { mc.gui.setScreen(null); copyCoordinates(); LOG.info("SOLARIS_SELFTEST clipboard: {}", mc.keyboardHandler.getClipboard()); }
+			if (worldTestTicks == 180) {
+				for (String f : new String[] {"togglesneak", "nohurtcam", "nobob", "bright"}) CONFIG.enabled.put(f, false);
+				applyFeatures();
+				LOG.info("SOLARIS_SELFTEST world done: restored gamma={}, tilt={}, bob={}", mc.options.gamma().get(), mc.options.damageTiltStrength().get(), mc.options.bobView().get());
+			}
+		}
 		if (selfTestTicks < 0) return;
 		selfTestTicks++;
 		if (selfTestTicks == 40) { mc.gui.setScreen(new SolarisMenuScreen(null)); LOG.info("SOLARIS_SELFTEST menu opened: {}", mc.gui.screen() instanceof SolarisMenuScreen); }
@@ -74,6 +108,7 @@ public class SolarisClient implements ClientModInitializer {
 
 	private static void tick(Minecraft mc) {
 		selfTest(mc);
+		Modules.Tracker.tick(mc);
 		while (menuKey.consumeClick()) {
 			if (mc.gui.screen() == null) mc.gui.setScreen(new SolarisMenuScreen(null));
 		}
@@ -97,10 +132,34 @@ public class SolarisClient implements ClientModInitializer {
 		fovBeforeZoom = null;
 	}
 
-	/** Applies settings that map onto Minecraft options (toggle sprint). */
+	/**
+	 * Applies settings that map onto Minecraft options. Values the player had before turning a feature on are kept in
+	 * the config, so turning it off gives them back.
+	 */
 	public static void applyFeatures() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.options == null) return;
-		mc.options.toggleSprint().set(CONFIG.isOn("togglesprint", false));
+		var o = mc.options;
+		o.toggleSprint().set(CONFIG.isOn("togglesprint", false));
+		o.toggleCrouch().set(CONFIG.isOn("togglesneak", false));
+		// No hurt camera: no screen tilt when you take damage
+		if (CONFIG.isOn("nohurtcam", false)) { if (CONFIG.savedTilt == null) CONFIG.savedTilt = o.damageTiltStrength().get(); o.damageTiltStrength().set(0.0); }
+		else if (CONFIG.savedTilt != null) { o.damageTiltStrength().set(CONFIG.savedTilt); CONFIG.savedTilt = null; }
+		// No view bobbing
+		if (CONFIG.isOn("nobob", false)) { if (CONFIG.savedBob == null) CONFIG.savedBob = o.bobView().get(); o.bobView().set(false); }
+		else if (CONFIG.savedBob != null) { o.bobView().set(CONFIG.savedBob); CONFIG.savedBob = null; }
+		// Max brightness (the brightest setting Minecraft allows)
+		if (CONFIG.isOn("bright", false)) { if (CONFIG.savedGamma == null) CONFIG.savedGamma = o.gamma().get(); o.gamma().set(1.0); }
+		else if (CONFIG.savedGamma != null) { o.gamma().set(CONFIG.savedGamma); CONFIG.savedGamma = null; }
+		CONFIG.save();
+	}
+
+	/** Copies "x y z" to the clipboard and says so in chat. */
+	public static void copyCoordinates() {
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.player == null) return;
+		String c = (int) Math.floor(mc.player.getX()) + " " + (int) Math.floor(mc.player.getY()) + " " + (int) Math.floor(mc.player.getZ());
+		mc.keyboardHandler.setClipboard(c);
+		mc.player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§6[Solaris]§r Copied coordinates: " + c));
 	}
 }

@@ -29,6 +29,9 @@ public final class SolarisConfig {
 	public boolean hudBackground = true;
 	/** Zoom field of view (30 = strongest Minecraft allows). */
 	public int zoomFov = 30;
+	/** The player's own values before a Solaris feature changed them (null = not changed). */
+	public Double savedTilt, savedGamma;
+	public Boolean savedBob;
 
 	public boolean isOn(String id, boolean def) {
 		return enabled.getOrDefault(id, def);

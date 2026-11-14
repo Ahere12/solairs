@@ -71,11 +71,13 @@ module.exports = (getWin) => ({
 
   // ---------- settings ----------
   'settings:get': () => settings.get(),
+  'discord:page': (name) => discord.setPage(String(name || '')),
   'settings:set': (patch) => {
     const s = settings.set(patch);
     if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin, args: ['--hidden'] });
     if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Solaris to apply the GPU acceleration change.' });
     if ('discordRpc' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
+    else if (['discordShowInstance', 'discordShowServer', 'discordShowHead', 'streamerMode'].some((k) => k in patch)) discord.setActivity(); // privacy change: update right away
     return s;
   },
   'settings:reset': () => settings.reset(),
@@ -287,6 +289,7 @@ module.exports = (getWin) => ({
     return f ? skins.addFile(f, variant) : skins.list();
   },
   'skins:addFromUsername': (n) => skins.addFromUsername(n),
+  'skins:addData': (data, name, variant) => skins.addData(data, name, variant),
   'skins:remove': (id) => skins.remove(id),
   'skins:update': (id, patch) => skins.rename(id, patch),
   'skins:wearing': (url) => skins.wearingId(url),

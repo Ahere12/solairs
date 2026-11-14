@@ -307,6 +307,7 @@ async function launchInner(instanceId, opts = {}) {
       logStream.write(line + '\n');
       push('game:log', { runId, instanceId, line });
       hostingFromLog(line, { runId, instanceId, name: inst.name });
+      discord.fromGameLog(runId, line);
     }
   };
   proc.stdout.on('data', onData);
@@ -318,6 +319,7 @@ async function launchInner(instanceId, opts = {}) {
       running.delete(runId); logStream.end();
       push('launch:status', { instanceId, stage: null, error: 'Could not start Java: ' + e.message });
       push('launch:exited', { runId, instanceId, code: -1, killed: true, duration: 0, analysis: null });
+      discord.gameEnded(runId);
       if (!running.size) events.emit('window', 'restore');
     }
   });
@@ -325,7 +327,7 @@ async function launchInner(instanceId, opts = {}) {
   instances.save({ ...instances.get(instanceId), lastPlayed: Date.now() });
   push('launch:started', { runId, instanceId, name: inst.name });
   events.emit('window', s.launchBehavior);
-  discord.playing({ inst, server: opts.server, start: run.start, account: accounts.active(), modded });
+  discord.playing({ runId, inst, server: opts.server, world: opts.world, start: run.start, account: accounts.active(), modded });
 
   proc.on('close', (code, signal) => {
     if (!running.has(runId)) return; // already handled (Java failed to start)
@@ -346,7 +348,8 @@ async function launchInner(instanceId, opts = {}) {
     history.unshift({ runId, instanceId, name: inst.name, start: run.start, end: Date.now(), code, lines: run.lines, logFile, analysis });
     history.splice(20);
     push('launch:exited', { runId, instanceId, code, killed, duration, analysis });
-    if (!running.size) { events.emit('window', 'restore'); settings.get().discordRpc ? discord.idle() : discord.disconnect(); }
+    discord.gameEnded(runId);
+    if (!running.size) { events.emit('window', 'restore'); }
   });
   return { runId };
 }

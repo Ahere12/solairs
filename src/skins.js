@@ -27,6 +27,17 @@ function addBuffer(buf, name, variant = 'classic') {
   return list();
 }
 function addFile(file, variant) { return addBuffer(fs.readFileSync(file), path.basename(file, '.png'), variant); }
+/** Adds a skin given as a data: URL (e.g. one of Minecraft's default skins) — or reuses the same picture if it's already in the wardrobe. Returns its id. */
+function addData(dataUrl, name, variant = 'classic') {
+  const m = String(dataUrl || '').match(/^data:image\/png;base64,(.+)$/);
+  if (!m) throw new Error('That skin image couldn’t be read.');
+  const buf = Buffer.from(m[1], 'base64');
+  for (const s of load()) {
+    try { if (fs.readFileSync(path.join(paths.skins(), s.file)).equals(buf)) { if (s.variant !== variant) rename(s.id, { variant }); return s.id; } } catch {}
+  }
+  addBuffer(buf, String(name || 'Skin').slice(0, 40), variant);
+  return load()[0].id;
+}
 async function texturesFor(uuid) {
   const prof = await getJSON(`https://sessionserver.mojang.com/session/minecraft/profile/${uuid.replace(/-/g, '')}`);
   const tex = JSON.parse(Buffer.from(prof.properties.find((p) => p.name === 'textures').value, 'base64').toString());
@@ -112,9 +123,11 @@ async function apply(id) {
     await new Promise((res) => setTimeout(res, 1200));
     prof = await getJSON('https://api.minecraftservices.com/minecraft/profile', { headers }).catch(() => null);
   }
-  // Same texture as before (re-applying the skin you already wear) also counts as applied.
-  if (beforeUrl && (prof?.skins || []).some((x) => x.state === 'ACTIVE' && x.url === beforeUrl)) { remember(id, beforeUrl); return { ok: true, name: s.name, url: beforeUrl, same: true }; }
-  throw new Error('Mojang didn’t confirm the new skin yet. Press Refresh skin in a minute to check.');
+  // Mojang accepted the upload (HTTP 200). Either it's the same picture as before (same texture URL), or Mojang's
+  // profile is still catching up — both mean the skin is on the account, so don't report an error.
+  const url = (prof?.skins || []).find((x) => x.state === 'ACTIVE')?.url || beforeUrl;
+  if (url) remember(id, url);
+  return { ok: true, name: s.name, url, same: url === beforeUrl, pending: url === beforeUrl };
 }
 
 /** Remembers which wardrobe skin a Microsoft account wears (matched by Mojang texture URL). */
@@ -153,4 +166,4 @@ async function setCape(capeId) {
   return true;
 }
 
-module.exports = { wearingId, offlineSkinFor, list, addFile, addFromUsername, remove, rename, current, apply, capes, setCape };
+module.exports = { wearingId, offlineSkinFor, list, addFile, addData, addFromUsername, remove, rename, current, apply, capes, setCape };

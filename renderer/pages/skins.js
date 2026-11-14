@@ -122,29 +122,37 @@ Pages.skins = {
     $$('[data-dm]', el).forEach((b) => (b.onclick = () => { defModel = b.dataset.dm; $$('[data-dm]', el).forEach((x) => x.classList.toggle('on', x === b)); drawDefaults(); }));
     const stage = () => {
       const s = wardrobe.find((x) => x.id === staged);
-      $('#apply', el).disabled = !s || !acct;
+      // Wardrobe skins and Minecraft's default skins can both be worn.
+      $('#apply', el).disabled = !(s || previewDefault) || !acct || (s && wearing === s.id);
       const cap = (n) => n[0].toUpperCase() + n.slice(1);
-      $('#stage-info', el).textContent = s ? `${s.name} is not on you yet — press “Wear this skin”`
-        : previewDefault ? `Previewing Minecraft's default ${cap(previewDefault.name)} skin`
+      $('#stage-info', el).textContent = s ? (wearing === s.id ? `You’re wearing ${s.name}` : `${s.name} is not on you yet — press “Wear this skin”`)
+        : previewDefault ? `Minecraft's default ${cap(previewDefault.name)} skin — press “Wear this skin” to use it`
         : current?.skin ? 'Showing your current skin' : acct ? `No custom skin — in-game you appear as ${cap(accountDefault()?.name || 'Steve')}` : '';
     };
     $('#apply', el).onclick = () => wear($('#apply', el));
     /** Wear the staged skin. `b` is the button that shows progress (the big one or a tile's Wear). */
     const wear = async (b) => {
-      if (!staged) return;
+      if (!staged && !previewDefault) return;
       b.disabled = true;
       const label = b.innerHTML;
-      b.classList.add('busy'); b.innerHTML = `${icon('refresh', 'spin')}Uploading to Mojang…`;
+      b.classList.add('busy'); b.innerHTML = `${icon('refresh', 'spin')}${acct?.type === 'msa' ? 'Uploading to Mojang…' : 'Saving…'}`;
       try {
+        if (!staged && previewDefault) {
+          // A default skin: put it in the wardrobe first (once), then wear it like any other skin.
+          const name = previewDefault.name[0].toUpperCase() + previewDefault.name.slice(1);
+          staged = await api('skins:addData', McIcons.skins[previewDefault.model][previewDefault.name], name, previewDefault.model === 'slim' ? 'slim' : 'classic');
+          previewDefault = null;
+          wardrobe = await api('skins:list');
+        }
         const r = await api('skins:apply', staged);
         if (r.offline) toast(`${r.name} is now your offline skin — it shows in modded instances (Solaris adds CustomSkinLoader when you press Play).`, 'ok', 7000);
-        else toast(`${r.name} is live on your Microsoft account. Rejoin your world or server to see it in-game.`, 'ok', 7000);
+        else toast(r.pending ? `Mojang accepted ${r.name}. It can take a minute to show everywhere — rejoin your world or server to see it.` : `${r.name} is live on your Microsoft account. Rejoin your world or server to see it in-game.`, 'ok', 7000);
         b.classList.remove('busy'); installFeedback.mark(b); b.innerHTML = `${icon('check')}Wearing it`;
         setTimeout(() => { if (b.isConnected) { b.classList.remove('installed'); b.innerHTML = label; stage(); } }, 2500);
         if (!r.offline) current = await api('skins:current');
         wearing = await api('skins:wearing', current?.url || null).catch(() => null);
         staged = null; drawWardrobe(); stage(); if (!r.offline) refreshSkin(true);
-      } catch (e) { toastErr(e); b.classList.remove('busy'); b.innerHTML = label; b.disabled = false; }
+      } catch (e) { toastErr(e); if (b.isConnected) { b.classList.remove('busy'); b.innerHTML = label; b.disabled = false; } drawWardrobe(); stage(); }
     };
     /** Skin refresh: re-read the account's skin from Minecraft and update the 3D view and the sidebar head. */
     const refreshSkin = async (quiet) => {
@@ -159,6 +167,8 @@ Pages.skins = {
       finally { if (b && b.isConnected) b.disabled = false; }
     };
     if ($('#sk-refresh', el)) $('#sk-refresh', el).onclick = () => refreshSkin(false);
+    // Switched account (e.g. offline ↔ Microsoft): show that account's skin and wardrobe state.
+    ctx.on('accounts', (a) => { if (a && a.active !== acct?.id && el.isConnected) Router.reload(); });
     $('#from-file', el).onclick = async () => {
       const variant = (await confirmDialog('Does this skin use slim (3-pixel) arms?', { title: 'Arm model', ok: 'Slim arms' })) ? 'slim' : 'classic';
       try { wardrobe = await api('skins:addFile', variant); if (wardrobe[0]) { staged = wardrobe[0].id; previewDefault = null; show(wardrobe[0].data, wardrobe[0].variant); } drawWardrobe(); stage(); } catch (e) { toastErr(e); }

@@ -154,6 +154,7 @@ Bus.on('tasks', renderTasks);
 Bus.on('runs', renderNav);
 Bus.on('runs', renderSidePlay);
 Bus.on('route', renderNav);
+Bus.on('route', (r) => { if (r?.name) api('discord:page', r.name).catch(() => {}); }); // Discord shows what you're doing in Solaris
 Bus.on('instances', renderSideInstances);
 Bus.on('instances', renderSidePlay);
 Bus.on('settings', renderSidePlay);

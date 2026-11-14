@@ -68,7 +68,14 @@ function list() {
     .sort((a, b) => (b.created || 0) - (a.created || 0));
 }
 function get(id) { return view(meta(id)); }
-function emit(id) { try { push('hosted:state', view(meta(id))); } catch {} }
+function emit(id) {
+  try {
+    const v = view(meta(id));
+    push('hosted:state', v);
+    // Discord: "Hosting <name> · 2 of 10" while it's online
+    require('./discord').setHosted(id, v.state === 'online' ? { name: v.name, software: v.softwareName, mc: v.mc, players: v.players.length, max: v.maxPlayers, address: v.address } : null);
+  } catch {}
+}
 
 // ---------- server.properties ----------
 function readProps(id) {
@@ -235,12 +242,28 @@ async function create(opts, resolveJava, onStep) {
       }
     }
     if (modpack) { onStep && onStep('Installing the modpack'); await installModpack(m, modpack, onStep); }
+    // The player who made the server can always join it and run commands: whitelist + operator.
+    addOwner(m);
   } catch (e) {
     writeJSON(indexFile(), index().filter((x) => x.id !== id));
     if (!chosenDir) try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
     throw e;
   }
   return save(m);
+}
+function addOwner(m) {
+  try {
+    const a = require('./accounts').active();
+    if (!a || a.type !== 'msa' || !a.uuid) return; // offline names can't join online-mode servers anyway
+    const uuid = String(a.uuid).replace(/^(.{8})-?(.{4})-?(.{4})-?(.{4})-?(.{12})$/, '$1-$2-$3-$4-$5');
+    const add = (file, entry) => {
+      const f = path.join(m.dir, file);
+      const l = readJSON(f, []).filter((p) => p.uuid !== uuid);
+      l.push(entry); writeJSON(f, l);
+    };
+    add('whitelist.json', { uuid, name: a.name });
+    add('ops.json', { uuid, name: a.name, level: 4, bypassesPlayerLimit: true });
+  } catch {}
 }
 const clampMem = (v) => Math.max(1024, Math.min(65536, Number(v) || 3072));
 const tunnelAllowed = (software, t) => (t === 'e4mc' && !E4MC_OK.includes(software) ? 'playit' : ['e4mc', 'playit', 'none'].includes(t) ? t : 'none');
@@ -266,6 +289,19 @@ async function start(id, resolveJava) {
   catch (e) { running.delete(id); emit(id); throw e; }
   // Stopped (or Solaris quitting) while Java was still being prepared: don't start it after all.
   if (r.cancelled) { running.delete(id); emit(id); return get(id); }
+  // The port must be free. Usually it isn't because an earlier copy of this same server kept running after
+  // Solaris closed (or updated) — close that one safely, otherwise explain what's wrong instead of crashing.
+  try {
+    if (!(await portFree(m.port))) {
+      const old = readPid(m.dir);
+      if (old && (await isOurServer(old, m.dir))) {
+        log(id, `[Solaris] An earlier copy of this server is still running (process ${old}) — closing it first.`);
+        try { process.kill(old); } catch {}
+        for (let i = 0; i < 40 && !(await portFree(m.port)); i++) await new Promise((res) => setTimeout(res, 500));
+      }
+      if (!(await portFree(m.port))) throw new Error(`Port ${m.port} is already in use by another program (maybe another Minecraft server). Close it, or pick another port in this server’s Settings.`);
+    }
+  } catch (e) { running.delete(id); emit(id); throw e; }
   writeProps(id, { 'server-port': m.port });
   const st = m.start || { jar: 'server.jar' };
   const args = [`-Xmx${m.memory}M`, `-Xms${Math.min(1024, m.memory)}M`, '-XX:+UseG1GC', ...(st.argsFile ? ['@' + st.argsFile] : ['-jar', st.jar]), 'nogui'];
@@ -273,6 +309,7 @@ async function start(id, resolveJava) {
   if (m.tunnel === 'playit') require('./playit').serverStarted(m.port, m.name).catch((e) => log(id, '[Solaris] playit.gg: ' + e.message));
   const proc = spawn(java.replace(/javaw\.exe$/i, 'java.exe'), args, { cwd: m.dir, windowsHide: true });
   r.proc = proc;
+  if (proc.pid) writePid(m.dir, proc.pid);
   proc.stdin.on('error', () => {}); // writing a command to a server that just exited (EPIPE) must not crash Solaris
   let buf = '';
   const onData = (d) => { buf += d; const parts = buf.split(/\r?\n/); buf = parts.pop(); parts.forEach((l) => onLine(id, l)); };
@@ -280,6 +317,7 @@ async function start(id, resolveJava) {
   proc.on('error', (e) => { log(id, '[Solaris] Could not start Java: ' + e.message); running.delete(id); emit(id); });
   proc.on('close', (code) => {
     if (buf) { onLine(id, buf); buf = ''; }
+    writePid(m.dir, null);
     const restart = r.restart;
     log(id, `[Solaris] Server stopped${code && !r.stopping ? ` (exit code ${code})` : ''} after ${fmtUptime(Date.now() - r.started)}.`);
     running.delete(id); emit(id);
@@ -289,6 +327,30 @@ async function start(id, resolveJava) {
   });
   return get(id);
 }
+// ---------- port / leftover server process ----------
+function portFree(port) {
+  return new Promise((resolve) => {
+    const s = require('net').createServer();
+    s.once('error', () => resolve(false));
+    s.once('listening', () => s.close(() => resolve(true)));
+    s.listen(port, '0.0.0.0');
+  });
+}
+const pidFile = (dir) => path.join(dir, '.solaris-pid');
+function readPid(dir) { try { const n = Number(fs.readFileSync(pidFile(dir), 'utf8').trim()); return n > 0 ? n : null; } catch { return null; } }
+function writePid(dir, pid) { try { if (pid) fs.writeFileSync(pidFile(dir), String(pid)); else fs.rmSync(pidFile(dir), { force: true }); } catch {} }
+/** Is process `pid` still this server's Java (and not some other program that got the same process number)? */
+function isOurServer(pid, dir) {
+  try { process.kill(pid, 0); } catch { return Promise.resolve(false); }
+  if (process.platform === 'linux') {
+    try { return Promise.resolve(path.resolve(fs.readlinkSync(`/proc/${pid}/cwd`)) === path.resolve(dir) && /java/.test(fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8'))); } catch { return Promise.resolve(false); }
+  }
+  if (process.platform === 'win32') {
+    return new Promise((resolve) => execFile('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 8000 }, (err, out) => resolve(!err && /^"javaw?\.exe"/i.test(String(out).trim()))));
+  }
+  return new Promise((resolve) => execFile('ps', ['-o', 'comm=', '-p', String(pid)], { timeout: 8000 }, (err, out) => resolve(!err && /java/.test(String(out)))));
+}
+
 const fmtUptime = (ms) => { const s = Math.floor(ms / 1000); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
 function log(id, line) {
@@ -308,6 +370,8 @@ function onLine(id, line) {
   }
   const j = line.match(/\]: ([A-Za-z0-9_]{2,16}) joined the game/); if (j) { r.players.add(j[1]); emit(id); }
   const lft = line.match(/\]: ([A-Za-z0-9_]{2,16}) left the game/); if (lft) { r.players.delete(lft[1]); emit(id); }
+  const nwl = line.match(/Disconnecting ([A-Za-z0-9_]{2,16}) .*not white-?listed/i);
+  if (nwl) push('hosted:notWhitelisted', { id, name: nwl[1] });
   if (/You need to agree to the EULA/i.test(line)) push('toast', { type: 'error', text: 'The server needs the Minecraft EULA accepted.' });
   if (/FAILED TO BIND TO PORT/i.test(line)) push('toast', { type: 'error', text: 'Another program is using this server’s port. Close it, or change the port in Settings.' });
 }
@@ -407,6 +471,7 @@ function setSettings(id, patch) {
   if (patch.memory) m.memory = clampMem(patch.memory);
   if (patch.name) m.name = String(patch.name).slice(0, 40);
   save(m);
+  emit(id); // the page header and cards show the new name right away
   return getSettings(id);
 }
 async function remove(id) {

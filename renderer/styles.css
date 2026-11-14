@@ -543,6 +543,7 @@ input[type='checkbox'] { accent-color: var(--accent); width: 16px; height: 16px;
 .toast.error { border-left-color: var(--danger); }
 .toast.warn { border-left-color: var(--warn); }
 .toast.info { border-left-color: var(--info); }
+.toast .toast-act { margin-left: 10px; vertical-align: middle; }
 @keyframes toastIn { from { transform: translateX(30px); opacity: 0; } }
 .ctx-menu { position: fixed; z-index: 400; background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 12px; box-shadow: var(--shadow); padding: 5px; min-width: 190px; animation: fade 0.08s; }
 .ctx-menu button { display: flex; width: 100%; gap: 10px; align-items: center; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left; }

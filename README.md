@@ -19,7 +19,7 @@ To build a Windows installer, run `npm run dist`. The installer is written to `d
 | **Instances** | Fabric, Quilt, Forge, NeoForge and Legacy Fabric. Loaders only appear on versions they support. Custom icons, pin to top, duplicate with a choice of what to copy, share as `.solpack`, play-time tracking, per-instance Java, memory, JVM arguments and resolution |
 | **Imports** | `.mrpack` modpacks, `.solpack` files, the official launcher, and MultiMC/Prism. You can drag and drop files |
 | **Content** | A Modrinth browser for mods, modpacks, resource packs, shaders and datapacks, with a version picker, automatic dependencies and category filters. Select many items with Ctrl/Shift and enable, disable or delete them together. Hash-based update checks, duplicate-mod detection and a heuristic malware scan |
-| **Solaris Client** | A one-click Fabric modpack (Sodium, Lithium, FerriteCore, Zoomify, AppleSkin and more) that updates itself on every launch. You can turn each module on or off |
+| **Solaris Client** | Our own in-game client mod (Right Shift menu, 14 movable HUD pieces, zoom, toggle sprint/sneak and more) plus a one-click Fabric modpack (Sodium, Lithium, FerriteCore, Zoomify, AppleSkin and more) that updates itself on every launch. You can turn each module on or off |
 | **Servers** | Live ping, player counts, MOTD and favicons. Region and tag filters, favourites, copy IP, one-click join, and a player-count history chart |
 | **Skins** | A 3D preview (skinview3d), a wardrobe, adding a skin from a file or a username, a staged Apply step, and cape switching (Microsoft accounts) |
 | **Troubleshooting** | A live console with filters, a plain-language crash assistant with hex exit codes, log sharing to mclo.gs, and a hosts-file check |

@@ -211,8 +211,8 @@ Pages.host = {
       $('#hs-actions', el).innerHTML = s.state === 'offline' ? `<button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
         : `<button class="btn lg" id="a-join" ${s.state !== 'online' ? 'disabled' : ''}>${icon('sun')}Join</button><button class="btn lg" id="a-restart" ${s.state !== 'online' ? 'disabled' : ''}>${icon('refresh')}Restart</button><button class="btn lg danger" id="a-stop" ${/stopping|restarting/.test(s.state) ? 'disabled' : ''}>${icon('power')}Stop</button>`;
       if ($('#a-start', el)) $('#a-start', el).onclick = (e) => this.start(id, e.currentTarget);
-      if ($('#a-stop', el)) $('#a-stop', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:stop', id); };
-      if ($('#a-restart', el)) $('#a-restart', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:restart', id); };
+      if ($('#a-stop', el)) $('#a-stop', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:stop', id).catch(toastErr); };
+      if ($('#a-restart', el)) $('#a-restart', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:restart', id).catch(toastErr); };
       if ($('#a-join', el)) $('#a-join', el).onclick = () => Pages.servers.join(`localhost:${s.port}`);
       const ts = s.tunnelStatus || {}, share = $('#hs-share', el);
       share.className = `card hs-share ${s.address ? 'live' : ''}`;
@@ -237,7 +237,8 @@ Pages.host = {
     };
     $$('[data-tab]', el).forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
     showTab(tab);
-    ctx.on('hosted', (st) => { if (st && st.id === id) { const was = s.state; s = st; drawHead(); if (was !== s.state && ['players'].includes(tab)) showTab(tab); } });
+    // Players tab follows joins/leaves too, not only start/stop.
+    ctx.on('hosted', (st) => { if (st && st.id === id) { const was = s.state, wasPl = s.players.join(','); s = st; drawHead(); if (tab === 'players' && (was !== s.state || wasPl !== s.players.join(','))) showTab(tab); } });
     ctx.on('hosted-stats', (st) => { if (st.id === id) { this.stats.set(id, st); drawStats(st); } });
     ctx.on('playit', async () => { try { s = await api('hosted:get', id); drawHead(); } catch {} });
   },
@@ -396,7 +397,18 @@ Pages.host = {
 window.solaris.on('hosted:state', (s) => Bus.emit('hosted', s));
 window.solaris.on('hosted:stats', (s) => { Pages.host.stats.set(s.id, s); Bus.emit('hosted-stats', s); });
 Bus.on('hosted-lines', (p) => { const l = Pages.host.logs.get(p.id) || []; l.push(...p.lines); if (l.length > 4000) l.splice(0, l.length - 4000); Pages.host.logs.set(p.id, l); Bus.emit('hosted-log', p); });
-window.solaris.on('hosted:stopped', ({ crashed }) => { if (crashed) toast('A server stopped unexpectedly — check its console.', 'error', 7000); });
+window.solaris.on('hosted:stopped', async ({ id, crashed }) => {
+  if (!crashed) return;
+  const s = await api('hosted:get', id).catch(() => null);
+  toast(`${s?.name || 'A server'} stopped unexpectedly — check its console.`, 'error', 9000, { label: 'Open console', run: () => Router.go('host', { id }) });
+});
+// Someone was turned away by the whitelist (often the owner after a modpack turned it on): offer the fix right there.
+window.solaris.on('hosted:notWhitelisted', ({ id, name }) => {
+  toast(`${name} couldn’t join — they’re not on this server’s whitelist.`, 'warn', 12000, {
+    label: 'Add to whitelist',
+    run: async () => { try { await api('hosted:addPerson', id, 'whitelist', name); toast(`${name} added — they can join now`); } catch (e) { toastErr(e); } },
+  });
+});
 window.solaris.on('playit:state', (s) => { Pages.host.playit = s; Bus.emit('playit', s); });
 window.solaris.on('hosted:playit-manual', ({ port, reason }) => {
   const m = modal({ title: 'Add a playit.gg tunnel', body: `<p class="muted">Solaris couldn’t create the tunnel automatically (${esc(reason)}).</p><p>On playit.gg, add a tunnel: type <b>Minecraft Java</b>, local address <b class="mono">127.0.0.1</b>, local port <b class="mono">${port}</b>. Solaris picks it up within a few seconds.</p>`, footer: `<button class="btn ghost" data-x>Later</button><button class="btn primary" data-go>${icon('external')}Open playit.gg</button>` });
