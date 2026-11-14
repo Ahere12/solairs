@@ -1,6 +1,39 @@
 [
   {
     "product": "launcher",
+    "version": "1.9.1",
+    "date": "2026-11-14",
+    "title": "Hosting fixes: player count, whitelist, duplicate mods",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "The player count stayed at 0 when people joined servers on Minecraft 26.x. Joins and leaves are now counted correctly (also for players who time out)."
+          },
+          {
+            "type": "fix",
+            "text": "Whitelisting players on servers that allow offline accounts didn’t work — they were still refused. Solaris now uses the right player ID for the server’s mode, and the running server picks it up right away."
+          },
+          {
+            "type": "fix",
+            "text": "Switching “Require Microsoft accounts” on or off keeps your whitelist and operators working."
+          },
+          {
+            "type": "fix",
+            "text": "Servers created with a modpack could get Fabric API and Lithium twice. The modpack’s own copies are used now, and duplicates already there are turned off automatically when the server starts."
+          },
+          {
+            "type": "improvement",
+            "text": "Join from the server page only lists instances with the same Minecraft version, and says when you need to make one."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.9.0",
     "date": "2026-11-14",
     "title": "Playit.gg hosting made automatic",

@@ -248,13 +248,14 @@ async function create(opts, resolveJava, onStep) {
     fs.writeFileSync(path.join(dir, 'eula.txt'), `# Accepted in Solaris on ${new Date().toISOString()} (https://aka.ms/MinecraftEULA)\neula=true\n`);
     writeProps(id, { motd: `${m.name} \\u00a77\\u2014 hosted with Solaris`, 'server-port': p, 'max-players': m.maxPlayers, 'online-mode': true, 'spawn-protection': 0, difficulty: 'normal', 'enable-command-block': false });
     if (m.tunnel === 'e4mc') { onStep && onStep('Adding e4mc for the public address'); if (!(await addE4mc(m))) m.tunnel = 'none'; }
+    // modpack first: Solaris's own extras are only added when the pack doesn't already bring them
+    if (modpack) { onStep && onStep('Installing the modpack'); await installModpack(m, modpack, onStep); }
     if (SOFTWARE[software].kind === 'mods') {
       for (const slug of software === 'fabric' ? ['fabric-api', 'lithium', 'ferrite-core'] : ['ferrite-core']) {
         onStep && onStep(`Adding ${slug}`);
         await installContent(m, slug, null, true).catch(() => {});
       }
     }
-    if (modpack) { onStep && onStep('Installing the modpack'); await installModpack(m, modpack, onStep); }
     // The player who made the server can always join it and run commands: whitelist + operator.
     addOwner(m);
   } catch (e) {
@@ -286,9 +287,13 @@ async function create(opts, resolveJava, onStep) {
 }
 function addOwner(m) {
   try {
-    const a = require('./accounts').active();
-    if (!a || a.type !== 'msa' || !a.uuid) return; // offline names can't join online-mode servers anyway
-    const uuid = String(a.uuid).replace(/^(.{8})-?(.{4})-?(.{4})-?(.{4})-?(.{12})$/, '$1-$2-$3-$4-$5');
+    const accounts = require('./accounts');
+    const a = accounts.active();
+    if (!a || !a.name) return;
+    const offlineServer = readProps(m.id)['online-mode'] === 'false';
+    if (a.type !== 'msa' && !offlineServer) return; // offline accounts can't join a server that requires Microsoft accounts
+    // offline-mode servers know every player by the offline UUID of their name
+    const uuid = offlineServer ? accounts.offlineUuid(a.name) : String(a.uuid).replace(/^(.{8})-?(.{4})-?(.{4})-?(.{4})-?(.{12})$/, '$1-$2-$3-$4-$5');
     const add = (file, entry) => {
       const f = path.join(m.dir, file);
       const l = readJSON(f, []).filter((p) => p.uuid !== uuid);
@@ -336,6 +341,7 @@ async function start(id, resolveJava) {
     }
   } catch (e) { running.delete(id); emit(id); throw e; }
   writeProps(id, { 'server-port': m.port });
+  try { fixDuplicateMods(id); } catch {}
   const st = m.start || { jar: 'server.jar' };
   const args = [`-Xmx${m.memory}M`, `-Xms${Math.min(1024, m.memory)}M`, '-XX:+UseG1GC', ...(st.argsFile ? ['@' + st.argsFile] : ['-jar', st.jar]), 'nogui'];
   log(id, `[Solaris] Starting ${m.name} — ${SOFTWARE[m.software].name} ${m.mc}, ${m.memory} MB, port ${m.port}`);
@@ -458,8 +464,13 @@ function onLine(id, line) {
     const m = meta(id);
     if (Notification.isSupported()) { const n = new Notification({ title: `${m.name} is online`, body: `Friends join at ${r.address} — click to copy` }); n.on('click', () => clipboard.writeText(r.address)); n.show(); }
   }
-  const j = line.match(/\]: ([A-Za-z0-9_]{2,16}) joined the game/); if (j) { r.players.add(j[1]); emit(id); }
-  const lft = line.match(/\]: ([A-Za-z0-9_]{2,16}) left the game/); if (lft) { r.players.delete(lft[1]); emit(id); }
+  // Players: Minecraft 26.x writes "System chat: <name> joined the game", older versions and Paper "<name> joined
+  // the game". "<name>[/ip] logged in" and "<name> lost connection" cover the rest (and players that time out).
+  const PLAYER = '([A-Za-z0-9_]{1,16})';
+  const j = line.match(new RegExp(`\\]: (?:System chat: |\\[Server\\] )?${PLAYER} joined the game`)) || line.match(new RegExp(`\\]: ${PLAYER}\\[/[^\\]]*\\] logged in with entity id`));
+  if (j && !r.players.has(j[1])) { r.players.add(j[1]); emit(id); }
+  const lft = line.match(new RegExp(`\\]: (?:System chat: |\\[Server\\] )?${PLAYER} left the game`)) || line.match(new RegExp(`\\]: ${PLAYER} lost connection: `));
+  if (lft && r.players.has(lft[1])) { r.players.delete(lft[1]); emit(id); }
   const nwl = line.match(/Disconnecting ([A-Za-z0-9_]{2,16}) .*not white-?listed/i);
   if (nwl) push('hosted:notWhitelisted', { id, name: nwl[1] });
   if (/You need to agree to the EULA/i.test(line)) push('toast', { type: 'error', text: 'The server needs the Minecraft EULA accepted.' });
@@ -556,7 +567,9 @@ function setSettings(id, patch) {
     for (const [k, v] of Object.entries(patch.props)) { if (!/^[a-z0-9.-]+$/i.test(k)) continue; props[k] = String(v).replace(/[\r\n]/g, ' ').slice(0, 300); }
     if (props['server-port']) { const p = Number(props['server-port']); if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.'); if (list().some((s) => s.id !== id && s.port === p)) throw new Error(`Another Solaris server uses port ${p}.`); if (p !== m.port) delete m.playitAddress; m.port = p; }
     if (props['max-players']) m.maxPlayers = Number(props['max-players']) || m.maxPlayers;
+    const wasOnline = readProps(id)['online-mode'] !== 'false';
     writeProps(id, props);
+    if ('online-mode' in props && wasOnline !== (props['online-mode'] !== 'false')) convertPeople(id, props['online-mode'] !== 'false').catch(() => {});
   }
   if (patch.memory) m.memory = clampMem(patch.memory);
   if (patch.name) m.name = String(patch.name).slice(0, 40);
@@ -598,22 +611,62 @@ async function deleteWorld(id, name) {
 // ---------- whitelist / operators ----------
 const listFile = (id, kind) => path.join(dirOf(id), kind === 'ops' ? 'ops.json' : 'whitelist.json');
 function people(id, kind) { return readJSON(listFile(id, kind), []); }
-async function addPerson(id, kind, name) {
-  const prof = await profileByName(String(name || '').trim());
-  if (!prof) throw new Error(`No Minecraft player called “${name}”.`);
-  const uuid = prof.id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-  if (running.has(id)) command(id, `${kind === 'ops' ? 'op' : 'whitelist add'} ${prof.name}`); // the server updates its own file
-  else {
-    const l = people(id, kind).filter((p) => p.uuid !== uuid);
-    l.push(kind === 'ops' ? { uuid, name: prof.name, level: 4, bypassesPlayerLimit: false } : { uuid, name: prof.name });
-    writeJSON(listFile(id, kind), l);
+/**
+ * The identity Minecraft checks for a player on this server. With "Require Microsoft accounts" on, that's the
+ * player's Mojang UUID. With it off (online-mode=false, offline/cracked accounts can join), the server uses an
+ * offline UUID made from the exact name the player types — a Mojang lookup would give the wrong one, and
+ * whitelisted players would still be refused.
+ */
+async function playerId(id, name) {
+  const n = String(name || '').trim();
+  if (!/^[A-Za-z0-9_]{1,16}$/.test(n)) throw new Error('Minecraft names are 1–16 letters, numbers or _.');
+  if (readProps(id)['online-mode'] === 'false') {
+    // keep the spelling the player actually used on this server, if they tried to join already
+    const seen = [...(running.get(id)?.lines || [])].reverse().join('\n').match(new RegExp(`(?:Disconnecting|UUID of player) (${n})\\b`, 'i'));
+    const exact = seen ? seen[1] : n;
+    return { uuid: require('./accounts').offlineUuid(exact), name: exact, offline: true };
   }
-  return kind === 'ops' || !running.has(id) ? people(id, kind) : [...people(id, kind).filter((p) => p.uuid !== uuid), { uuid, name: prof.name }];
+  const prof = await profileByName(n);
+  if (!prof) throw new Error(`No Minecraft account is called “${n}”. (Turn off “Require Microsoft accounts” in Settings to let offline accounts join.)`);
+  return { uuid: prof.id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5'), name: prof.name, offline: false };
+}
+async function addPerson(id, kind, name) {
+  const p = await playerId(id, name);
+  const r = running.get(id);
+  // Solaris writes the list itself (with the right UUID for this server's mode), then a running server reloads it.
+  const l = people(id, kind).filter((x) => x.uuid !== p.uuid && x.name.toLowerCase() !== p.name.toLowerCase());
+  l.push(kind === 'ops' ? { uuid: p.uuid, name: p.name, level: 4, bypassesPlayerLimit: false } : { uuid: p.uuid, name: p.name });
+  writeJSON(listFile(id, kind), l);
+  if (r?.proc) {
+    if (kind === 'ops') {
+      // there's no "op reload": a player who is online gets op right away, everyone else from the next start
+      if ([...r.players].some((x) => x.toLowerCase() === p.name.toLowerCase())) command(id, `op ${p.name}`);
+      else log(id, `[Solaris] ${p.name} becomes an operator the next time the server starts (or use “op ${p.name}” once they are online).`);
+    } else command(id, 'whitelist reload');
+  }
+  return people(id, kind);
+}
+/** "Require Microsoft accounts" was switched: give whitelisted players and operators the IDs of the new mode. */
+async function convertPeople(id, online) {
+  for (const kind of ['whitelist', 'ops']) {
+    const out = [];
+    for (const p of people(id, kind)) {
+      let uuid = p.uuid;
+      if (!online) uuid = require('./accounts').offlineUuid(p.name);
+      else { try { const prof = await profileByName(p.name); if (prof) uuid = prof.id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5'); } catch {} }
+      out.push({ ...p, uuid });
+    }
+    writeJSON(listFile(id, kind), out);
+  }
+  if (running.get(id)?.proc) command(id, 'whitelist reload');
 }
 function removePerson(id, kind, name) {
-  if (running.has(id)) command(id, `${kind === 'ops' ? 'deop' : 'whitelist remove'} ${name}`);
-  else writeJSON(listFile(id, kind), people(id, kind).filter((p) => p.name.toLowerCase() !== String(name).toLowerCase()));
-  return people(id, kind).filter((p) => p.name.toLowerCase() !== String(name).toLowerCase());
+  const lower = String(name).toLowerCase();
+  const r = running.get(id);
+  if (r?.proc && kind === 'ops') command(id, `deop ${name}`);
+  writeJSON(listFile(id, kind), people(id, kind).filter((p) => p.name.toLowerCase() !== lower));
+  if (r?.proc && kind !== 'ops') command(id, 'whitelist reload');
+  return people(id, kind);
 }
 
 // ---------- backups ----------
@@ -697,11 +750,55 @@ async function installContent(mOrId, projectId, versionId = null, quiet = false,
   const rec = readJSON(recordFile(m), {});
   if (rec[v.project_id]?.file && rec[v.project_id].file !== f.filename) fs.rmSync(path.join(dir, rec[v.project_id].file), { force: true });
   await download(f.url, path.join(dir, f.filename), { sha1: f.hashes.sha1 });
+  // The same mod under another file name (e.g. it came with the modpack): never keep two copies.
+  // Extras Solaris adds by itself (quiet) give way to the copy that's already there; a mod the player picks
+  // replaces the older copy.
+  const newFile = path.join(dir, f.filename);
+  const dupes = sameModFiles(dir, newFile);
+  if (dupes.length && quiet) { fs.rmSync(newFile, { force: true }); return []; }
+  for (const d of dupes) fs.rmSync(path.join(dir, d), { force: true });
   rec[v.project_id] = { file: f.filename, version: v.version_number, title: proj.title };
   writeJSON(recordFile(m), rec);
   const out = [proj.title];
   for (const d of v.dependencies || []) if (d.dependency_type === 'required' && d.project_id) out.push(...(await installContent(m, d.project_id, null, true, seen).catch(() => [])));
   return out;
+}
+/** Other enabled jars in `dir` that are the same mod (same mod id) as `file`. */
+function sameModFiles(dir, file) {
+  const { readModMeta } = require('./instances');
+  const id = readModMeta(file).modId;
+  if (!id) return [];
+  let files = []; try { files = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)); } catch {}
+  return files.filter((f) => path.join(dir, f) !== file && readModMeta(path.join(dir, f)).modId === id);
+}
+/**
+ * Before a start: if a mod is in the mods folder twice (different versions), keep the newest and turn the others
+ * off (renamed to .disabled, not deleted) — two copies make Fabric/Forge refuse to start or load the wrong one.
+ */
+function fixDuplicateMods(id) {
+  const m = meta(id);
+  if (SOFTWARE[m.software]?.kind !== 'mods') return;
+  const dir = contentDir(m);
+  const { readModMeta } = require('./instances');
+  let files = []; try { files = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)); } catch { return; }
+  const byId = new Map();
+  for (const f of files) {
+    const meta_ = readModMeta(path.join(dir, f));
+    if (!meta_.modId) continue;
+    (byId.get(meta_.modId) || byId.set(meta_.modId, []).get(meta_.modId)).push({ f, v: String(meta_.version || ''), t: fs.statSync(path.join(dir, f)).mtimeMs });
+  }
+  const cmp = (a, b) => {
+    const pa = a.v.split(/[.+-]/).map((x) => parseInt(x, 10)), pb = b.v.split(/[.+-]/).map((x) => parseInt(x, 10));
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const x = pa[i] || 0, y = pb[i] || 0; if (!Number.isNaN(x) && !Number.isNaN(y) && x !== y) return y - x; }
+    return b.t - a.t;
+  };
+  for (const [modId, list] of byId) {
+    if (list.length < 2) continue;
+    list.sort(cmp);
+    for (const old of list.slice(1)) {
+      try { fs.renameSync(path.join(dir, old.f), path.join(dir, old.f + '.disabled')); log(id, `[Solaris] ${modId} was installed twice — using ${list[0].f}, turned off ${old.f}.`); } catch {}
+    }
+  }
 }
 async function removeContent(id, file) {
   const m = meta(id);

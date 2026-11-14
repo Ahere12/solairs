@@ -255,7 +255,7 @@ Pages.host = {
       if ($('#a-start', el)) $('#a-start', el).onclick = (e) => this.start(id, e.currentTarget);
       if ($('#a-stop', el)) $('#a-stop', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:stop', id).catch(toastErr); };
       if ($('#a-restart', el)) $('#a-restart', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:restart', id).catch(toastErr); };
-      if ($('#a-join', el)) $('#a-join', el).onclick = () => Pages.servers.join(`localhost:${s.port}`);
+      if ($('#a-join', el)) $('#a-join', el).onclick = () => Pages.servers.join(`localhost:${s.port}`, { mc: s.mc, modded: s.contentKind === 'mods' ? s.softwareName : '' });
       const ts = s.tunnelStatus || {}, share = $('#hs-share', el);
       const pl = s.tunnel === 'playit';
       const addr = s.address || s.knownAddress; // live address, or the saved playit.gg one while not public

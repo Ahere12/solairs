@@ -1,7 +1,12 @@
 Pages.servers = {
-  async join(address) {
+  /** Join a server. `opts.mc` (your own hosted servers) lists only instances of that Minecraft version. */
+  async join(address, opts = {}) {
     const pick = State.instances.find((i) => i.id === State.settings.selectedInstance);
-    const inst = await chooseInstance({ title: `Join ${address} with…`, note: pick ? '' : 'Pick the instance to launch.' });
+    const same = opts.mc ? State.instances.filter((i) => i.versionId === opts.mc) : [];
+    const note = opts.mc
+      ? (same.length ? `This server runs Minecraft ${opts.mc}${opts.modded ? ` (${opts.modded}) — use an instance with the same mods` : ''}.` : `This server runs Minecraft ${opts.mc}, and none of your instances use that version yet. Create one with “New instance”.`)
+      : (pick ? '' : 'Pick the instance to launch.');
+    const inst = await chooseInstance({ title: `Join ${address} with…`, note, filter: opts.mc && same.length ? (i) => i.versionId === opts.mc : () => true });
     if (inst) play(inst.id, { server: address });
   },
   async render(el, params, ctx) {
