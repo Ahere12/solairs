@@ -187,3 +187,6 @@ app.on('before-quit', (e) => {
   }
 });
 app.on('window-all-closed', () => app.quit());
+// The playit.gg agent is Solaris's child: never leave it running in the background (e.g. Solaris closed during
+// server setup). Its tunnels and the link to playit.gg are kept for next time.
+app.on('will-quit', () => { try { require('./src/playit').stopAgent(); } catch {} });

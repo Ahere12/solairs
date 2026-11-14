@@ -47,21 +47,28 @@ function meta(id) {
 function save(m) { const { dir, ...rest } = m; writeJSON(path.join(dir, 'solaris-server.json'), rest); return view(m); }
 function view(m) {
   const r = running.get(m.id);
-  const pl = require('./playit');
-  const tunnelAddress = m.tunnel === 'e4mc' ? r?.address || null : m.tunnel === 'playit' ? pl.addressFor(m.port) : null;
+  const ts = tunnelStatus(m, r);
+  // `address` is only set while it really works (friends can join now). playit.gg addresses stay the same for a
+  // server's tunnel, so the saved one is shown separately as `knownAddress` while the server is stopped.
+  const live = m.tunnel === 'e4mc' ? r?.address || null : m.tunnel === 'playit' && ts.ok ? require('./playit').liveAddress(m) || m.playitAddress || null : null;
   return {
     ...m, softwareName: SOFTWARE[m.software]?.name || m.software, contentKind: SOFTWARE[m.software]?.kind || 'none',
     state: r ? r.state : 'offline', players: r ? [...r.players] : [], lan: `localhost:${m.port}`,
-    address: tunnelAddress, tunnelStatus: tunnelStatus(m, r), started: r?.started || null, stats: r?.stats || null,
+    address: live, knownAddress: m.tunnel === 'playit' ? (require('./playit').liveAddress(m) || m.playitAddress || null) : null,
+    tunnelStatus: ts, started: r?.started || null, stats: r?.stats || null, tunnelBusy: !!r?.tunnelBusy,
   };
 }
 function tunnelStatus(m, r) {
-  if (m.tunnel === 'none') return { ok: false, text: 'Local network only' };
+  if (m.tunnel === 'none') return { ok: false, state: 'off', text: 'Local network only' };
   if (m.tunnel === 'e4mc') {
-    if (!r) return { ok: false, text: 'Public when started (e4mc)' };
-    return r.address ? { ok: true, text: 'Public via e4mc' } : { ok: false, text: r.state === 'online' ? 'Connecting to e4mc…' : 'Starting…' };
+    if (!r) return { ok: false, state: 'off', text: 'Public when started (e4mc)' };
+    return r.address ? { ok: true, state: 'ok', text: 'Public via e4mc' } : { ok: false, state: 'warn', text: r.state === 'online' ? 'Connecting to e4mc…' : 'Starting…' };
   }
-  return require('./playit').statusFor(m.port, !!r);
+  const st = require('./playit').statusFor(m, !!r, !!m.playitStopped);
+  // the server itself must be up too: a connected tunnel to a server that is still starting can't be joined yet
+  if (st.ok && r && r.state !== 'online') return { ok: false, state: 'warn', text: 'Tunnel ready — waiting for the server to finish starting' };
+  if (r?.tunnelError && !st.ok && st.state !== 'error') return { ok: false, state: 'error', text: r.tunnelError, retry: true };
+  return st;
 }
 function list() {
   return index().map((e) => { try { return view(meta(e.id)); } catch (er) { return { id: e.id, dir: e.dir, name: e.id, missing: true, state: 'offline', error: er.message }; } })
@@ -219,9 +226,15 @@ async function create(opts, resolveJava, onStep) {
   if (!eula) throw new Error('You need to accept the Minecraft EULA to run a server.');
   if (!SOFTWARE[software]) throw new Error('Pick the server software.');
   if (!/^[\w.-]+$/.test(mc || '')) throw new Error('Pick a Minecraft version.');
-  const p = port ? Number(port) : nextPort();
+  onStep && onStep('Preparing Minecraft server…');
+  let p = port ? Number(port) : nextPort();
   if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.');
   if (list().some((s) => s.port === p)) throw new Error(`Another Solaris server already uses port ${p}.`);
+  if (!(await portFree(p))) {
+    if (port) throw new Error(`Port ${p} is already used by another program on this PC. Pick another port, or leave it on “auto”.`);
+    const used = new Set(list().map((s) => s.port));
+    do { p++; } while (p < 65535 && (used.has(p) || !(await portFree(p))));
+  }
   let id = slugify(name || `server-${mc}`) || 'server';
   while (index().some((e) => e.id === id)) id += '-2';
   const dir = chosenDir ? path.resolve(chosenDir) : path.join(root(), id);
@@ -249,7 +262,27 @@ async function create(opts, resolveJava, onStep) {
     if (!chosenDir) try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
     throw e;
   }
-  return save(m);
+  save(m);
+  // playit.gg: link this PC (once), start the agent, create this server's tunnel and get its real address now,
+  // so the player sees the address before the first start. The server files are already installed, so a problem
+  // here doesn't undo the server: it's reported, and the tunnel is set up again when the server starts.
+  if (m.tunnel === 'playit') {
+    const pl = require('./playit');
+    try {
+      const t = await pl.setupServer({ id, port: m.port, name: m.name, tunnelId: null }, onStep);
+      Object.assign(m, { playitTunnelId: t.tunnelId, playitAddress: t.address });
+      save(m);
+      onStep && onStep(`Public address: ${t.address}`);
+    } catch (e) {
+      m.playitSetupError = e.message;
+      save(m);
+      push('toast', { type: 'warn', text: `The server is ready, but playit.gg isn’t set up yet: ${e.message} Solaris tries again when you start the server, or use “Restart tunnel”.` });
+    } finally {
+      pl.releaseServer(id); // the agent only runs while a server needs it
+    }
+  }
+  onStep && onStep('Server ready!');
+  return view(meta(id));
 }
 function addOwner(m) {
   try {
@@ -306,7 +339,7 @@ async function start(id, resolveJava) {
   const st = m.start || { jar: 'server.jar' };
   const args = [`-Xmx${m.memory}M`, `-Xms${Math.min(1024, m.memory)}M`, '-XX:+UseG1GC', ...(st.argsFile ? ['@' + st.argsFile] : ['-jar', st.jar]), 'nogui'];
   log(id, `[Solaris] Starting ${m.name} — ${SOFTWARE[m.software].name} ${m.mc}, ${m.memory} MB, port ${m.port}`);
-  if (m.tunnel === 'playit') require('./playit').serverStarted(m.port, m.name).catch((e) => log(id, '[Solaris] playit.gg: ' + e.message));
+  if (m.tunnel === 'playit' && !m.playitStopped) startTunnel(id).catch(() => {});
   const proc = spawn(java.replace(/javaw\.exe$/i, 'java.exe'), args, { cwd: m.dir, windowsHide: true });
   r.proc = proc;
   if (proc.pid) writePid(m.dir, proc.pid);
@@ -321,12 +354,69 @@ async function start(id, resolveJava) {
     const restart = r.restart;
     log(id, `[Solaris] Server stopped${code && !r.stopping ? ` (exit code ${code})` : ''} after ${fmtUptime(Date.now() - r.started)}.`);
     running.delete(id); emit(id);
-    if (m.tunnel === 'playit') require('./playit').serverStopped(m.port);
+    if (m.tunnel === 'playit') require('./playit').releaseServer(id);
     push('hosted:stopped', { id, crashed: !!code && !r.stopping });
     if (restart) start(id, resolveJava).catch((e) => push('toast', { type: 'error', text: 'Restart failed: ' + e.message }));
   });
   return get(id);
 }
+// ---------- playit.gg tunnel of a running server ----------
+/** Sets up (or re-uses) the server's tunnel while it runs, and remembers the address playit.gg gives it. */
+async function startTunnel(id) {
+  const r = running.get(id); if (!r) return;
+  const m = meta(id);
+  r.tunnelBusy = true; r.tunnelError = null; emit(id);
+  try {
+    const t = await require('./playit').setupServer({ id, port: m.port, name: m.name, tunnelId: m.playitTunnelId }, (s) => log(id, '[Solaris] playit.gg: ' + s));
+    const cur = meta(id); // re-read: settings may have changed meanwhile
+    if (cur.playitTunnelId !== t.tunnelId || cur.playitAddress !== t.address || cur.playitSetupError) { Object.assign(cur, { playitTunnelId: t.tunnelId, playitAddress: t.address }); delete cur.playitSetupError; save(cur); }
+    log(id, `[Solaris] playit.gg tunnel ready: ${t.address} → localhost:${m.port}`);
+  } catch (e) {
+    if (running.get(id) === r) r.tunnelError = e.message;
+    log(id, '[Solaris] playit.gg: ' + e.message);
+    // nothing to tunnel for this server any more — let the agent stop if no other server needs it
+    if (!running.has(id)) require('./playit').releaseServer(id);
+  } finally {
+    if (running.get(id) === r) r.tunnelBusy = false;
+    emit(id);
+  }
+}
+/** Dashboard buttons. */
+async function tunnelStop(id) {
+  const m = meta(id);
+  m.playitStopped = true; save(m);
+  require('./playit').releaseServer(id);
+  if (running.has(id)) log(id, '[Solaris] playit.gg tunnel stopped — the server is only reachable on your network now.');
+  emit(id);
+  return get(id);
+}
+async function tunnelStart(id) {
+  const m = meta(id);
+  delete m.playitStopped; save(m);
+  if (running.has(id)) await startTunnel(id);
+  emit(id);
+  return get(id);
+}
+async function tunnelRestart(id) {
+  const m = meta(id);
+  if (m.tunnel !== 'playit') throw new Error('This server doesn’t use playit.gg.');
+  if (m.playitStopped) { delete m.playitStopped; save(m); }
+  if (!running.has(id)) {
+    // stopped server: just (re)check the link and the tunnel, then let the agent stop again
+    const pl = require('./playit');
+    try {
+      const t = await pl.setupServer({ id, port: m.port, name: m.name, tunnelId: m.playitTunnelId }, null);
+      Object.assign(m, { playitTunnelId: t.tunnelId, playitAddress: t.address }); delete m.playitSetupError; save(m);
+    } finally { pl.releaseServer(id); }
+    emit(id);
+    return get(id);
+  }
+  log(id, '[Solaris] Restarting the playit.gg tunnel…');
+  await require('./playit').restartAgent();
+  await startTunnel(id);
+  return get(id);
+}
+
 // ---------- port / leftover server process ----------
 function portFree(port) {
   return new Promise((resolve) => {
@@ -464,7 +554,7 @@ function setSettings(id, patch) {
   if (patch.props) {
     const props = {};
     for (const [k, v] of Object.entries(patch.props)) { if (!/^[a-z0-9.-]+$/i.test(k)) continue; props[k] = String(v).replace(/[\r\n]/g, ' ').slice(0, 300); }
-    if (props['server-port']) { const p = Number(props['server-port']); if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.'); if (list().some((s) => s.id !== id && s.port === p)) throw new Error(`Another Solaris server uses port ${p}.`); m.port = p; }
+    if (props['server-port']) { const p = Number(props['server-port']); if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.'); if (list().some((s) => s.id !== id && s.port === p)) throw new Error(`Another Solaris server uses port ${p}.`); if (p !== m.port) delete m.playitAddress; m.port = p; }
     if (props['max-players']) m.maxPlayers = Number(props['max-players']) || m.maxPlayers;
     writeProps(id, props);
   }
@@ -662,4 +752,5 @@ module.exports = {
   SOFTWARE, list, get, create, start, stop, restart, stopAll, anyRunning, command, logs, getSettings, setSettings, setTunnel, remove, openFolder,
   softwareVersions, worlds, setActiveWorld, deleteWorld, people, addPerson, removePerson, backups, backup, restore, deleteBackup,
   logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, modpackVersions,
+  tunnelStop, tunnelStart, tunnelRestart,
 };

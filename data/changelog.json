@@ -1,6 +1,55 @@
 [
   {
     "product": "launcher",
+    "version": "1.9.0",
+    "date": "2026-11-14",
+    "title": "Playit.gg hosting made automatic",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Pick Playit.gg when you create a server and Solaris does the rest: installs and starts the playit.gg agent, creates the Minecraft tunnel for that server and shows its real public address — no tunnel setup on playit.gg."
+          },
+          {
+            "type": "feature",
+            "text": "Live progress while the server is created: preparing, downloading, installing playit.gg, starting the agent, creating the tunnel, waiting for the address, server ready."
+          },
+          {
+            "type": "feature",
+            "text": "The first time only, playit.gg asks you to approve Solaris once in your browser (sign in or continue as a guest). After that every new server gets its address automatically."
+          },
+          {
+            "type": "feature",
+            "text": "Server page: tunnel status light, Copy, How to join (instructions you can send to friends), Invite link, Restart tunnel and Stop/Start tunnel."
+          },
+          {
+            "type": "improvement",
+            "text": "Each server keeps its own tunnel and the same address every time — saved between restarts, never duplicated."
+          },
+          {
+            "type": "improvement",
+            "text": "The light only turns green once playit.gg is really connected and the server is up."
+          },
+          {
+            "type": "fix",
+            "text": "If playit.gg stops accepting this PC, Solaris says so and asks you to connect again instead of retrying forever in the background."
+          },
+          {
+            "type": "fix",
+            "text": "A port already used by another program is detected before the server is created, and “auto” picks a free one."
+          },
+          {
+            "type": "improvement",
+            "text": "The playit.gg agent is checked against its official checksum, and always closes with Solaris."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.8.1",
     "date": "2026-11-14",
     "title": "Browse fixes: modpack pages open properly",

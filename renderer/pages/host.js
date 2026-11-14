@@ -42,12 +42,16 @@ Pages.host = {
     if (pl.claim && pl.claim.state === 'waiting') return `<div class="card hs-playit wait">${icon('globe')}<div class="grow"><b>Approve Solaris on playit.gg</b><div class="faint small">A browser tab opened. Sign in (or make a free account) and press <b>Add agent</b>. This page updates by itself.</div></div><button class="btn sm" data-pl="open">${icon('external')}Open again</button><button class="btn sm ghost" data-pl="cancel">${T('Cancel')}</button></div>`;
     if (pl.linked) {
       const a = pl.agent?.state;
-      return `<div class="card hs-playit ok">${icon('globe')}<div class="grow"><b>playit.gg connected</b><div class="faint small">Agent: ${a === 'online' ? 'running' : a === 'connecting' ? 'connecting…' : 'starts with a server that uses playit.gg'}${pl.agent?.lastError ? ` · <span class="danger-text">${esc(pl.agent.lastError)}</span>` : ''}</div></div><button class="btn sm ghost" data-pl="dash">${icon('external')}Dashboard</button><button class="btn sm ghost" data-pl="unlink">Disconnect</button></div>`;
+      const agentText = { connected: 'connected', starting: 'connecting…', reconnecting: 'reconnecting…' }[a] || 'starts with a server that uses playit.gg';
+      const notices = (pl.notices || []).map((n) => `<div class="small warn-text">${icon('alert')} ${esc(n.message)}${n.link ? ` <a href="#" data-pl-notice="${esc(n.link)}">Fix on playit.gg</a>` : ''}</div>`).join('');
+      return `<div class="card hs-playit ok">${icon('globe')}<div class="grow"><b>playit.gg connected</b>${pl.account === 'guest' ? ' <span class="chip">guest account</span>' : ''}<div class="faint small">Agent: ${agentText}${pl.agent?.lastError && a !== 'connected' ? ` · <span class="danger-text">${esc(pl.agent.lastError)}</span>` : ''}</div>${notices}</div><button class="btn sm ghost" data-pl="dash">${icon('external')}Dashboard</button><button class="btn sm ghost" data-pl="unlink">Disconnect</button></div>`;
     }
+    if (pl.problem) return `<div class="card hs-playit wait">${icon('alert')}<div class="grow"><b>Connect playit.gg again</b><div class="faint small">${esc(pl.problem)}</div></div><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
     const msg = pl.claim?.state === 'rejected' ? 'You declined on playit.gg.' : pl.claim?.state === 'expired' ? 'The approval timed out.' : pl.claim?.state === 'error' ? esc(pl.claim.error || 'Something went wrong.') : '';
     return `<div class="card hs-playit">${icon('globe')}<div class="grow"><b>playit.gg — public address for any server</b><div class="faint small">Free. You approve this PC once on playit.gg, then Solaris creates the tunnels for you. ${msg}</div></div><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
   },
   bindPlayit(root, redraw) {
+    $$('[data-pl-notice]', root).forEach((l) => (l.onclick = (e) => { e.preventDefault(); api('shell:open', l.dataset.plNotice); }));
     $$('[data-pl]', root).forEach((b) => (b.onclick = async () => {
       const a = b.dataset.pl;
       try {
@@ -75,6 +79,7 @@ Pages.host = {
     return `<div class="hs-card ${s.state}" data-open="${esc(s.id)}">
       <div class="hs-top"><div class="hs-ic">${icon('host')}</div><div class="grow" style="min-width:0"><b class="ellipsis">${esc(s.name)}</b><div class="faint small">${esc(s.softwareName)} ${esc(s.mc)} · ${s.players.length}/${s.maxPlayers || '?'} players</div></div>${this.stateChip(s)}</div>
       <div class="hs-addr">${s.address ? `${icon('globe')}<span class="mono ellipsis">${esc(s.address)}</span><button class="icon-btn" data-copy="${esc(s.address)}" title="Copy address">${icon('copy')}</button>`
+        : s.knownAddress ? `<span class="hs-tdot ${esc(ts.state || 'off')}" title="${esc(ts.text || '')}"></span><span class="mono ellipsis" style="opacity:.6" title="${esc(ts.text || '')}">${esc(s.knownAddress)}</span><button class="icon-btn" data-copy="${esc(s.knownAddress)}" title="Copy address">${icon('copy')}</button>`
         : `${icon(ts.ok ? 'globe' : 'wifi')}<span class="faint small ellipsis">${esc(ts.text || '')}${s.tunnel === 'none' ? ` · ${esc(s.lan)}` : ''}</span>`}</div>
       <div class="hs-stats">${s.state === 'offline' ? '<span class="faint small">Stopped</span>' : this.statsHtml(s)}</div>
       <div class="hs-foot"><div class="grow"></div>
@@ -101,6 +106,24 @@ Pages.host = {
       ]);
     }));
   },
+  /** Step-by-step joining instructions for friends. */
+  howToJoin(s, addr) {
+    const m = modal({
+      title: `Join ${s.name}`,
+      body: `<div class="hs-join">
+        <ol>
+          <li>Open <b>Minecraft: Java Edition ${esc(s.mc)}</b>${s.contentKind === 'mods' ? ` with the same mods (${esc(s.softwareName)})` : ''}.</li>
+          <li>Click <b>Multiplayer</b> → <b>Add Server</b>.</li>
+          <li>Paste this address into <b>Server Address</b>: <span class="mono">${esc(addr)}</span></li>
+          <li>Click <b>Done</b>, then double-click the server to join.</li>
+        </ol>
+        <p class="faint small">The address works while ${esc(s.name)} is running in Solaris and its tunnel is online (green light). ${s.tunnel === 'playit' ? 'It stays the same every time, so friends only add it once.' : ''} If the whitelist is on, add your friends in the Players tab first.</p></div>`,
+      footer: `<button class="btn" data-x>${T('Close')}</button><button class="btn primary" data-copy>${icon('copy')}Copy address</button><button class="btn" data-copyall>${icon('copy')}Copy instructions</button>`,
+    });
+    m.$('[data-x]').onclick = () => m.close();
+    m.$('[data-copy]').onclick = () => { api('clipboard:write', addr); toast('Address copied'); };
+    m.$('[data-copyall]').onclick = () => { api('clipboard:write', `Join my Minecraft server "${s.name}" (Java ${s.mc}):\nMultiplayer → Add Server → Server Address: ${addr}`); toast('Instructions copied — paste them to your friends'); };
+  },
   async start(id, btn) {
     if (btn) { btn.disabled = true; btn.innerHTML = `${icon('refresh', 'spin')}Starting`; }
     try { await api('hosted:start', id); } catch (e) { toastErr(e); if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = `${icon('play')}Start`; } }
@@ -126,22 +149,40 @@ Pages.host = {
           <label class="field" style="width:120px">Port<input type="number" id="hc-port" min="1024" max="65535" placeholder="auto"></label></div>
         <label class="field">Memory <span class="faint small" id="hc-memv">${def / 1024} GB</span><input type="range" id="hc-mem" min="1024" max="${Math.max(2048, Math.floor(totalGb * 0.7) * 1024)}" step="512" value="${def}"></label>
         <div class="field">Folder<div class="row"><span class="mono small grow ellipsis" id="hc-dir">Default (inside Solaris data)</span><button class="btn sm" id="hc-pick">${icon('folder')}Choose…</button></div></div>
-        <div class="field">Public address<div class="seg" id="hc-tun"><button data-t="e4mc">e4mc (no account)</button><button data-t="playit">playit.gg</button><button data-t="none">Home network only</button></div><div class="faint small" id="hc-tun-note"></div></div>
+        <div class="field">Public address<div class="seg" id="hc-tun"><button data-t="playit">Playit.gg</button><button data-t="e4mc">e4mc</button><button data-t="none">Home network only</button></div><div class="faint small" id="hc-tun-note"></div></div>
         <div class="field" id="hc-pack-wrap">Modpack <span class="faint small">(optional, from Modrinth)</span><div class="row"><span class="grow small" id="hc-pack">None</span><button class="btn sm" id="hc-pack-pick">${icon('search')}Choose modpack…</button></div></div>
         <label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="hc-eula"><span>I accept the <a href="#" id="hc-eula-link">Minecraft EULA</a> — required to run a Minecraft server.</span></label>
+        <div class="hc-progress hidden" id="hc-progress"></div>
       </div>`,
       footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go disabled>${icon('host')}Create server</button>`,
     });
-    let tun = 'e4mc';
+    let tun = 'playit';
     const go = m.$('[data-go]');
     const setTun = (t) => {
       if (t === 'e4mc' && !HOST_E4MC.includes(sw)) t = 'playit';
       tun = t;
       $$('[data-t]', m.el).forEach((b) => { b.classList.toggle('on', b.dataset.t === t); b.disabled = b.dataset.t === 'e4mc' && !HOST_E4MC.includes(sw); });
-      m.$('#hc-tun-note').innerHTML = t === 'e4mc' ? 'Instant public address, nothing to sign up for. Uses the free e4mc relay.'
-        : t === 'playit' ? (this.playit?.linked ? 'playit.gg is connected — Solaris creates the tunnel when the server starts.' : 'Needs a free playit.gg account — you connect it once from the Hosting page.')
+      m.$('#hc-tun-note').innerHTML = t === 'playit'
+        ? `<b>Playit.gg</b> — Automatically generate a public Minecraft server address using Playit.gg. No manual tunnel configuration required.${this.playit?.linked ? '' : '<br>The first time, playit.gg asks you to approve Solaris once in your browser (sign in or continue as a guest).'}`
+        : t === 'e4mc' ? 'Instant public address through the free e4mc relay, nothing to sign up for (Fabric, Forge and NeoForge).'
         : `Only people on your Wi-Fi/LAN can join (port ${m.$('#hc-port').value || 'auto'}).`;
     };
+    // Live progress while the server is created: every step Solaris reports, the current one highlighted.
+    const steps = [];
+    const prog = m.$('#hc-progress');
+    const drawProg = (err) => {
+      prog.classList.remove('hidden');
+      const waitingClaim = this.playit?.claim?.state === 'waiting';
+      prog.innerHTML = steps.map((s, i) => `<div class="st ${i === steps.length - 1 ? (err ? 'err' : 'now') : ''}">${icon(i < steps.length - 1 ? 'check' : err ? 'alert' : 'refresh', i === steps.length - 1 && !err ? 'spin' : '')}<span>${esc(s)}</span></div>`).join('')
+        + (err ? `<div class="st err">${icon('alert')}<span>${esc(err)}</span></div>` : '')
+        + (waitingClaim && !err ? `<div class="acts"><button class="btn sm primary" data-pl-open>${icon('external')}Open playit.gg approval</button><button class="btn sm ghost" data-pl-cancel>${T('Cancel')}</button></div>` : '');
+      const o = prog.querySelector('[data-pl-open]'); if (o) o.onclick = () => api('shell:open', this.playit.claim.url);
+      const c = prog.querySelector('[data-pl-cancel]'); if (c) c.onclick = () => api('playit:cancel');
+    };
+    const gone = () => { if (m.el.isConnected) return false; offTask(); offPl(); return true; }; // closed with × or Esc
+    const offTask = window.solaris.on('task', (t) => { if (gone()) return; if (t.id === 'hosted-create' && t.detail && steps[steps.length - 1] !== t.detail) { steps.push(t.detail); drawProg(); } });
+    const offPl = window.solaris.on('playit:state', () => { if (gone()) return; if (steps.length) drawProg(); });
+    const closeModal = m.close; m.close = () => { offTask(); offPl(); closeModal(); };
     const loadVersions = async () => {
       const sel = m.$('#hc-mc'); sel.innerHTML = '<option>Loading…</option>'; sel.disabled = true;
       try { const vs = await api('hosted:versions', sw); if (!m.el.isConnected) return; sel.innerHTML = vs.slice(0, 80).map((v) => `<option>${esc(v)}</option>`).join(''); }
@@ -165,12 +206,13 @@ Pages.host = {
     m.$('[data-x]').onclick = () => m.close();
     go.onclick = async () => {
       go.disabled = true; go.innerHTML = `${icon('refresh', 'spin')}Setting up…`;
+      steps.length = 0;
       try {
         const s = await api('hosted:create', { name: m.$('#hc-name').value.trim() || undefined, software: sw, mc: m.$('#hc-mc').value, memory: +m.$('#hc-mem').value, maxPlayers: +m.$('#hc-max').value, port: m.$('#hc-port').value ? +m.$('#hc-port').value : undefined, dir: folder, tunnel: tun, eula: m.$('#hc-eula').checked, modpack: pack ? { versionId: pack.versionId } : null });
         m.close();
-        toast(`${s.name} is ready — press Start`);
+        toast(s.knownAddress ? `${s.name} is ready — public address ${s.knownAddress}. Press Start.` : `${s.name} is ready — press Start`);
         Router.go('host', { id: s.id });
-      } catch (e) { toastErr(e); go.disabled = false; go.innerHTML = `${icon('host')}Create server`; }
+      } catch (e) { drawProg(e.message); toastErr(e); go.disabled = false; go.innerHTML = `${icon('refresh')}Try again`; }
     };
     setSw('fabric');
   },
@@ -215,12 +257,29 @@ Pages.host = {
       if ($('#a-restart', el)) $('#a-restart', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:restart', id).catch(toastErr); };
       if ($('#a-join', el)) $('#a-join', el).onclick = () => Pages.servers.join(`localhost:${s.port}`);
       const ts = s.tunnelStatus || {}, share = $('#hs-share', el);
+      const pl = s.tunnel === 'playit';
+      const addr = s.address || s.knownAddress; // live address, or the saved playit.gg one while not public
       share.className = `card hs-share ${s.address ? 'live' : ''}`;
-      share.innerHTML = s.address
-        ? `<div class="hs-live-dot"></div><div class="grow" style="min-width:0"><div class="faint small">${esc(ts.text)} — send this to friends</div><div class="hs-big mono ellipsis">${esc(s.address)}</div></div><button class="btn" data-c="addr">${icon('copy')}Copy</button><button class="btn primary" data-c="inv">${icon('users')}Invite link</button>`
-        : `<div class="grow"><div class="faint small">${esc(ts.text || '')}</div><div class="hs-big mono">${esc(s.lan)}</div><div class="faint small">On this PC use <span class="mono">localhost:${s.port}</span>${s.tunnel === 'none' ? ' · friends on your network use your PC’s local IP' : ''}</div></div>${ts.needsLink ? `<button class="btn primary" id="hs-link">${icon('link')}Connect playit.gg</button>` : ''}`;
-      $$('[data-c]', share).forEach((b) => (b.onclick = () => { const t = b.dataset.c === 'addr' ? s.address : `solaris://server/${s.address}`; api('clipboard:write', t); toast(b.dataset.c === 'addr' ? 'Address copied' : 'Invite link copied — friends with Solaris click it to join'); }));
+      // Tunnel panel: status light, the real address (only from playit.gg / e4mc), and the tunnel controls.
+      const btns = pl ? `<div class="hs-tun-btns">
+          ${ts.needsLink ? `<button class="btn primary" id="hs-link">${icon('link')}Connect playit.gg</button>` : ''}
+          ${!ts.needsLink ? `<button class="btn sm" id="hs-trestart" ${s.tunnelBusy ? 'disabled' : ''} title="Restart the playit.gg agent and check the tunnel">${icon('refresh', s.tunnelBusy ? 'spin' : '')}${s.tunnelBusy ? 'Working…' : 'Restart tunnel'}</button>` : ''}
+          ${!ts.needsLink ? (s.playitStopped ? `<button class="btn sm" id="hs-tstart">${icon('play')}Start tunnel</button>` : `<button class="btn sm" id="hs-tstop" ${s.state === 'offline' ? 'disabled title="The tunnel only runs while the server runs"' : ''}>${icon('power')}Stop tunnel</button>`) : ''}
+        </div>` : '';
+      const joinBtns = addr ? `<button class="btn" data-c="addr">${icon('copy')}Copy</button><button class="btn" data-c="how">${icon('info')}How to join</button>${s.address ? `<button class="btn primary" data-c="inv">${icon('users')}Invite link</button>` : ''}` : '';
+      share.innerHTML = addr
+        ? `<div class="hs-tdot ${esc(ts.state || 'off')}" title="${esc(ts.text || '')}"></div><div class="grow" style="min-width:0"><div class="faint small">${esc(ts.text || '')}${s.address ? ' — send this to friends' : ''}</div><div class="hs-big mono ellipsis ${s.address ? '' : 'dim'}">${esc(addr)}</div>${s.address ? '' : `<div class="faint small">This is your server’s ${pl ? 'playit.gg' : ''} address — it works while the server and its tunnel are running.</div>`}</div>${joinBtns}${btns}`
+        : `<div class="hs-tdot ${esc(ts.state || 'off')}"></div><div class="grow"><div class="faint small">${esc(ts.text || '')}</div><div class="hs-big mono">${esc(s.lan)}</div><div class="faint small">On this PC use <span class="mono">localhost:${s.port}</span>${s.tunnel === 'none' ? ' · friends on your network use your PC’s local IP' : ''}${s.playitSetupError && !s.address ? ` · <span class="danger-text">${esc(s.playitSetupError)}</span>` : ''}</div></div>${btns}`;
+      $$('[data-c]', share).forEach((b) => (b.onclick = () => {
+        if (b.dataset.c === 'how') return this.howToJoin(s, addr);
+        const t = b.dataset.c === 'addr' ? addr : `solaris://server/${addr}`;
+        api('clipboard:write', t); toast(b.dataset.c === 'addr' ? 'Address copied' : 'Invite link copied — friends with Solaris click it to join');
+      }));
       if ($('#hs-link', share)) $('#hs-link', share).onclick = async () => { try { await api('playit:connect'); toast('Approve Solaris in the browser tab that opened'); } catch (e) { toastErr(e); } };
+      const tbtn = (sel, call, done) => { const b = $(sel, share); if (b) b.onclick = async () => { b.disabled = true; try { s = await api(call, id); if (done) toast(done); } catch (e) { toastErr(e); } drawHead(); }; };
+      tbtn('#hs-trestart', 'hosted:tunnelRestart', 'playit.gg tunnel checked');
+      tbtn('#hs-tstop', 'hosted:tunnelStop', 'Tunnel stopped — the server is only on your network now');
+      tbtn('#hs-tstart', 'hosted:tunnelStart', 'Tunnel started');
       drawStats(this.stats.get(id) || s.stats);
     };
     const drawStats = (st) => {
