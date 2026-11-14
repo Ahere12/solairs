@@ -18,7 +18,7 @@ Pages.gallery = {
       $('[data-prev]', lb.el).onclick = (e) => { e.stopPropagation(); lb.close(); open(list, (i - 1 + list.length) % list.length); };
       $('[data-next]', lb.el).onclick = (e) => { e.stopPropagation(); lb.close(); open(list, (i + 1) % list.length); };
       $('[data-folder]', lb.el).onclick = (e) => { e.stopPropagation(); api('shell:showItem', s.path); };
-      $('[data-del]', lb.el).onclick = async (e) => { e.stopPropagation(); await api('gallery:delete', s.path); lb.close(); shots = shots.filter((x) => x.path !== s.path); draw(); toast('Moved to Recycle Bin'); };
+      $('[data-del]', lb.el).onclick = async (e) => { e.stopPropagation(); await api('gallery:delete', s.path); lb.close(); shots = shots.filter((x) => x.path !== s.path); draw(); toast(`Moved to the ${TRASH}`); };
     };
     draw();
   },

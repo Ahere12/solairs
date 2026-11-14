@@ -250,8 +250,14 @@ Pages.host = {
         <div class="row" style="margin-top:8px"><input type="text" id="hs-cmd" class="grow mono" placeholder="${s.state === 'offline' ? 'Start the server to send commands' : 'Command, e.g. say Hello · op Name · gamemode creative Name'}" spellcheck="false"><button class="btn" id="hs-send">${icon('send')}Send</button></div>`;
       const con = $('#hs-console', box);
       const cls = (l) => (/ERROR|Exception|FATAL/.test(l) ? 'e' : /WARN/.test(l) ? 'w' : /^\[Solaris\]|Domain assigned|Done \(/.test(l) ? 's' : /^> /.test(l) ? 'c' : '');
-      const add = (l) => { const c = cls(l); if (onlyErr && c !== 'e' && c !== 'w') return; const d = document.createElement('div'); d.textContent = l; if (c) d.className = c; con.appendChild(d); while (con.childElementCount > 2000) con.firstChild.remove(); };
-      const redraw = () => { con.innerHTML = ''; (this.logs.get(id) || []).forEach(add); if (auto) con.scrollTop = con.scrollHeight; };
+      const add = (lines) => {
+        const frag = document.createDocumentFragment();
+        for (const l of lines) { const c = cls(l); if (onlyErr && c !== 'e' && c !== 'w') continue; const d = document.createElement('div'); d.textContent = l; if (c) d.className = c; frag.appendChild(d); }
+        con.appendChild(frag);
+        let extra = con.childElementCount - 2000;
+        while (extra-- > 0) con.firstChild.remove();
+      };
+      const redraw = () => { con.innerHTML = ''; add((this.logs.get(id) || []).slice(-2000)); if (auto) con.scrollTop = con.scrollHeight; };
       redraw();
       $('#c-auto', box).onchange = (e) => { auto = e.target.checked; if (auto) con.scrollTop = con.scrollHeight; };
       $('#c-err', box).onchange = (e) => { onlyErr = e.target.checked; redraw(); };
@@ -259,7 +265,7 @@ Pages.host = {
       const send = () => { const i = $('#hs-cmd', box); if (!i.value.trim()) return; api('hosted:command', id, i.value).catch(toastErr); i.value = ''; };
       $('#hs-send', box).onclick = send;
       $('#hs-cmd', box).onkeydown = (e) => { if (e.key === 'Enter') send(); };
-      ctx.on('hosted-log', ({ id: lid, line }) => { if (lid !== id || !con.isConnected) return; add(line); if (auto) con.scrollTop = con.scrollHeight; });
+      ctx.on('hosted-log', ({ id: lid, lines }) => { if (lid !== id || !con.isConnected) return; add(lines); if (auto) con.scrollTop = con.scrollHeight; });
     },
 
     async players(box, id, s) {
@@ -389,7 +395,7 @@ Pages.host = {
 
 window.solaris.on('hosted:state', (s) => Bus.emit('hosted', s));
 window.solaris.on('hosted:stats', (s) => { Pages.host.stats.set(s.id, s); Bus.emit('hosted-stats', s); });
-window.solaris.on('hosted:log', (p) => { const l = Pages.host.logs.get(p.id) || []; l.push(p.line); if (l.length > 4000) l.shift(); Pages.host.logs.set(p.id, l); Bus.emit('hosted-log', p); });
+Bus.on('hosted-lines', (p) => { const l = Pages.host.logs.get(p.id) || []; l.push(...p.lines); if (l.length > 4000) l.splice(0, l.length - 4000); Pages.host.logs.set(p.id, l); Bus.emit('hosted-log', p); });
 window.solaris.on('hosted:stopped', ({ crashed }) => { if (crashed) toast('A server stopped unexpectedly — check its console.', 'error', 7000); });
 window.solaris.on('playit:state', (s) => { Pages.host.playit = s; Bus.emit('playit', s); });
 window.solaris.on('hosted:playit-manual', ({ port, reason }) => {

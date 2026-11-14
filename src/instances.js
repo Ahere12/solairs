@@ -76,11 +76,34 @@ async function duplicate(id, { name, include = ['mods', 'config', 'resourcepacks
 }
 
 // ---------- content ----------
-const metaCache = new Map();
+// Reading a jar's name/icon opens the whole jar, which is slow for big modpacks — so the result is kept on disk
+// (cache/modmeta.json) and a jar is only read again when its size or date changes.
+let metaCache = null, metaDirty = false, metaTimer = null;
+const metaFile = () => path.join(paths.cache(), 'modmeta.json');
+function loadMetaCache() {
+  if (metaCache) return metaCache;
+  metaCache = new Map();
+  try { for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(metaFile(), 'utf8')))) metaCache.set(k, v); } catch {}
+  return metaCache;
+}
+function saveMetaCacheSoon() {
+  metaDirty = true;
+  if (metaTimer) return;
+  metaTimer = setTimeout(() => {
+    metaTimer = null;
+    if (!metaDirty) return;
+    metaDirty = false;
+    // keep the newest 3000 entries
+    const entries = [...metaCache.entries()].slice(-3000);
+    try { writeJSON(metaFile(), Object.fromEntries(entries)); } catch {}
+  }, 2000);
+  metaTimer.unref?.();
+}
 function readModMeta(file) {
   const st = fs.statSync(file);
   const key = `${file}:${st.size}:${st.mtimeMs}`;
-  if (metaCache.has(key)) return metaCache.get(key);
+  const cache = loadMetaCache();
+  if (cache.has(key)) return cache.get(key);
   let meta = {};
   try {
     const zip = new AdmZip(file);
@@ -117,7 +140,8 @@ function readModMeta(file) {
       meta = { description: desc, icon: iconData('pack.png') };
     }
   } catch {}
-  metaCache.set(key, meta);
+  cache.set(key, meta);
+  saveMetaCacheSoon();
   return meta;
 }
 /** Where each file came from: Modrinth, CurseForge, a modpack, or added by hand. */

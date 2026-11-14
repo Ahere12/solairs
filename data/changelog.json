@@ -1,194 +1,638 @@
 [
   {
-    "product": "launcher", "version": "1.6.0", "date": "2026-11-13",
+    "product": "launcher",
+    "version": "1.7.0",
+    "date": "2026-11-13",
+    "title": "Solaris on Linux, faster and steadier",
+    "groups": [
+      {
+        "area": "Linux",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Solaris now runs on Linux (64-bit): download the AppImage (any distro) or the .deb (Ubuntu, Debian, Mint, Pop!_OS). Both update themselves like on Windows."
+          },
+          {
+            "type": "feature",
+            "text": "Games, Java, mods, modpacks, skins, server hosting (including playit.gg and live CPU/RAM stats) all work on Linux."
+          },
+          {
+            "type": "feature",
+            "text": "Finds the Java installed by your distro, and on laptops with two graphics cards can run Minecraft on the fast one."
+          },
+          {
+            "type": "improvement",
+            "text": "Starts normally on Ubuntu 24.04 and newer, where many Electron apps fail to open."
+          }
+        ]
+      },
+      {
+        "area": "Speed",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "Game and server consoles no longer slow the launcher down while big modpacks start: log lines are drawn in batches."
+          },
+          {
+            "type": "improvement",
+            "text": "Mod lists open faster: mod names and icons are remembered between sessions instead of re-reading every jar."
+          },
+          {
+            "type": "improvement",
+            "text": "Solaris opens a little faster, and Java detection checks all Javas at once."
+          }
+        ]
+      },
+      {
+        "area": "Fixes",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "“Clean up storage” no longer deletes the OptiFine versions you imported or the running playit.gg agent."
+          },
+          {
+            "type": "fix",
+            "text": "A stuck internet connection can no longer freeze “Downloading game files” forever — Solaris retries instead."
+          },
+          {
+            "type": "fix",
+            "text": "Stopping a server while it was still preparing Java now really stops it."
+          },
+          {
+            "type": "fix",
+            "text": "Sending a command to a server at the moment it closed could crash Solaris in the background."
+          },
+          {
+            "type": "fix",
+            "text": "Server backups on Paper and Purpur no longer store the Nether and End twice."
+          },
+          {
+            "type": "fix",
+            "text": "Closing the window while hosting and playing no longer shuts your server down when the game closes."
+          },
+          {
+            "type": "fix",
+            "text": "Moving the data folder is blocked while games or servers run, and into a folder inside itself."
+          },
+          {
+            "type": "fix",
+            "text": "The right native libraries are picked for your computer’s processor."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
+    "version": "1.6.0",
+    "date": "2026-11-13",
     "title": "Our own Solaris Client mod",
     "groups": [
-      { "area": "Solaris Client", "entries": [
-        { "type": "feature", "text": "The Solaris Client now has its own mod, made by Solaris: press Right Shift in game for the Solaris menu." },
-        { "type": "feature", "text": "Movable HUD: FPS, CPS, keystrokes, coordinates with direction, ping and a clock. Drag them anywhere in “Edit HUD layout”." },
-        { "type": "feature", "text": "Hold C to zoom, and turn on toggle sprint from the Solaris menu. Your settings are saved." },
-        { "type": "improvement", "text": "OneConfig, EvergreenHUD, PolySprint and Zoomify are now optional extras (off by default) — the Solaris mod does those jobs." }
-      ] }
+      {
+        "area": "Solaris Client",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "The Solaris Client now has its own mod, made by Solaris: press Right Shift in game for the Solaris menu."
+          },
+          {
+            "type": "feature",
+            "text": "Movable HUD: FPS, CPS, keystrokes, coordinates with direction, ping and a clock. Drag them anywhere in “Edit HUD layout”."
+          },
+          {
+            "type": "feature",
+            "text": "Hold C to zoom, and turn on toggle sprint from the Solaris menu. Your settings are saved."
+          },
+          {
+            "type": "improvement",
+            "text": "OneConfig, EvergreenHUD, PolySprint and Zoomify are now optional extras (off by default) — the Solaris mod does those jobs."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.5.0", "date": "2026-11-13",
+    "product": "launcher",
+    "version": "1.5.0",
+    "date": "2026-11-13",
     "title": "Hosting: every server type, playit.gg, backups and more",
     "groups": [
-      { "area": "Hosting", "entries": [
-        { "type": "feature", "text": "Create Vanilla, Paper, Purpur, Fabric, Forge and NeoForge servers — pick the version, memory, max players, port and folder. Solaris downloads everything." },
-        { "type": "feature", "text": "Public address with playit.gg for any server type (free account, connected once), or e4mc for Fabric/Forge/NeoForge (no account). Tunnel status and automatic reconnects." },
-        { "type": "feature", "text": "Dashboard with status, players, CPU, RAM, uptime and address. Start, stop, restart, open folder, settings and delete." },
-        { "type": "feature", "text": "Server page: live console (clear, auto-scroll, errors only), players, whitelist and operators, worlds, backups and restore, log files, and a full server.properties editor." },
-        { "type": "feature", "text": "Install mods and plugins from Modrinth, checked against your server’s version and software — or start a server from a modpack." }
-      ] },
-      { "area": "Skins", "entries": [
-        { "type": "bugfix", "text": "Skins now really change: each wardrobe skin has a Wear button, and the skin you wear is marked. Clicking a skin only previews it." },
-        { "type": "bugfix", "text": "Your current skin is read live from your Microsoft account, so a new skin shows right away instead of a minute later." }
-      ] },
-      { "area": "Instances", "entries": [
-        { "type": "improvement", "text": "Deleting an instance removes it for good instead of moving it to the Recycle Bin." }
-      ] }
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Create Vanilla, Paper, Purpur, Fabric, Forge and NeoForge servers — pick the version, memory, max players, port and folder. Solaris downloads everything."
+          },
+          {
+            "type": "feature",
+            "text": "Public address with playit.gg for any server type (free account, connected once), or e4mc for Fabric/Forge/NeoForge (no account). Tunnel status and automatic reconnects."
+          },
+          {
+            "type": "feature",
+            "text": "Dashboard with status, players, CPU, RAM, uptime and address. Start, stop, restart, open folder, settings and delete."
+          },
+          {
+            "type": "feature",
+            "text": "Server page: live console (clear, auto-scroll, errors only), players, whitelist and operators, worlds, backups and restore, log files, and a full server.properties editor."
+          },
+          {
+            "type": "feature",
+            "text": "Install mods and plugins from Modrinth, checked against your server’s version and software — or start a server from a modpack."
+          }
+        ]
+      },
+      {
+        "area": "Skins",
+        "entries": [
+          {
+            "type": "bugfix",
+            "text": "Skins now really change: each wardrobe skin has a Wear button, and the skin you wear is marked. Clicking a skin only previews it."
+          },
+          {
+            "type": "bugfix",
+            "text": "Your current skin is read live from your Microsoft account, so a new skin shows right away instead of a minute later."
+          }
+        ]
+      },
+      {
+        "area": "Instances",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "Deleting an instance removes it for good instead of moving it to the Recycle Bin."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.4.0", "date": "2026-11-12",
+    "product": "launcher",
+    "version": "1.4.0",
+    "date": "2026-11-12",
     "title": "Host servers, in-game client menu and skins that show up",
     "groups": [
-      { "area": "Host", "entries": [
-        { "type": "feature", "text": "New Host page: create a Minecraft server on your PC in a few clicks, start it, and share a public address — no port forwarding, no account. Live console, players, kick, settings, whitelist." },
-        { "type": "feature", "text": "Solaris stops your servers properly when you quit, so worlds are saved." }
-      ] },
-      { "area": "Solaris Client", "entries": [
-        { "type": "feature", "text": "In-game client menu like Lunar: press Right Shift for one menu with your mods, a HUD editor and settings (OneConfig by Polyfrost)." },
-        { "type": "feature", "text": "New modules: PolySprint (toggle sprint/sneak) and Chatting (chat tabs and search)." }
-      ] },
-      { "area": "Skins", "entries": [
-        { "type": "bugfix", "text": "“Wear this skin” now checks with Mojang that your skin really changed, and tells you clearly if it didn’t." },
-        { "type": "feature", "text": "Offline accounts can wear skins too — Solaris adds CustomSkinLoader to modded instances so your skin shows in game." }
-      ] },
-      { "area": "Launcher", "entries": [
-        { "type": "feature", "text": "Installing a mod, pack or shader now turns the button green with “Installed” and a check, so you know it worked." },
-        { "type": "improvement", "text": "New icons from Lucide." },
-        { "type": "improvement", "text": "Player look-ups fall back to minetools when Mojang is busy." },
-        { "type": "improvement", "text": "World hosting picks up the e4mc address even when it is hidden in chat." }
-      ] }
+      {
+        "area": "Host",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New Host page: create a Minecraft server on your PC in a few clicks, start it, and share a public address — no port forwarding, no account. Live console, players, kick, settings, whitelist."
+          },
+          {
+            "type": "feature",
+            "text": "Solaris stops your servers properly when you quit, so worlds are saved."
+          }
+        ]
+      },
+      {
+        "area": "Solaris Client",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "In-game client menu like Lunar: press Right Shift for one menu with your mods, a HUD editor and settings (OneConfig by Polyfrost)."
+          },
+          {
+            "type": "feature",
+            "text": "New modules: PolySprint (toggle sprint/sneak) and Chatting (chat tabs and search)."
+          }
+        ]
+      },
+      {
+        "area": "Skins",
+        "entries": [
+          {
+            "type": "bugfix",
+            "text": "“Wear this skin” now checks with Mojang that your skin really changed, and tells you clearly if it didn’t."
+          },
+          {
+            "type": "feature",
+            "text": "Offline accounts can wear skins too — Solaris adds CustomSkinLoader to modded instances so your skin shows in game."
+          }
+        ]
+      },
+      {
+        "area": "Launcher",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Installing a mod, pack or shader now turns the button green with “Installed” and a check, so you know it worked."
+          },
+          {
+            "type": "improvement",
+            "text": "New icons from Lucide."
+          },
+          {
+            "type": "improvement",
+            "text": "Player look-ups fall back to minetools when Mojang is busy."
+          },
+          {
+            "type": "improvement",
+            "text": "World hosting picks up the e4mc address even when it is hidden in chat."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.3.0", "date": "2026-11-12",
+    "product": "launcher",
+    "version": "1.3.0",
+    "date": "2026-11-12",
     "title": "New look, OptiFine, hosting for friends and cosmetics",
     "groups": [
-      { "area": "Look & feel", "entries": [
-        { "type": "feature", "text": "New Solaris logo and new fonts (Plus Jakarta Sans and Outfit) — including a cleaner Play button." },
-        { "type": "improvement", "text": "Faster start: Home shows modpacks, news and player counts from last time instantly, and the 3D skin viewer only loads when you need it." }
-      ] },
-      { "area": "Solaris Client", "entries": [
-        { "type": "feature", "text": "Optional cosmetics: Capes (see OptiFine, LabyMod and MinecraftCapes capes), 3D Skin Layers, Wavey Capes, Emotecraft and Ears." },
-        { "type": "feature", "text": "Host for friends: with e4mc, Open to LAN puts your world online without port forwarding. Solaris shows the address and an invite link." },
-        { "type": "feature", "text": "New modules like Feather and OneClient: EvergreenHUD (FPS, CPS, keystrokes), Controlling, FastQuit, Chat Heads, World Host, More Culling and more." },
-        { "type": "bugfix", "text": "AppleSkin’s settings page works again (Cloth Config is added automatically)." }
-      ] },
-      { "area": "Friends", "entries": [
-        { "type": "feature", "text": "Play together: host your world, join a friend by address or invite link, and see when you are hosting." }
-      ] },
-      { "area": "OptiFine", "entries": [
-        { "type": "feature", "text": "OptiFine for vanilla instances: download OptiFine from optifine.net, import it, and Solaris installs it. Pick OptiFine when creating an instance or in Change version." }
-      ] },
-      { "area": "Updates", "entries": [
-        { "type": "feature", "text": "See the release notes of a new version while it downloads, before you restart." }
-      ] }
+      {
+        "area": "Look & feel",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New Solaris logo and new fonts (Plus Jakarta Sans and Outfit) — including a cleaner Play button."
+          },
+          {
+            "type": "improvement",
+            "text": "Faster start: Home shows modpacks, news and player counts from last time instantly, and the 3D skin viewer only loads when you need it."
+          }
+        ]
+      },
+      {
+        "area": "Solaris Client",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Optional cosmetics: Capes (see OptiFine, LabyMod and MinecraftCapes capes), 3D Skin Layers, Wavey Capes, Emotecraft and Ears."
+          },
+          {
+            "type": "feature",
+            "text": "Host for friends: with e4mc, Open to LAN puts your world online without port forwarding. Solaris shows the address and an invite link."
+          },
+          {
+            "type": "feature",
+            "text": "New modules like Feather and OneClient: EvergreenHUD (FPS, CPS, keystrokes), Controlling, FastQuit, Chat Heads, World Host, More Culling and more."
+          },
+          {
+            "type": "bugfix",
+            "text": "AppleSkin’s settings page works again (Cloth Config is added automatically)."
+          }
+        ]
+      },
+      {
+        "area": "Friends",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Play together: host your world, join a friend by address or invite link, and see when you are hosting."
+          }
+        ]
+      },
+      {
+        "area": "OptiFine",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "OptiFine for vanilla instances: download OptiFine from optifine.net, import it, and Solaris installs it. Pick OptiFine when creating an instance or in Change version."
+          }
+        ]
+      },
+      {
+        "area": "Updates",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "See the release notes of a new version while it downloads, before you restart."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.2.0", "date": "2026-11-12",
+    "product": "launcher",
+    "version": "1.2.0",
+    "date": "2026-11-12",
     "title": "Minecraft news, solaris:// links and snowfall",
     "groups": [
-      { "area": "Home", "entries": [
-        { "type": "feature", "text": "Minecraft news: the latest Java Edition news from Mojang right on Home. Click a card to read the full article." }
-      ] },
-      { "area": "Launcher", "entries": [
-        { "type": "feature", "text": "New animated splash screen while Solaris starts." },
-        { "type": "feature", "text": "solaris:// links open Solaris straight to a Modrinth modpack (solaris://modrinth/<name>) or offer to join a server (solaris://server/<address>). Links never install or launch anything without you." },
-        { "type": "feature", "text": "Snowfall: gentle falling snow, on by itself in December. Switch it in Settings → Appearance." },
-        { "type": "improvement", "text": "Update files are now named Solaris-Setup-x.y.z.exe, so releases upload to GitHub without renaming." }
-      ] }
+      {
+        "area": "Home",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Minecraft news: the latest Java Edition news from Mojang right on Home. Click a card to read the full article."
+          }
+        ]
+      },
+      {
+        "area": "Launcher",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New animated splash screen while Solaris starts."
+          },
+          {
+            "type": "feature",
+            "text": "solaris:// links open Solaris straight to a Modrinth modpack (solaris://modrinth/<name>) or offer to join a server (solaris://server/<address>). Links never install or launch anything without you."
+          },
+          {
+            "type": "feature",
+            "text": "Snowfall: gentle falling snow, on by itself in December. Switch it in Settings → Appearance."
+          },
+          {
+            "type": "improvement",
+            "text": "Update files are now named Solaris-Setup-x.y.z.exe, so releases upload to GitHub without renaming."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.1.1", "date": "2026-11-12",
+    "product": "launcher",
+    "version": "1.1.1",
+    "date": "2026-11-12",
     "title": "Sign-in screen, self-updates and Discord buttons",
     "groups": [
-      { "area": "Launcher", "entries": [
-        { "type": "feature", "text": "New sign-in screen: sign in with Microsoft or pick an offline name before you start, with a live 3D preview of your player." },
-        { "type": "feature", "text": "Solaris now updates itself: new versions download in the background with a progress animation, then install with one click." },
-        { "type": "feature", "text": "“What’s new” pops up once after each update." },
-        { "type": "bugfix", "text": "No more “Update failed” message when there simply isn’t a new version yet." }
-      ] },
-      { "area": "Discord", "entries": [
-        { "type": "feature", "text": "Rich Presence works out of the box — no application ID to paste. It now uses Silent Client’s discord-rpc, shows a “Get Solaris” button and reconnects by itself when you open Discord later." }
-      ] },
-      { "area": "Skins", "entries": [
-        { "type": "feature", "text": "Animated capes in the 3D viewer, and a button to preview your own cape file (idea from Silent Client’s skinview3d)." }
-      ] }
+      {
+        "area": "Launcher",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New sign-in screen: sign in with Microsoft or pick an offline name before you start, with a live 3D preview of your player."
+          },
+          {
+            "type": "feature",
+            "text": "Solaris now updates itself: new versions download in the background with a progress animation, then install with one click."
+          },
+          {
+            "type": "feature",
+            "text": "“What’s new” pops up once after each update."
+          },
+          {
+            "type": "bugfix",
+            "text": "No more “Update failed” message when there simply isn’t a new version yet."
+          }
+        ]
+      },
+      {
+        "area": "Discord",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Rich Presence works out of the box — no application ID to paste. It now uses Silent Client’s discord-rpc, shows a “Get Solaris” button and reconnects by itself when you open Discord later."
+          }
+        ]
+      },
+      {
+        "area": "Skins",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Animated capes in the 3D viewer, and a button to preview your own cape file (idea from Silent Client’s skinview3d)."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.0.0", "date": "2026-11-11",
+    "product": "launcher",
+    "version": "1.0.0",
+    "date": "2026-11-11",
     "title": "CurseForge, friends and a lot more",
     "groups": [
-      { "area": "Mods & modpacks", "entries": [
-        { "type": "feature", "text": "CurseForge: browse and install mods, modpacks, shaders and resource packs (add your free API key in Settings → Integrations)." },
-        { "type": "feature", "text": "Modpack updates: update a Modrinth or CurseForge modpack, or switch to any version. Your worlds, settings and own mods are kept." },
-        { "type": "feature", "text": "Source badges show where every mod came from: Modrinth, CurseForge, a modpack, or added by you." },
-        { "type": "feature", "text": "Import CurseForge modpack .zip files and CurseForge app instances." }
-      ] },
-      { "area": "Instances", "entries": [
-        { "type": "feature", "text": "New Files, Screenshots and Logs tabs: a built-in file explorer and config editor, per-instance screenshots, and crash logs you can upload to mclo.gs." },
-        { "type": "feature", "text": "Reorder or hide instance tabs in Settings → Appearance." },
-        { "type": "improvement", "text": "Damaged game files are detected automatically and repaired on the next launch." }
-      ] },
-      { "area": "Accounts & safety", "entries": [
-        { "type": "feature", "text": "Friends: follow players, see their real skins, and see when Solaris spots them on a server." },
-        { "type": "feature", "text": "New mods are scanned for malware automatically, plus Scan now in Settings → Privacy & safety." },
-        { "type": "feature", "text": "Discord shows your player head for Microsoft accounts, with privacy switches for what is shared." },
-        { "type": "feature", "text": "Refresh skin button, streamer mode, and warnings for unusual offline usernames." }
-      ] },
-      { "area": "Look & performance", "entries": [
-        { "type": "feature", "text": "Light, dark or match-system mode, a Classic layout, and custom gradients for buttons and the background." },
-        { "type": "feature", "text": "Low-end PC mode and a GPU acceleration switch in Settings → Performance." },
-        { "type": "improvement", "text": "Smarter Java: per-version Java choices, a Test button, and Java that is too old is skipped automatically." },
-        { "type": "fix", "text": "If your moved data folder is missing (e.g. an unplugged drive), Solaris asks what to do instead of starting empty." }
-      ] }
+      {
+        "area": "Mods & modpacks",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "CurseForge: browse and install mods, modpacks, shaders and resource packs (add your free API key in Settings → Integrations)."
+          },
+          {
+            "type": "feature",
+            "text": "Modpack updates: update a Modrinth or CurseForge modpack, or switch to any version. Your worlds, settings and own mods are kept."
+          },
+          {
+            "type": "feature",
+            "text": "Source badges show where every mod came from: Modrinth, CurseForge, a modpack, or added by you."
+          },
+          {
+            "type": "feature",
+            "text": "Import CurseForge modpack .zip files and CurseForge app instances."
+          }
+        ]
+      },
+      {
+        "area": "Instances",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New Files, Screenshots and Logs tabs: a built-in file explorer and config editor, per-instance screenshots, and crash logs you can upload to mclo.gs."
+          },
+          {
+            "type": "feature",
+            "text": "Reorder or hide instance tabs in Settings → Appearance."
+          },
+          {
+            "type": "improvement",
+            "text": "Damaged game files are detected automatically and repaired on the next launch."
+          }
+        ]
+      },
+      {
+        "area": "Accounts & safety",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Friends: follow players, see their real skins, and see when Solaris spots them on a server."
+          },
+          {
+            "type": "feature",
+            "text": "New mods are scanned for malware automatically, plus Scan now in Settings → Privacy & safety."
+          },
+          {
+            "type": "feature",
+            "text": "Discord shows your player head for Microsoft accounts, with privacy switches for what is shared."
+          },
+          {
+            "type": "feature",
+            "text": "Refresh skin button, streamer mode, and warnings for unusual offline usernames."
+          }
+        ]
+      },
+      {
+        "area": "Look & performance",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Light, dark or match-system mode, a Classic layout, and custom gradients for buttons and the background."
+          },
+          {
+            "type": "feature",
+            "text": "Low-end PC mode and a GPU acceleration switch in Settings → Performance."
+          },
+          {
+            "type": "improvement",
+            "text": "Smarter Java: per-version Java choices, a Test button, and Java that is too old is skipped automatically."
+          },
+          {
+            "type": "fix",
+            "text": "If your moved data folder is missing (e.g. an unplugged drive), Solaris asks what to do instead of starting empty."
+          }
+        ]
+      }
     ]
   },
   {
-    "product": "launcher", "version": "1.0.0", "date": "2026-11-09",
+    "product": "launcher",
+    "version": "1.0.0",
+    "date": "2026-11-09",
     "title": "Solaris is here",
     "groups": [
-      { "area": "Launch", "entries": [
-        { "type": "feature", "text": "Launch every Minecraft: Java Edition release, snapshot and old version from one launcher." },
-        { "type": "feature", "text": "Multi-instancing: run several instances at the same time, each with its own live console." },
-        { "type": "feature", "text": "Automatic Java: the right official Java runtime is downloaded for every version." },
-        { "type": "feature", "text": "Quick Play: join a server or open a world straight from the launcher." },
-        { "type": "feature", "text": "Auto memory sizing based on your system RAM, with per-instance overrides." },
-        { "type": "feature", "text": "Performance mode and dedicated-GPU preference for laptops." }
-      ]},
-      { "area": "Instances", "entries": [
-        { "type": "feature", "text": "Fabric, Quilt, Forge, NeoForge and Legacy Fabric — loaders only show up on compatible versions." },
-        { "type": "feature", "text": "Duplicate instances with selective copying of mods, packs, worlds and config." },
-        { "type": "feature", "text": "Share instances as .solpack files and import .mrpack modpacks by drag & drop." },
-        { "type": "feature", "text": "Custom icons, pinned favourites, readable folder names and play-time tracking." },
-        { "type": "feature", "text": "Import from the official launcher, MultiMC and Prism Launcher." }
-      ]},
-      { "area": "Content", "entries": [
-        { "type": "feature", "text": "Built-in Modrinth browser for mods, modpacks, resource packs, shaders and datapacks." },
-        { "type": "feature", "text": "Version picker, automatic required dependencies and multi-category filters." },
-        { "type": "feature", "text": "Bulk select, enable, disable and delete with Ctrl/Shift+Click." },
-        { "type": "feature", "text": "Update manager that checks every mod against Modrinth by file hash." },
-        { "type": "feature", "text": "Duplicate-mod detection and a heuristic malware scan." }
-      ]},
-      { "area": "Solaris Client", "entries": [
-        { "type": "feature", "text": "One-click all-in-one modpack: Sodium, Lithium, FerriteCore, Zoomify and more, kept up to date on every launch." },
-        { "type": "feature", "text": "Toggle modules per instance from the Solaris Client page." }
-      ]},
-      { "area": "Social", "entries": [
-        { "type": "feature", "text": "Server browser with live player counts, ping, MOTD, region & tag filters and favourites." },
-        { "type": "feature", "text": "Server statistics: player count history for every server you check." },
-        { "type": "feature", "text": "Skin wardrobe with a 3D preview, staged Apply, and cape switching for Microsoft accounts." },
-        { "type": "feature", "text": "Discord Rich Presence." }
-      ]},
-      { "area": "Troubleshooting", "entries": [
-        { "type": "feature", "text": "Crash assistant explains crashes in plain language with suggested fixes and hex exit codes." },
-        { "type": "feature", "text": "Live console with filtering and one-click log sharing to mclo.gs." },
-        { "type": "feature", "text": "Hosts-file check for blocked Mojang/Microsoft domains." }
-      ]},
-      { "area": "Interface", "entries": [
-        { "type": "feature", "text": "Themes with live preview, custom accent colours and a custom theme editor." },
-        { "type": "feature", "text": "Editable keybinds, mouse back/forward navigation and instant language switching." },
-        { "type": "feature", "text": "Gallery of screenshots across all instances." },
-        { "type": "improvement", "text": "Storage manager: see what uses space, clean up unused files and move the data folder." }
-      ]}
+      {
+        "area": "Launch",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Launch every Minecraft: Java Edition release, snapshot and old version from one launcher."
+          },
+          {
+            "type": "feature",
+            "text": "Multi-instancing: run several instances at the same time, each with its own live console."
+          },
+          {
+            "type": "feature",
+            "text": "Automatic Java: the right official Java runtime is downloaded for every version."
+          },
+          {
+            "type": "feature",
+            "text": "Quick Play: join a server or open a world straight from the launcher."
+          },
+          {
+            "type": "feature",
+            "text": "Auto memory sizing based on your system RAM, with per-instance overrides."
+          },
+          {
+            "type": "feature",
+            "text": "Performance mode and dedicated-GPU preference for laptops."
+          }
+        ]
+      },
+      {
+        "area": "Instances",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Fabric, Quilt, Forge, NeoForge and Legacy Fabric — loaders only show up on compatible versions."
+          },
+          {
+            "type": "feature",
+            "text": "Duplicate instances with selective copying of mods, packs, worlds and config."
+          },
+          {
+            "type": "feature",
+            "text": "Share instances as .solpack files and import .mrpack modpacks by drag & drop."
+          },
+          {
+            "type": "feature",
+            "text": "Custom icons, pinned favourites, readable folder names and play-time tracking."
+          },
+          {
+            "type": "feature",
+            "text": "Import from the official launcher, MultiMC and Prism Launcher."
+          }
+        ]
+      },
+      {
+        "area": "Content",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Built-in Modrinth browser for mods, modpacks, resource packs, shaders and datapacks."
+          },
+          {
+            "type": "feature",
+            "text": "Version picker, automatic required dependencies and multi-category filters."
+          },
+          {
+            "type": "feature",
+            "text": "Bulk select, enable, disable and delete with Ctrl/Shift+Click."
+          },
+          {
+            "type": "feature",
+            "text": "Update manager that checks every mod against Modrinth by file hash."
+          },
+          {
+            "type": "feature",
+            "text": "Duplicate-mod detection and a heuristic malware scan."
+          }
+        ]
+      },
+      {
+        "area": "Solaris Client",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "One-click all-in-one modpack: Sodium, Lithium, FerriteCore, Zoomify and more, kept up to date on every launch."
+          },
+          {
+            "type": "feature",
+            "text": "Toggle modules per instance from the Solaris Client page."
+          }
+        ]
+      },
+      {
+        "area": "Social",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Server browser with live player counts, ping, MOTD, region & tag filters and favourites."
+          },
+          {
+            "type": "feature",
+            "text": "Server statistics: player count history for every server you check."
+          },
+          {
+            "type": "feature",
+            "text": "Skin wardrobe with a 3D preview, staged Apply, and cape switching for Microsoft accounts."
+          },
+          {
+            "type": "feature",
+            "text": "Discord Rich Presence."
+          }
+        ]
+      },
+      {
+        "area": "Troubleshooting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Crash assistant explains crashes in plain language with suggested fixes and hex exit codes."
+          },
+          {
+            "type": "feature",
+            "text": "Live console with filtering and one-click log sharing to mclo.gs."
+          },
+          {
+            "type": "feature",
+            "text": "Hosts-file check for blocked Mojang/Microsoft domains."
+          }
+        ]
+      },
+      {
+        "area": "Interface",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Themes with live preview, custom accent colours and a custom theme editor."
+          },
+          {
+            "type": "feature",
+            "text": "Editable keybinds, mouse back/forward navigation and instant language switching."
+          },
+          {
+            "type": "feature",
+            "text": "Gallery of screenshots across all instances."
+          },
+          {
+            "type": "improvement",
+            "text": "Storage manager: see what uses space, clean up unused files and move the data folder."
+          }
+        ]
+      }
     ]
   }
 ]

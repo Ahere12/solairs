@@ -95,6 +95,24 @@ function fixRepo(url) {
     .replace(/\/?$/, '/');
 }
 
+/**
+ * Modern versions list every CPU's native jar for an OS (natives-linux, natives-linux-arm64, natives-windows-x86 …).
+ * Only the ones for this computer's CPU are extracted, so the right .dll/.so ends up in the natives folder.
+ */
+function nativeArchOk(classifier) {
+  const c = String(classifier || '');
+  const arm = /(arm64|aarch_?64)$/.test(c), x86 = /-(x86|i386)$/.test(c), arm32 = /-arm32$/.test(c);
+  if (process.arch === 'arm64') return arm || !(x86 || arm32);
+  if (process.arch === 'ia32') return x86 || !(arm || arm32);
+  return !(arm || x86 || arm32);
+}
+/** LWJGL 3.3+ jars keep libraries under <os>/<cpu>/…; skip other CPUs' copies inside one jar. */
+function entryArchOk(name) {
+  const m = name.match(/^(?:windows|linux|macos)\/(x64|x86|arm64|arm32)\//);
+  if (!m) return true;
+  const want = process.arch === 'arm64' ? 'arm64' : process.arch === 'ia32' ? 'x86' : process.arch === 'arm' ? 'arm32' : 'x64';
+  return m[1] === want;
+}
 /** Returns { classpath: [task], natives: [task] } download tasks for a resolved version. */
 function collectLibraries(version) {
   const classpath = [];
@@ -118,7 +136,7 @@ function collectLibraries(version) {
     if (task && !seen.has(key)) {
       seen.add(key);
       classpath.push(task);
-      if (/:natives-/.test(lib.name)) natives.push({ ...task, exclude: ['META-INF/'] });
+      if (/:natives-/.test(lib.name) && nativeArchOk(parts[3])) natives.push({ ...task, exclude: ['META-INF/'] });
     }
     // Legacy native classifiers (<= 1.18)
     if (lib.natives && lib.natives[osName()]) {
@@ -144,6 +162,7 @@ function extractNatives(natives, dir) {
       if (e.isDirectory) continue;
       if ((n.exclude || []).some((x) => e.entryName.startsWith(x))) continue;
       if (!/\.(dll|so|dylib|jnilib)$/i.test(e.entryName)) continue;
+      if (!entryArchOk(e.entryName)) continue;
       const out = path.join(dir, path.basename(e.entryName));
       if (!fs.existsSync(out)) { try { fs.writeFileSync(out, e.getData()); } catch {} }
     }

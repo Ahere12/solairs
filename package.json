@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Solaris",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",
@@ -11,7 +11,7 @@
     "icon": "node tools/make-icon.js",
     "dist": "electron-builder --win nsis",
     "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux AppImage rpm",
+    "dist:linux": "electron-builder --linux AppImage deb --x64",
     "predist": "node tools/check-release.js",
     "predist:mac": "node tools/check-release.js",
     "predist:linux": "node tools/check-release.js"
@@ -47,11 +47,36 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "rpm"
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "assets/icon.png",
-      "category": "Game"
+      "category": "Game",
+      "executableName": "solaris",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "synopsis": "A fast, modern Minecraft: Java Edition launcher",
+      "description": "Solaris — a fast, modern Minecraft: Java Edition launcher with mods, modpacks, skins and server hosting.",
+      "maintainer": "Ahere12 <Ahere12@users.noreply.github.com>",
+      "vendor": "Solaris",
+      "desktop": {
+        "entry": {
+          "Keywords": "minecraft;launcher;game;"
+        }
+      },
+      "mimeTypes": [
+        "x-scheme-handler/solaris"
+      ],
+      "syncDesktopName": true
     },
     "publish": [
       {
@@ -72,7 +97,23 @@
           "solaris"
         ]
       }
-    ]
+    ],
+    "afterPack": "tools/after-pack.js",
+    "deb": {
+      "depends": [
+        "libgtk-3-0 | libgtk-3-0t64",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0 | libatspi2.0-0t64",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2 | libasound2t64"
+      ],
+      "artifactName": "solaris_${version}_amd64.${ext}"
+    }
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
@@ -86,5 +127,7 @@
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
     "lucide-static": "^0.577.0"
-  }
+  },
+  "homepage": "https://github.com/Ahere12/solairs",
+  "desktopName": "solaris.desktop"
 }

@@ -114,11 +114,23 @@ on('launch:exited', async ({ runId, instanceId, code, killed, analysis }) => {
   if (analysis) showCrash({ instanceId, analysis, runId });
   else if (killed) toast('Game stopped', 'info');
 });
-on('game:log', ({ runId, instanceId, line }) => {
-  const r = (State.runs[runId] = State.runs[runId] || { instanceId, name: State.instances.find((i) => i.id === instanceId)?.name || instanceId, start: Date.now(), lines: [], running: !runId.startsWith('install-') });
-  r.lines.push(line);
-  if (r.lines.length > 8000) r.lines.shift();
-  Bus.emit('log', { runId, line });
+// Log lines come in batches from the main process (see main.js). Group them per run/server, then let each
+// console draw a whole batch at once.
+on('logs:batch', (batch) => {
+  const games = new Map(), hosted = new Map();
+  for (const [ch, p] of batch) {
+    if (ch === 'game:log') {
+      const r = (State.runs[p.runId] = State.runs[p.runId] || { instanceId: p.instanceId, name: State.instances.find((i) => i.id === p.instanceId)?.name || p.instanceId, start: Date.now(), lines: [], running: !p.runId.startsWith('install-') });
+      r.lines.push(p.line);
+      (games.get(p.runId) || games.set(p.runId, []).get(p.runId)).push(p.line);
+    } else if (ch === 'hosted:log') (hosted.get(p.id) || hosted.set(p.id, []).get(p.id)).push(p.line);
+  }
+  for (const [runId, lines] of games) {
+    const r = State.runs[runId];
+    if (r.lines.length > 8000) r.lines.splice(0, r.lines.length - 8000);
+    Bus.emit('log', { runId, lines });
+  }
+  for (const [id, lines] of hosted) Bus.emit('hosted-lines', { id, lines });
 });
 on('task', (t) => {
   if (t.done) delete State.tasks[t.id]; else State.tasks[t.id] = { label: t.label, progress: t.progress, detail: t.detail };
@@ -133,7 +145,7 @@ on('safety:flagged', ({ instanceId, file, findings }) => {
     footer: `<button class="btn ghost" data-keep>Keep it</button><button class="btn" data-off>${icon('eye')}Turn it off</button><button class="btn danger" data-del>${icon('trash')}Delete</button>` });
   m.$('[data-keep]').onclick = () => m.close();
   m.$('[data-off]').onclick = async () => { try { await api('safety:disable', instanceId, file); toast(`${file} turned off`); } catch (e) { toastErr(e); } m.close(); };
-  m.$('[data-del]').onclick = async () => { try { await api('instances:deleteContent', instanceId, 'mods', [file]); toast(`${file} moved to the Recycle Bin`); } catch (e) { toastErr(e); } m.close(); };
+  m.$('[data-del]').onclick = async () => { try { await api('instances:deleteContent', instanceId, 'mods', [file]); toast(`${file} moved to the ${TRASH}`); } catch (e) { toastErr(e); } m.close(); };
 });
 on('window:maximized', (m) => ($('#win-max').innerHTML = icon(m ? 'copy' : 'max')));
 

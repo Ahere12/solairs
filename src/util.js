@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const { pipeline } = require('stream/promises');
-const { Readable } = require('stream');
+const { Readable, Transform } = require('stream');
 const { app } = require('electron');
 
 const UA = 'Solaris-Launcher/1.0.0';
@@ -73,7 +73,8 @@ async function request(url, opts = {}) {
   let last;
   for (let i = 0; i < 3; i++) {
     try {
-      const r = await fetch(url, { ...opts, headers });
+      // A stuck connection must not hang the launcher: give up after 25 s unless the caller set its own signal.
+      const r = await fetch(url, { ...opts, headers, signal: opts.signal || AbortSignal.timeout(25000) });
       if (r.status >= 500) throw new Error(`HTTP ${r.status} for ${url}`);
       return r;
     } catch (e) { last = e; await sleep(400 * (i + 1)); }
@@ -113,9 +114,15 @@ async function download(url, dest, { sha1, size, verify } = {}) {
   let last;
   for (let i = 0; i < 4; i++) {
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': UA } });
-      if (!r.ok) throw new Error(`HTTP ${r.status} downloading ${url}`);
-      await pipeline(Readable.fromWeb(r.body), fs.createWriteStream(tmp));
+      // Abort when no data arrives for 30 s (a stalled download), however long the whole file takes.
+      const ctl = new AbortController();
+      let idle = setTimeout(() => ctl.abort(new Error('Download stalled: ' + path.basename(dest))), 30000);
+      const alive = () => { clearTimeout(idle); idle = setTimeout(() => ctl.abort(new Error('Download stalled: ' + path.basename(dest))), 30000); };
+      try {
+        const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctl.signal });
+        if (!r.ok) throw new Error(`HTTP ${r.status} downloading ${url}`);
+        await pipeline(Readable.fromWeb(r.body), new Transform({ transform(c, _e, cb) { alive(); cb(null, c); } }), fs.createWriteStream(tmp), { signal: ctl.signal });
+      } finally { clearTimeout(idle); }
       if (sha1) {
         const got = await sha1File(tmp);
         if (got !== sha1) throw new Error(`Checksum mismatch for ${path.basename(dest)}`);

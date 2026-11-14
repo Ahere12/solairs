@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, Notification } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let win = null;
 let tray = null;
@@ -10,12 +11,24 @@ let quitWhenGamesClose = false; // window was closed while a game was running
 try {
   const { paths } = require('./src/util');
   if (!paths.missingDataDir()) {
-    const fs = require('fs');
     const root = process.env.SOLARIS_DATA_DIR || (() => { try { return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'boot.json'), 'utf8')).dataDir; } catch { return null; } })() || paths.defaultRoot();
     const s = JSON.parse(fs.readFileSync(path.join(root, 'settings.json'), 'utf8'));
     if (s.hardwareAcceleration === false) app.disableHardwareAcceleration();
   }
 } catch {}
+
+// A bug in a background task (a download, a server, Discord) must not pop up an error box or stop Solaris:
+// write it to logs/main-errors.log instead.
+function logMainError(kind, e) {
+  try {
+    const { paths } = require('./src/util');
+    fs.mkdirSync(paths.logs(), { recursive: true });
+    fs.appendFileSync(path.join(paths.logs(), 'main-errors.log'), `[${new Date().toISOString()}] ${kind}: ${e && e.stack ? e.stack : String(e)}\n`);
+  } catch {}
+  console.error(`[Solaris] ${kind}:`, e);
+}
+process.on('uncaughtException', (e) => logMainError('uncaughtException', e));
+process.on('unhandledRejection', (e) => logMainError('unhandledRejection', e));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -76,7 +89,24 @@ function init() {
     return fn(...(args || []));
   });
 
+  // Log lines (games, hosted servers) arrive by the thousand while modded games start: send them in batches
+  // every 60 ms instead of one IPC message per line. Other events flush the batch first, so order is kept.
+  let logQueue = [], logTimer = null;
+  const LOG_CHANNELS = new Set(['game:log', 'hosted:log']);
+  const flushLogs = () => {
+    clearTimeout(logTimer); logTimer = null;
+    if (!logQueue.length) return;
+    const q = logQueue; logQueue = [];
+    if (win && !win.isDestroyed()) win.webContents.send('event', 'logs:batch', q);
+  };
   events.on('send', (channel, payload) => {
+    if (LOG_CHANNELS.has(channel)) {
+      logQueue.push([channel, payload]);
+      if (logQueue.length >= 500) flushLogs();
+      else if (!logTimer) logTimer = setTimeout(flushLogs, 60);
+      return;
+    }
+    flushLogs();
     if (win && !win.isDestroyed()) win.webContents.send('event', channel, payload);
   });
   events.on('window', (action) => {
@@ -113,7 +143,9 @@ function init() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:\/\//.test(url)) shell.openExternal(url); } });
 
   // Tray with quick launch of recent instances.
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  // Linux panels (GNOME AppIndicator, KDE) show tray icons at 22-24 px; Windows uses 16 px.
+  const traySize = process.platform === 'linux' ? 24 : 16;
+  tray = new Tray(icon.resize({ width: traySize, height: traySize }));
   tray.setToolTip('Solaris');
   const rebuildTray = () => {
     const instances = require('./src/instances').list().sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 5);
@@ -130,7 +162,7 @@ function init() {
   events.on('send', (ch, payload) => {
     if (ch === 'launch:started' || ch === 'launch:exited') rebuildTray();
     // window was closed during play: quit once nothing is running (a game exited, or a launch failed)
-    if ((ch === 'launch:exited' || (ch === 'launch:status' && payload?.error)) && quitWhenGamesClose) setTimeout(() => { if (!require('./src/launch').anyRunning()) { app.isQuitting = true; app.quit(); } }, 1500);
+    if ((ch === 'launch:exited' || (ch === 'launch:status' && payload?.error)) && quitWhenGamesClose) setTimeout(() => { if (quitWhenGamesClose && !require('./src/launch').anyRunning() && !require('./src/hostserver').anyRunning()) { app.isQuitting = true; app.quit(); } }, 1500);
   });
 
   // Background work starts after the window is up, so it doesn't slow down opening Solaris.

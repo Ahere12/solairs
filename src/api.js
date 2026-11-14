@@ -27,8 +27,10 @@ function withRunning(list) { return list.map((i) => ({ ...i, running: launch.isR
 /** File actions from the UI are limited to Solaris's own folders (data folder + instance game folders). */
 function assertKnownPath(p) {
   const r = path.resolve(String(p || ''));
-  const roots = [paths.getRoot(), ...instances.list().map((i) => i.gameDir)].map((x) => path.resolve(x).toLowerCase());
-  const rl = r.toLowerCase();
+  // Windows and macOS paths ignore case; Linux paths don't.
+  const fold = process.platform === 'linux' ? (x) => x : (x) => x.toLowerCase();
+  const roots = [paths.getRoot(), ...instances.list().map((i) => i.gameDir)].map((x) => fold(path.resolve(x)));
+  const rl = fold(r);
   if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Solaris folders.');
   return r;
 }
@@ -304,7 +306,7 @@ module.exports = (getWin) => ({
   // ---------- java ----------
   'java:detect': () => java.detect(),
   'java:test': (p) => java.test(p),
-  'java:install': (component) => java.ensureRuntime(component, (d, t) => push('task', { id: 'java', label: `Installing ${component}`, progress: d / t, detail: `${d}/${t}` })).then((p) => { push('task', { id: 'java', done: true }); return p; }),
+  'java:install': (component) => java.ensureRuntime(component, (d, t) => push('task', { id: 'java', label: `Installing ${component}`, progress: d / t, detail: `${d}/${t}` })).finally(() => push('task', { id: 'java', done: true })),
 
   // ---------- import ----------
   'import:officialScan': () => importers.scanOfficial(),
@@ -327,7 +329,10 @@ module.exports = (getWin) => ({
     noGamesRunning('cleaning up'); // running games use natives and version files
     let freed = 0;
     const rm = async (p) => { const sz = await dirSizeAsync(p); try { await fs.promises.rm(p, { recursive: true, force: true }); freed += sz; } catch {} };
-    await rm(paths.cache());
+    // Cache, except what can't simply be downloaded again: OptiFine jars the player imported by hand,
+    // and the playit.gg agent (it may be running a tunnel right now).
+    const KEEP = new Set(['optifine', 'playit']);
+    try { for (const f of fs.readdirSync(paths.cache())) if (!KEEP.has(f)) await rm(path.join(paths.cache(), f)); } catch {}
     await rm(paths.natives());
     // Old logs (>14 days)
     try { for (const f of fs.readdirSync(paths.logs())) { const full = path.join(paths.logs(), f); if (Date.now() - fs.statSync(full).mtimeMs > 14 * 864e5) { freed += fs.statSync(full).size; fs.unlinkSync(full); } } } catch {}
@@ -348,15 +353,18 @@ module.exports = (getWin) => ({
     return true;
   },
   'storage:relocate': async () => {
+    noGamesRunning('moving the data folder');
+    if (require('./hostserver').anyRunning()) throw new Error('Stop your hosted servers before moving the data folder.');
     const [dir] = (await dialog.showOpenDialog(getWin(), { properties: ['openDirectory', 'createDirectory'] })).filePaths;
     if (!dir) return null;
     const target = path.join(dir, 'Solaris');
     const old = paths.getRoot();
     if (path.resolve(target) === path.resolve(old)) return null;
+    // Copying a folder into itself never ends.
+    if (path.resolve(target).startsWith(path.resolve(old) + path.sep)) throw new Error('Pick a folder outside the current Solaris data folder.');
     push('task', { id: 'relocate', label: 'Moving data folder', progress: null });
-    await fs.promises.cp(old, target, { recursive: true });
+    try { await fs.promises.cp(old, target, { recursive: true }); } finally { push('task', { id: 'relocate', done: true }); }
     paths.setRoot(target);
-    push('task', { id: 'relocate', done: true });
     app.relaunch(); app.exit(0);
     return target;
   },

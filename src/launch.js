@@ -18,7 +18,23 @@ const modrinth = require('./modrinth');
 const running = new Map(); // runId -> { proc, instanceId, start, lines, logFile }
 const history = []; // finished runs (for the console)
 
-function cleanEnv() { const e = { ...process.env }; delete e.JAVA_TOOL_OPTIONS; delete e._JAVA_OPTIONS; return e; }
+function cleanEnv() {
+  const e = { ...process.env }; delete e.JAVA_TOOL_OPTIONS; delete e._JAVA_OPTIONS;
+  if (process.platform === 'linux') {
+    // Solaris's own AppImage/Electron variables must not leak into Java (they can load the wrong libraries).
+    for (const k of ['LD_PRELOAD', 'ELECTRON_RUN_AS_NODE', 'CHROME_DESKTOP', 'GDK_BACKEND']) delete e[k];
+    // The AppImage puts its own folder (with Electron's libEGL/libvulkan) on LD_LIBRARY_PATH; the game must use the system's.
+    if (e.APPDIR && e.LD_LIBRARY_PATH) {
+      e.LD_LIBRARY_PATH = e.LD_LIBRARY_PATH.split(':').filter((p) => p && !p.startsWith(e.APPDIR)).join(':');
+      if (!e.LD_LIBRARY_PATH) delete e.LD_LIBRARY_PATH;
+    }
+    if (settings.get().dedicatedGpu) {
+      e.DRI_PRIME = '1'; // Mesa (AMD / Intel) offload
+      if (fs.existsSync('/proc/driver/nvidia')) { e.__NV_PRIME_RENDER_OFFLOAD = '1'; e.__GLX_VENDOR_LIBRARY_NAME = 'nvidia'; e.__VK_LAYER_NV_optimus = 'NVIDIA_only'; }
+    }
+  }
+  return e;
+}
 function status(instanceId, stage, progress = null, detail = '') {
   push('launch:status', { instanceId, stage, progress, detail });
 }
@@ -59,7 +75,16 @@ async function resolveJava(inst, version, onProgress) {
     if (found) return found.path;
     if (!java.isInstalled(component)) throw new Error(`Java ${need} is needed but not installed, and automatic Java installs are off. Install it in Settings → Java.`);
   }
-  return java.ensureRuntime(component, onProgress);
+  try {
+    return await java.ensureRuntime(component, onProgress);
+  } catch (e) {
+    // No Mojang Java for this computer (e.g. Linux on ARM): use a Java installed on the system if one fits.
+    if (!/not available for/.test(e.message)) throw e;
+    const all = await java.detect();
+    const found = all.find((j) => java.majorOf(j.version) === need) || all.find((j) => java.majorOf(j.version) > need && need >= 17);
+    if (found) return found.path;
+    throw new Error(`Minecraft ${inst.versionId} needs Java ${need}. Install it with your system's package manager (for example: openjdk-${need}-jre), then press Play again.`);
+  }
 }
 
 function setGpuPreference(javaPath) {

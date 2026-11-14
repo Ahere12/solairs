@@ -84,14 +84,21 @@ function unlink() {
 // ---------- agent process ----------
 async function agentExe() {
   const dir = path.join(paths.cache(), 'playit');
-  const exe = path.join(dir, 'playitd.exe');
+  const win = process.platform === 'win32';
+  const exe = path.join(dir, win ? 'playitd.exe' : 'playitd');
   if (fs.existsSync(exe)) return exe;
-  if (process.platform !== 'win32') throw new Error('playit.gg hosting from Solaris is available on Windows.');
+  // playit's release names its agent (playitd) per OS and CPU; "playit-linux-*" is the Linux build of playitd.
+  const linuxArch = { x64: 'amd64', arm64: 'aarch64', arm: 'armv7', ia32: 'i686' }[process.arch];
+  const wanted = win ? [/^playitd-windows-x86_64-signed\.exe$/, /^playitd-windows-x86_64\.exe$/]
+    : process.platform === 'linux' && linuxArch ? [new RegExp(`^playit-linux-${linuxArch}$`)] : [];
+  if (!wanted.length) throw new Error('playit.gg hosting from Solaris works on Windows and Linux.');
   const rel = await getJSON('https://api.github.com/repos/playit-cloud/playit-agent/releases/latest');
-  const a = (rel.assets || []).find((x) => /^playitd-windows-x86_64-signed\.exe$/.test(x.name)) || (rel.assets || []).find((x) => /^playitd-windows-x86_64\.exe$/.test(x.name));
+  let a = null;
+  for (const re of wanted) { a = (rel.assets || []).find((x) => re.test(x.name)); if (a) break; }
   if (!a) throw new Error('Couldn’t find the playit.gg agent download.');
   push('task', { id: 'playit', label: 'Downloading playit.gg agent', progress: null });
   try { await download(a.browser_download_url, exe, { size: a.size }); } finally { push('task', { id: 'playit', done: true }); }
+  if (!win) fs.chmodSync(exe, 0o755);
   return exe;
 }
 async function ensureAgent() {
@@ -103,7 +110,10 @@ async function ensureAgent() {
   agent = { proc: null, state: 'connecting', restarts, lastError: null };
   const logDir = path.join(paths.cache(), 'playit', 'logs');
   fs.mkdirSync(logDir, { recursive: true });
-  const proc = spawn(exe, ['--secret', secret, '--log-path', path.join(logDir, 'playitd.log'), '--socket-path', `\\\\.\\pipe\\solaris-playitd-${process.pid}`], { windowsHide: true });
+  // The agent's control socket: a named pipe on Windows, a socket file elsewhere.
+  const socket = process.platform === 'win32' ? `\\\\.\\pipe\\solaris-playitd-${process.pid}` : path.join(require('os').tmpdir(), `solaris-playitd-${process.pid}.sock`);
+  if (process.platform !== 'win32') { try { fs.rmSync(socket, { force: true }); } catch {} }
+  const proc = spawn(exe, ['--secret', secret, '--log-path', path.join(logDir, 'playitd.log'), '--socket-path', socket], { windowsHide: true });
   agent.proc = proc;
   const onOut = (d) => { const s = String(d); if (/error|failed/i.test(s)) agent.lastError = s.trim().split(/\r?\n/).pop().slice(0, 200); };
   proc.stdout.on('data', onOut); proc.stderr.on('data', onOut);

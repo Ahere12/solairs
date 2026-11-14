@@ -1,6 +1,7 @@
 // Discord Rich Presence through Silent Client's discord-rpc (MIT, github.com/Silent-Client/discord-rpc).
 // Uses Solaris's built-in Discord application (src/config.js). Reconnects by itself when Discord is started later.
-const { Client } = require('silent-discord-rpc');
+// Loaded on first use: the library (with its websocket and fetch helpers) takes ~45 ms to load at startup.
+const Client = function (opts) { const { Client: C } = require('silent-discord-rpc'); return new C(opts); };
 const settings = require('./settings');
 const { DISCORD_CLIENT_ID } = require('./config');
 

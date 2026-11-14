@@ -264,6 +264,8 @@ async function start(id, resolveJava) {
   let java;
   try { java = await javaFor(m.mc, resolveJava, (s) => log(id, '[Solaris] ' + s)); }
   catch (e) { running.delete(id); emit(id); throw e; }
+  // Stopped (or Solaris quitting) while Java was still being prepared: don't start it after all.
+  if (r.cancelled) { running.delete(id); emit(id); return get(id); }
   writeProps(id, { 'server-port': m.port });
   const st = m.start || { jar: 'server.jar' };
   const args = [`-Xmx${m.memory}M`, `-Xms${Math.min(1024, m.memory)}M`, '-XX:+UseG1GC', ...(st.argsFile ? ['@' + st.argsFile] : ['-jar', st.jar]), 'nogui'];
@@ -271,11 +273,13 @@ async function start(id, resolveJava) {
   if (m.tunnel === 'playit') require('./playit').serverStarted(m.port, m.name).catch((e) => log(id, '[Solaris] playit.gg: ' + e.message));
   const proc = spawn(java.replace(/javaw\.exe$/i, 'java.exe'), args, { cwd: m.dir, windowsHide: true });
   r.proc = proc;
+  proc.stdin.on('error', () => {}); // writing a command to a server that just exited (EPIPE) must not crash Solaris
   let buf = '';
   const onData = (d) => { buf += d; const parts = buf.split(/\r?\n/); buf = parts.pop(); parts.forEach((l) => onLine(id, l)); };
   proc.stdout.on('data', onData); proc.stderr.on('data', onData);
   proc.on('error', (e) => { log(id, '[Solaris] Could not start Java: ' + e.message); running.delete(id); emit(id); });
   proc.on('close', (code) => {
+    if (buf) { onLine(id, buf); buf = ''; }
     const restart = r.restart;
     log(id, `[Solaris] Server stopped${code && !r.stopping ? ` (exit code ${code})` : ''} after ${fmtUptime(Date.now() - r.started)}.`);
     running.delete(id); emit(id);
@@ -318,7 +322,8 @@ function command(id, cmd) {
 }
 function stop(id, { restart = false } = {}) {
   const r = running.get(id);
-  if (!r?.proc) return false;
+  if (!r) return false;
+  if (!r.proc) { r.cancelled = true; r.state = 'stopping'; emit(id); return true; } // still preparing Java
   r.stopping = true; r.restart = restart; r.state = restart ? 'restarting' : 'stopping'; emit(id);
   try { r.proc.stdin.write('stop\n'); } catch {}
   setTimeout(() => { if (running.get(id) === r) try { r.proc.kill(); } catch {} }, 45000); // big worlds take a while to save
@@ -329,28 +334,63 @@ function stopAll() { for (const id of running.keys()) stop(id); }
 function anyRunning() { return running.size > 0; }
 function logs(id) { return running.get(id)?.lines || []; }
 
-// ---------- CPU / RAM of running servers (sampled every 3 s on Windows) ----------
+// ---------- CPU / RAM of running servers (sampled every 3 s) ----------
+// Each sampler returns [{ pid, cpuSec (total CPU seconds used), rssBytes }].
+const CLK_TCK = 100; // Linux kernel clock ticks per second (USER_HZ is 100 on every mainstream distro)
+function sampleLinux(pids) {
+  const rows = [];
+  for (const pid of pids) {
+    try {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+      const f = stat.slice(stat.lastIndexOf(')') + 2).split(' '); // fields after "(comm)"; f[0] is field 3 (state)
+      const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+      const rss = Number((status.match(/VmRSS:\s+(\d+)/) || [])[1] || 0) * 1024;
+      rows.push({ pid, cpuSec: (Number(f[11]) + Number(f[12])) / CLK_TCK, rssBytes: rss });
+    } catch {}
+  }
+  return Promise.resolve(rows);
+}
+function sampleWindows(pids) {
+  return new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,CPU,WorkingSet64 | ConvertTo-Json -Compress`], { windowsHide: true, timeout: 8000 }, (err, out) => {
+      if (err || !String(out).trim()) return resolve([]);
+      let rows; try { rows = JSON.parse(out); } catch { return resolve([]); }
+      if (!Array.isArray(rows)) rows = [rows];
+      resolve(rows.map((x) => ({ pid: x.Id, cpuSec: x.CPU, rssBytes: x.WorkingSet64 })));
+    });
+  });
+}
+function sampleMac(pids) {
+  return new Promise((resolve) => {
+    execFile('ps', ['-o', 'pid=,time=,rss=', '-p', pids.join(',')], { timeout: 8000 }, (err, out) => {
+      if (err) return resolve([]);
+      resolve(String(out).trim().split('\n').map((l) => {
+        const [pid, time, rss] = l.trim().split(/\s+/);
+        const t = time.split(/[:-]/).map(Number); let sec = 0; for (const x of t) sec = sec * 60 + x;
+        return { pid: Number(pid), cpuSec: sec, rssBytes: Number(rss) * 1024 };
+      }));
+    });
+  });
+}
+const sampler = process.platform === 'win32' ? sampleWindows : process.platform === 'linux' ? sampleLinux : sampleMac;
 let lastCpu = new Map(), sampling = false;
-setInterval(() => {
-  if (!running.size || sampling || process.platform !== 'win32') return;
+setInterval(async () => {
+  if (!running.size || sampling) return;
   const pids = [...running.values()].map((r) => r.proc?.pid).filter(Boolean);
   if (!pids.length) return;
   sampling = true;
-  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,CPU,WorkingSet64 | ConvertTo-Json -Compress`], { windowsHide: true, timeout: 8000 }, (err, out) => {
-    sampling = false;
-    if (err || !out.trim()) return;
-    let rows; try { rows = JSON.parse(out); } catch { return; }
-    if (!Array.isArray(rows)) rows = [rows];
+  try {
+    const rows = await sampler(pids);
     const now = Date.now(), cores = require('os').cpus().length;
     for (const [id, r] of running) {
-      const row = rows.find((x) => x.Id === r.proc?.pid); if (!row) continue;
+      const row = rows.find((x) => x.pid === r.proc?.pid); if (!row) continue;
       const prev = lastCpu.get(id);
-      const cpu = prev ? Math.max(0, Math.min(100, ((row.CPU - prev.cpu) / ((now - prev.t) / 1000) / cores) * 100)) : null;
-      lastCpu.set(id, { cpu: row.CPU, t: now });
-      r.stats = { cpu, ramMb: Math.round(row.WorkingSet64 / 1048576) };
+      const cpu = prev && prev.pid === row.pid ? Math.max(0, Math.min(100, ((row.cpuSec - prev.cpu) / ((now - prev.t) / 1000) / cores) * 100)) : null;
+      lastCpu.set(id, { cpu: row.cpuSec, t: now, pid: row.pid });
+      r.stats = { cpu, ramMb: Math.round(row.rssBytes / 1048576) };
       push('hosted:stats', { id, ...r.stats, uptime: now - r.started });
     }
-  });
+  } catch {} finally { sampling = false; }
 }, 3000).unref?.();
 
 // ---------- settings ----------
@@ -385,7 +425,12 @@ function worlds(id) {
   return fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && fs.existsSync(path.join(dir, d.name, 'level.dat')))
     .map((d) => ({ name: d.name, active: d.name === active, modified: fs.statSync(path.join(dir, d.name, 'level.dat')).mtimeMs }));
 }
-function setActiveWorld(id, name) { if (running.has(id)) throw new Error('Stop the server first.'); writeProps(id, { 'level-name': name }); return worlds(id); }
+function setActiveWorld(id, name) {
+  if (running.has(id)) throw new Error('Stop the server first.');
+  if (!worlds(id).some((w) => w.name === name)) throw new Error('That world folder doesn’t exist.');
+  writeProps(id, { 'level-name': name });
+  return worlds(id);
+}
 async function deleteWorld(id, name) {
   if (running.has(id)) throw new Error('Stop the server first.');
   const dir = dirOf(id), w = path.resolve(dir, name);
@@ -424,7 +469,8 @@ function backups(id) {
 }
 async function backup(id) {
   const dir = dirOf(id), live = running.has(id);
-  const ws = worlds(id).map((w) => w.name).flatMap((n) => [n, n + '_nether', n + '_the_end']).filter((n) => fs.existsSync(path.join(dir, n)));
+  // Paper/Purpur keep world_nether / world_the_end as worlds of their own: list every folder once.
+  const ws = [...new Set(worlds(id).map((w) => w.name).flatMap((n) => [n, n + '_nether', n + '_the_end']))].filter((n) => fs.existsSync(path.join(dir, n)));
   if (!ws.length) throw new Error('There’s no world to back up yet — start the server once first.');
   if (live) { command(id, 'save-off'); command(id, 'save-all flush'); await new Promise((r) => setTimeout(r, 4000)); }
   try {

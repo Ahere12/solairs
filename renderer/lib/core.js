@@ -1,5 +1,8 @@
 /* Core helpers shared by every page: API, DOM, icons, i18n, router, global state. */
 const api = (name, ...args) => window.solaris.call(name, ...args);
+/** Which OS the launcher runs on, for wording (Recycle Bin vs Trash) and Windows-only settings. */
+const OS = /Windows/.test(navigator.userAgent) ? 'win' : /Mac OS X|Macintosh/.test(navigator.userAgent) ? 'mac' : 'linux';
+const TRASH = OS === 'win' ? 'Recycle Bin' : 'Trash';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

@@ -26,11 +26,17 @@ Pages.console = {
       con.innerHTML = lines.map((l) => `<div class="${this.lineClass(l)}">${esc(l)}</div>`).join('');
       if (follow) con.scrollTop = con.scrollHeight;
     };
-    const append = (l) => {
-      if (!match(l)) return;
-      const d = document.createElement('div'); d.className = this.lineClass(l); d.textContent = l;
-      con.appendChild(d);
-      if (con.childElementCount > 5000) con.firstChild.remove();
+    const append = (lines) => {
+      const frag = document.createDocumentFragment();
+      for (const l of lines) {
+        if (!match(l)) continue;
+        const d = document.createElement('div'); d.className = this.lineClass(l); d.textContent = l;
+        frag.appendChild(d);
+      }
+      if (!frag.childNodes.length) return;
+      con.appendChild(frag);
+      let extra = con.childElementCount - 5000;
+      while (extra-- > 0) con.firstChild.remove();
       if (follow) con.scrollTop = con.scrollHeight;
     };
     $('#lf', box).oninput = debounce((e) => { filter = e.target.value.toLowerCase(); render(); }, 150);
@@ -40,7 +46,7 @@ Pages.console = {
     $('#lshare', box).onclick = () => shareLog(runId);
     const k = $('#lkill', box); if (k) k.onclick = () => api('launch:stop', runId);
     render();
-    return Bus.on('log', (e) => { if (e.runId === runId) append(e.line); });
+    return Bus.on('log', (e) => { if (e.runId === runId) append(e.lines); });
   },
   async render(el, params, ctx) {
     let runId = params.runId || Object.keys(State.runs).pop();

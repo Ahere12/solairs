@@ -9,7 +9,7 @@ npm install
 npm start
 ```
 
-To build a Windows installer, run `npm run dist`. The installer is written to `dist/`. Use `npm run dist:mac` or `npm run dist:linux` on those platforms.
+To build a Windows installer, run `npm run dist`. The installer is written to `dist/`. Run `npm run dist:linux` on Linux (AppImage + .deb), or `npm run dist:mac` on a Mac.
 
 ## Features
 
@@ -75,7 +75,7 @@ data/                    changelog.json and roadmap.json shown in the app
 tools/                   icon generator, smoke test, end-to-end launch test
 ```
 
-Data is stored in `%APPDATA%\.solaris` by default. Set `SOLARIS_DATA_DIR` to use a portable folder.
+Data is stored in `%APPDATA%\.solaris` on Windows and `~/.config/.solaris` on Linux by default. Set `SOLARIS_DATA_DIR` to use a portable folder.
 
 Solaris is not affiliated with Mojang Studios or Microsoft.
 
@@ -83,8 +83,16 @@ Solaris is not affiliated with Mojang Studios or Microsoft.
 
 Solaris updates itself from GitHub Releases on `Ahere12/solairs` (electron-updater, `src/updater.js`). It checks on start and every 4 hours, downloads in the background (progress card in the sidebar + titlebar chip), then offers **Restart & update**. If the player picks "Later", the update installs when Solaris closes.
 
-1. Bump `version` in `package.json` (e.g. 1.1.0 → 1.2.0).
+1. Bump `version` in `package.json` (e.g. 1.6.0 → 1.7.0), commit and push.
 2. `npm run dist`
-3. Create a GitHub release with tag `v1.2.0` (published, not a draft) and upload these files from `dist/`: `Solaris Setup 1.2.0.exe`, `Solaris Setup 1.2.0.exe.blockmap`, `latest.yml`.
+3. Create a GitHub release with tag `v1.7.0` (published, not a draft) and upload these files from `dist/`: `Solaris-Setup-1.7.0.exe`, `Solaris-Setup-1.7.0.exe.blockmap`, `latest.yml`.
+4. The Linux build happens by itself: publishing the release starts the **Linux build** GitHub workflow (`.github/workflows/linux.yml`), which builds `Solaris-1.7.0-x86_64.AppImage` and `solaris_1.7.0_amd64.deb` on Ubuntu and adds them, with `latest-linux.yml`, to the same release. It can't be built on Windows, because the AppImage needs Linux symbolic links. For an older release, run the workflow by hand from the Actions tab.
+
+### Linux
+
+- **AppImage** (any 64-bit distro): `chmod +x Solaris-*.AppImage`, then run it. It updates itself.
+- **.deb** (Ubuntu, Debian, Mint, Pop!_OS): `sudo apt install ./solaris_*_amd64.deb`. Updates download in the app and ask for your password to install.
+- The AppImage starts through a small wrapper (`tools/after-pack.js`) that adds `--no-sandbox` only where the system blocks Chromium's sandbox (Ubuntu 24.04+ AppArmor). Without it, the AppImage wouldn't open there.
+- Data lives in `~/.config/.solaris` (Electron's `appData`), and Java comes from Mojang's Linux runtimes or the system (`/usr/lib/jvm`, `java` on PATH).
 
 Players on older versions see the download animation within a few seconds of opening Solaris. To preview the animation without a release, run `SOLARIS_FAKE_UPDATE=1 npm start`.

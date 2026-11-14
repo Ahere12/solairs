@@ -73,7 +73,14 @@ async function detect() {
   } else if (process.platform === 'darwin') {
     roots.push('/Library/Java/JavaVirtualMachines');
   } else {
-    roots.push('/usr/lib/jvm', '/usr/java', '/opt/java');
+    roots.push('/usr/lib/jvm', '/usr/lib64/jvm', '/usr/java', '/opt/java', '/opt/jdk', '/usr/local/java', path.join(require('os').homedir(), '.sdkman', 'candidates', 'java'), path.join(require('os').homedir(), '.jdks'));
+  }
+  if (process.platform !== 'win32') {
+    // `java` on PATH (e.g. /usr/bin/java → /usr/lib/jvm/…/bin/java via update-alternatives)
+    for (const dir of String(process.env.PATH || '').split(':')) {
+      const e = path.join(dir, 'java');
+      try { if (fs.statSync(e).isFile()) candidates.add(fs.realpathSync(e)); } catch {}
+    }
   }
   for (const r of roots) {
     let entries = []; try { entries = fs.readdirSync(r); } catch {}
@@ -84,12 +91,9 @@ async function detect() {
   }
   // Solaris-managed runtimes
   try { for (const c of fs.readdirSync(paths.runtime())) { const e = javaExe(path.join(paths.runtime(), c)); if (fs.existsSync(e)) candidates.add(e); } } catch {}
-  const out = [];
-  for (const exe of candidates) {
-    const v = await javaVersionOf(exe);
-    if (v) out.push({ path: exe, ...v, managed: exe.startsWith(paths.runtime()) });
-  }
-  return out;
+  // Check all candidates at the same time (each `java -version` takes ~0.3 s).
+  const found = await Promise.all([...candidates].map(async (exe) => { const v = await javaVersionOf(exe); return v ? { path: exe, ...v, managed: exe.startsWith(paths.runtime()) } : null; }));
+  return found.filter(Boolean);
 }
 
 /** "1.8.0_392" → 8, "17.0.9" → 17, "21" → 21 */

@@ -138,7 +138,7 @@ Pages.settings = {
   appearance(box) {
     const s = State.settings;
     box.innerHTML = `<div class="card">
-      <div class="setting"><div class="txt"><div class="t">Mode</div><div class="d">Light, dark, or follow your Windows setting.</div></div><div class="ctl"><div class="seg">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'Match system']].map(([k, l]) => `<button data-mode="${k}" class="${(s.colorMode || 'dark') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div></div>
+      <div class="setting"><div class="txt"><div class="t">Mode</div><div class="d">Light, dark, or follow your system setting.</div></div><div class="ctl"><div class="seg">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'Match system']].map(([k, l]) => `<button data-mode="${k}" class="${(s.colorMode || 'dark') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div></div>
       <div class="setting"><div class="txt"><div class="t">Layout</div><div class="d">Modern: menu on the side. Classic: menu on top and a Play bar at the bottom.</div></div><div class="ctl"><div class="seg">${[['modern', 'Modern'], ['classic', 'Classic']].map(([k, l]) => `<button data-layout="${k}" class="${(s.layout || 'modern') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div></div>
     </div>
     <div class="card" style="margin-top:14px">
@@ -273,7 +273,9 @@ Pages.settings = {
     const saveMajor = (n, v) => saveSettings({ javaPaths: { ...(State.settings.javaPaths || {}), [n]: v } });
     $$('[data-jmajor]', box).forEach((i) => (i.onchange = async () => { await saveMajor(i.dataset.jmajor, i.value.trim()); toast('Saved'); }));
     $$('[data-jpick]', box).forEach((b) => (b.onclick = async () => {
-      const [f] = await api('dialog:open', { title: 'Choose javaw.exe', properties: ['openFile'], filters: [{ name: 'Java', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }] });
+      const [f] = await api('dialog:open', OS === 'win'
+        ? { title: 'Choose javaw.exe', properties: ['openFile'], filters: [{ name: 'Java', extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }] }
+        : { title: 'Choose the java program (…/bin/java)', properties: ['openFile', 'showHiddenFiles'] });
       if (!f) return;
       const k = b.dataset.jpick;
       $('#jp-' + k, box).value = f;
@@ -368,7 +370,7 @@ Pages.settings = {
       ${this.toggle('lowEndMode', 'Low-end PC mode', 'Makes the launcher lighter: no blur, no animations, a plain background and a still 3D skin preview. Also turns on the JVM performance flags below.')}
       ${this.toggle('performanceMode', 'Game performance flags', 'Extra Java flags that help Minecraft run smoother on low-end machines.')}
       ${this.toggle('hardwareAcceleration', 'GPU acceleration', 'Draw the launcher with your graphics card. Turn off if the launcher flickers or shows a black window. Needs a restart.')}
-      ${this.toggle('dedicatedGpu', 'Play on the dedicated GPU', 'Windows laptops: asks the system to run Minecraft on your high-performance graphics card.')}
+      ${OS !== 'mac' ? this.toggle('dedicatedGpu', 'Play on the dedicated GPU', OS === 'win' ? 'Windows laptops: asks the system to run Minecraft on your high-performance graphics card.' : 'Laptops with two graphics cards: runs Minecraft on the high-performance one (PRIME offload, NVIDIA or AMD).') : ''}
       <div class="setting"><div class="txt"><div class="t">Parallel downloads</div><div class="d">How many files Solaris downloads at once. Lower this on slow or unstable connections.</div></div><div class="ctl"><select data-sel="concurrency">${[4, 8, 16, 32].map((n) => `<option ${n == s.concurrency ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
     </div>
     <div class="row" style="margin-top:12px"><button class="btn sm" id="hw-restart">${icon('refresh')}Restart Solaris now</button></div>`;
@@ -403,7 +405,7 @@ Pages.settings = {
           ? `<span style="color:var(--danger)">${r.flagged.length} suspicious file${r.flagged.length > 1 ? 's' : ''} in ${r.scanned} mods:</span>${r.flagged.map((f) => `<div class="crash-cause" style="margin-top:6px"><b>${esc(f.file)}</b> <span class="faint small">in ${esc(f.instanceName)}</span>${f.findings.map((x) => `<div class="small muted">• ${esc(x)}</div>`).join('')}<div class="row" style="margin-top:6px"><button class="btn sm" data-off="${esc(f.instanceId)}|${esc(f.file)}">Turn off</button><button class="btn sm danger" data-del="${esc(f.instanceId)}|${esc(f.file)}">${icon('trash')}Delete</button></div></div>`).join('')}`
           : `<span style="color:var(--ok)">All clear — scanned ${r.scanned} mod${r.scanned === 1 ? '' : 's'}, nothing suspicious.</span>`;
         $$('[data-off]', out).forEach((x) => (x.onclick = async () => { const [i, f] = x.dataset.off.split('|'); await api('safety:disable', i, f); x.closest('.crash-cause').remove(); toast('Turned off'); }));
-        $$('[data-del]', out).forEach((x) => (x.onclick = async () => { const [i, f] = x.dataset.del.split('|'); await api('instances:deleteContent', i, 'mods', [f]); x.closest('.crash-cause').remove(); toast('Moved to the Recycle Bin'); }));
+        $$('[data-del]', out).forEach((x) => (x.onclick = async () => { const [i, f] = x.dataset.del.split('|'); await api('instances:deleteContent', i, 'mods', [f]); x.closest('.crash-cause').remove(); toast(`Moved to the ${TRASH}`); }));
       } catch (er) { toastErr(er); }
       finally { if (b.isConnected) { b.disabled = false; b.innerHTML = `${icon('shield')}Scan now`; } }
     };

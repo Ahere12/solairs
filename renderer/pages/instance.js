@@ -89,7 +89,7 @@ Pages.instance = {
         lastIdx = i; draw();
       }));
       $$('[data-toggle]', box).forEach((c) => (c.onchange = async () => { items = await api('instances:setEnabled', inst.id, kind, [c.dataset.toggle], c.checked); draw(); }));
-      $$('[data-del]', box).forEach((b) => (b.onclick = async () => { if (await confirmDialog(`Move ${b.dataset.del} to the Recycle Bin?`, { danger: true, ok: T('Delete') })) { items = await api('instances:deleteContent', inst.id, kind, [b.dataset.del]); draw(); } }));
+      $$('[data-del]', box).forEach((b) => (b.onclick = async () => { if (await confirmDialog(`Move ${b.dataset.del} to the ${TRASH}?`, { danger: true, ok: T('Delete') })) { items = await api('instances:deleteContent', inst.id, kind, [b.dataset.del]); draw(); } }));
       $$('[data-apply]', box).forEach((b) => (b.onclick = async () => {
         const u = updates.find((x) => x.file === b.dataset.apply);
         b.disabled = true;
@@ -106,7 +106,7 @@ Pages.instance = {
       $$('[data-b]', bar).forEach((b) => (b.onclick = async () => {
         const files = [...selected];
         if (b.dataset.b === 'clear') { selected.clear(); return draw(); }
-        if (b.dataset.b === 'del') { if (!(await confirmDialog(`Move ${files.length} file(s) to the Recycle Bin?`, { danger: true, ok: T('Delete') }))) return; items = await api('instances:deleteContent', inst.id, kind, files); }
+        if (b.dataset.b === 'del') { if (!(await confirmDialog(`Move ${files.length} file(s) to the ${TRASH}?`, { danger: true, ok: T('Delete') }))) return; items = await api('instances:deleteContent', inst.id, kind, files); }
         else items = await api('instances:setEnabled', inst.id, kind, files, b.dataset.b === 'on');
         selected.clear(); draw();
       }));
@@ -198,7 +198,7 @@ Pages.instance = {
         <div class="crumbs">${crumbs.map((c, i) => `<button class="crumb" data-go="${esc(c.rel)}">${i === 0 ? icon('folder') : ''}${esc(c.name)}</button>`).join('<span class="faint">/</span>')}</div>
         <div class="grow"></div>
         <button class="btn sm" id="fx-new">${icon('plus')}Folder</button>
-        <button class="btn sm" id="fx-reveal">${icon('folder')}Show in Explorer</button>
+        <button class="btn sm" id="fx-reveal">${icon('folder')}Show in folder</button>
       </div>
       <div class="list files-list">${r.rel ? `<div class="list-row file-row" data-up>${icon('back')}<div class="info"><div class="title">..</div></div></div>` : ''}
       ${r.entries.map((e) => `<div class="list-row file-row" data-rel="${esc(e.rel)}" data-dir="${e.dir ? 1 : ''}">
@@ -223,10 +223,10 @@ Pages.instance = {
       const menu = (ev) => contextMenu(ev.clientX, ev.clientY, [
         { label: e.dir ? 'Open' : 'View / open', icon: 'eye', action: () => openEntry(e) },
         { label: 'Open with default app', icon: 'external', action: () => api('files:open', inst.id, e.rel) },
-        { label: 'Show in Explorer', icon: 'folder', action: () => api('files:reveal', inst.id, e.rel) },
+        { label: 'Show in folder', icon: 'folder', action: () => api('files:reveal', inst.id, e.rel) },
         { label: 'Copy path', icon: 'copy', action: () => { api('clipboard:write', inst.gameDir + '\\' + e.rel.replace(/\//g, '\\')); toast('Path copied'); } },
         { label: 'Rename', icon: 'edit', action: async () => { const n = await promptDialog('Rename', { value: e.name, ok: 'Rename' }); if (n && n !== e.name) { try { await api('files:rename', inst.id, e.rel, n.trim()); go(r.rel); } catch (er) { toastErr(er); } } } },
-        { label: 'Move to Recycle Bin', icon: 'trash', danger: true, action: async () => { if (await confirmDialog(`Move “${e.name}” to the Recycle Bin?`, { danger: true, ok: T('Delete') })) { try { await api('files:trash', inst.id, e.rel); go(r.rel); } catch (er) { toastErr(er); } } } },
+        { label: `Move to ${TRASH}`, icon: 'trash', danger: true, action: async () => { if (await confirmDialog(`Move “${e.name}” to the ${TRASH}?`, { danger: true, ok: T('Delete') })) { try { await api('files:trash', inst.id, e.rel); go(r.rel); } catch (er) { toastErr(er); } } } },
       ]);
       row.oncontextmenu = (ev) => { ev.preventDefault(); menu(ev); };
       $('[data-more]', row).onclick = menu;
