@@ -1,6 +1,35 @@
 [
   {
     "product": "launcher",
+    "version": "1.10.3",
+    "date": "2026-11-15",
+    "title": "Voice chat tunnels that work on free playit.gg",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "Voice chat uses playit.gg’s free “MC: Simple Voice Chat” tunnel, asked for the same way the playit.gg website does — before, playit.gg refused it (TunnelTypeRequiresDescription) and voice chat showed as disconnected."
+          },
+          {
+            "type": "fix",
+            "text": "Bedrock players get playit.gg’s free “Minecraft Bedrock (NetherNet)” tunnel the same way."
+          },
+          {
+            "type": "feature",
+            "text": "Voice chat address box in a server’s Settings: paste the address of a tunnel you made on playit.gg yourself. A voice_host you set is never erased any more."
+          },
+          {
+            "type": "feature",
+            "text": "If playit.gg still says no, Solaris shows the exact free tunnel to add on playit.gg, an Open playit.gg button and “I made it — check again”."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.10.2",
     "date": "2026-11-15",
     "title": "Hosting in its own window",
