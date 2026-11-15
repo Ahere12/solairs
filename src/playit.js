@@ -86,7 +86,9 @@ async function startClaim() {
   authProblem = null;
   const code = crypto.randomBytes(5).toString('hex');
   claim = { code, url: `https://playit.gg/claim/${code}`, state: 'waiting' };
-  await call('/claim/setup', { code, agent_type: 'self-managed', version: VERSION }, null);
+  // playit.gg not reachable right now: don't stay stuck on "waiting for approval" — let Connect be pressed again
+  try { await call('/claim/setup', { code, agent_type: 'self-managed', version: VERSION }, null); }
+  catch (e) { claim = { code, url: claim.url, state: 'error', error: e.message }; claimDone(e); throw e; }
   shell.openExternal(claim.url);
   (async () => {
     const until = Date.now() + 10 * 60 * 1000;
@@ -327,33 +329,38 @@ async function udpAddress(t) {
 //   voice   — Simple Voice Chat, UDP
 //   bedrock — Geyser, TCP + UDP on the same port (Bedrock's NetherNet signaling uses TCP, the game itself UDP)
 const SIDE = {
-  voice: { label: 'voice chat', portType: 'udp', ports: { type: 'custom-udp', details: 1 }, is: isUdp, kind: 'UDP' },
-  bedrock: { label: 'Bedrock', portType: 'both', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
+  // tunnelType: a playit.gg tunnel type with the right protocol — "minecraft-bedrock" is one UDP port (fine for
+  // voice chat), "nethernet" is TCP + UDP on one port (exactly what Geyser's NetherNet needs)
+  voice: { label: 'voice chat', portType: 'udp', tunnelType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: isUdp, kind: 'UDP' },
+  bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
 };
 /**
- * Creates a plain UDP / TCP+UDP tunnel. playit.gg's current request (POST /tunnels/create, the one its own agent
- * uses: port_type + port_count + the agent's local address) first; the older /v1 request only if that one isn't
- * accepted. Returns the new tunnel's id.
+ * Creates a UDP / TCP+UDP tunnel to this PC's `port` and returns its id. playit.gg has several ways to ask; Solaris
+ * tries them in order and moves on only while playit.gg says the *request* isn't right (an account answer such as
+ * "verify your account" or "tunnel limit" stops right away, it would be the same for every way):
+ *   1. POST /tunnels/create  — port_type + port_count + the agent's local address (playit.gg's current API)
+ *   2. POST /v1/tunnels/create with a tunnel type of that protocol — the same way the Minecraft Java tunnel is
+ *      made, which works on every account
+ *   3. POST /v1/tunnels/create with a custom port
  */
+const REQUEST_PROBLEM = /validation|path-not-found|InvalidOrigin|InvalidPortCount|DefaultAgentNotSupported|InvalidTunnelConfig|^playit\.gg: auth\b/i;
 async function createPortTunnel(k, name, port) {
   const tname = String(name).replace(/[^\x20-\x7e]/g, '').slice(0, 40);
-  try {
-    const made = await call('/tunnels/create', {
-      name: tname, tunnel_type: null, port_type: k.portType, port_count: 1,
-      origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: port } },
-      enabled: true, alloc: null, firewall_id: null, proxy_protocol: null,
-    });
-    return made?.id || made;
-  } catch (e) {
-    // account limits and the like are real answers — only a request playit.gg doesn't understand falls back
-    if (!/validation|path-not-found/i.test(e.message)) throw e;
-    const made = await call('/v1/tunnels/create', {
-      name: tname, ports: k.ports,
-      origin: { type: 'agent', data: { agent_id: agentId, config: { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] } } },
-      enabled: true, alloc: null, firewall_id: null,
-    });
-    return made?.id || made;
+  const fields = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
+  const tries = [
+    () => call('/tunnels/create', { name: tname, tunnel_type: null, port_type: k.portType, port_count: 1, origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: port } }, enabled: true, alloc: null, firewall_id: null, proxy_protocol: null }),
+    () => call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: k.tunnelType }, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, enabled: true, alloc: null, firewall_id: null }),
+    () => call('/v1/tunnels/create', { name: tname, ports: k.ports, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, enabled: true, alloc: null, firewall_id: null }),
+  ];
+  const errors = [];
+  for (const t of tries) {
+    let made;
+    try { made = await t(); } catch (e) { errors.push(e); if (!REQUEST_PROBLEM.test(e.message)) throw e; continue; }
+    const id = made?.id || made;
+    if (typeof id === 'string' && id) return id;
+    throw new Error('playit.gg didn’t return the new tunnel.');
   }
+  throw errors[1] || errors[0]; // the tunnel-type answer explains the most
 }
 async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
   const k = SIDE[kind];

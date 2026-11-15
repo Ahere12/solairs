@@ -10,11 +10,19 @@
         "entries": [
           {
             "type": "fix",
-            "text": "Voice chat and Bedrock tunnels are made on playit.gg again (playit.gg answered “validation” before). Solaris now uses the same request as the official playit.gg agent."
+            "text": "Voice chat and Bedrock tunnels are made on playit.gg again (playit.gg answered “validation” before). Solaris now tries playit.gg’s current request first, then the same kind of request that makes your Minecraft tunnel, so it works on every account."
+          },
+          {
+            "type": "fix",
+            "text": "Bedrock tunnels use playit.gg’s NetherNet type — the connection the newest Bedrock Edition uses."
           },
           {
             "type": "fix",
             "text": "When playit.gg turns a tunnel down, Solaris shows its full reason instead of a single word."
+          },
+          {
+            "type": "fix",
+            "text": "If playit.gg can’t be reached when you press Connect, Solaris no longer gets stuck on “waiting for approval”."
           }
         ]
       }
