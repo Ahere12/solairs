@@ -1,6 +1,118 @@
 [
   {
     "product": "launcher",
+    "version": "1.11.0",
+    "date": "2026-11-15",
+    "title": "Solaris Connect, faster launches and a much bigger Hosting",
+    "groups": [
+      {
+        "area": "Solaris Connect",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New Connect page: every service Solaris connects to — maps, friends, servers and player tools — with its real status (connected, ready, needs setup, problem), settings, compatibility with your servers, recent problems and documentation. Nothing pretends to work: things not built yet say “Planned”, things that would need an online Solaris service say “Unavailable”."
+          },
+          {
+            "type": "feature",
+            "text": "Server monitoring: checks your favourite (or all saved) servers every few minutes and tells you when one comes online, goes offline, or a friend joins it."
+          },
+          {
+            "type": "feature",
+            "text": "Desktop alerts for the servers you host: online, crashed, stopped, a player joined or left — while Solaris is in the background."
+          },
+          {
+            "type": "feature",
+            "text": "Web maps: BlueMap (3D), Pl3xMap (2D) or Dynmap on a hosted server’s new Map tab — Solaris installs and sets it up, and the map opens inside Solaris with live player positions. Map links: open the web map of any server you play on."
+          },
+          {
+            "type": "feature",
+            "text": "Stats: play time, deaths, distance, mining, mobs and advancements (with dates, “X of Y”) for every player of your worlds and hosted servers, read from the save files."
+          },
+          {
+            "type": "feature",
+            "text": "Inventory viewer: inventory, armour, off hand and ender chest (with shulker box and bundle contents, real item pictures) for servers you host and your own worlds. Read-only."
+          }
+        ]
+      },
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New server in 4 steps — Server Type, World, Performance, Review — with cards for Paper, Purpur, Vanilla, Modpack, Fabric, Quilt, NeoForge, Forge and Bedrock, and a RAM hint for the optimal range."
+          },
+          {
+            "type": "feature",
+            "text": "Quilt servers, and Mojang’s own Bedrock Dedicated Server (phones, consoles and Windows join directly)."
+          },
+          {
+            "type": "feature",
+            "text": "Performance tab with CPU, RAM, uptime and a 30-minute graph."
+          },
+          {
+            "type": "feature",
+            "text": "Scheduler: your own timed commands, messages, restarts and backups (every X minutes, daily at a time, or when the server starts), plus automatic restarts."
+          },
+          {
+            "type": "feature",
+            "text": "Tunnels tab: every playit.gg tunnel with its address, local port and which server uses it — turn on/off or delete."
+          },
+          {
+            "type": "feature",
+            "text": "Players: everyone who ever joined, with search, filters (online, operators, whitelisted, banned), last seen and play time."
+          },
+          {
+            "type": "feature",
+            "text": "Mods tab: Server mods and Client mods (what players need, plus extra game-only mods for the play instance)."
+          },
+          {
+            "type": "feature",
+            "text": "Settings: gameplay, performance and security switches, your own Java and JVM arguments, optimized flags, restart after a crash, resource pack (upload a .zip or paste a link), Copy server, and Export / Import a server to move it to another PC."
+          },
+          {
+            "type": "feature",
+            "text": "Backups: countdown to the next automatic backup, and auto-backup settings right there. Worlds: import a world folder, .zip or .mcworld."
+          },
+          {
+            "type": "improvement",
+            "text": "Deleting a server also deletes its playit.gg tunnels."
+          }
+        ]
+      },
+      {
+        "area": "Friends",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Add friends with an offline (cracked) account."
+          },
+          {
+            "type": "improvement",
+            "text": "Friends on your running servers show as online live, not only for 5 minutes."
+          },
+          {
+            "type": "feature",
+            "text": "Join codes say whether the server needs a Microsoft account; an offline account gets a clear warning before joining. When an offline account is turned away from your server, Solaris offers to allow offline accounts (with the whitelist)."
+          },
+          {
+            "type": "improvement",
+            "text": "Switching “Require Microsoft accounts” keeps everyone’s inventory and progress — Solaris moves their save to the right ID on the next start."
+          }
+        ]
+      },
+      {
+        "area": "Game launch",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "Faster Play: Solaris module updates are checked at most every 6 hours (and all at once), the sounds-and-textures check runs while the game loads, and signing in happens at the same time as the file checks."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.10.3",
     "date": "2026-11-15",
     "title": "Voice chat tunnels that work on free playit.gg",

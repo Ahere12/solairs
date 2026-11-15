@@ -16,7 +16,7 @@ const BUTTONS = [{ label: 'Get Solaris', url: 'https://github.com/Ahere12/solair
 const PAGES = {
   home: 'In the launcher', library: 'Organising instances', instance: 'Setting up an instance', browse: 'Browsing mods',
   solaris: 'Setting up Solaris Client', servers: 'Looking for a server', skins: 'Picking a skin', friends: 'Checking on friends',
-  host: 'Managing servers', gallery: 'Looking at screenshots', console: 'Reading game logs', settings: 'Tweaking settings',
+  host: 'Managing servers', connect: 'Setting up Solaris Connect', maps: 'Looking at a map', stats: 'Checking their stats', gallery: 'Looking at screenshots', console: 'Reading game logs', settings: 'Tweaking settings',
   changelog: 'Reading what’s new', roadmap: 'Reading the roadmap',
 };
 
@@ -159,4 +159,7 @@ function setHosted(id, info) {
 /** Back-compat: set an explicit activity. */
 function setActivity() { return update(); }
 
-module.exports = { setActivity, idle, playing, gameEnded, fromGameLog, setHosted, setPage, disconnect };
+/** For Solaris Connect: is Rich Presence on, and is Discord connected right now? */
+function status() { return { enabled: enabled(), connected: ready, hasApp: !!DISCORD_CLIENT_ID }; }
+
+module.exports = { setActivity, idle, playing, gameEnded, fromGameLog, setHosted, setPage, disconnect, status };

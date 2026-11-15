@@ -6,6 +6,7 @@ const NAV = [
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
   { id: 'friends', label: 'Friends', icon: 'users', key: 'nav.friends' },
   { id: 'host', label: 'Hosting', icon: 'host', key: 'nav.host' },
+  { id: 'connect', label: 'Connect', icon: 'link', key: 'nav.connect' },
   { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];

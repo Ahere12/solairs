@@ -55,7 +55,7 @@ Pages.friends = {
       const box = $('#host-status', el); if (!box) return;
       const h = Hosting.list[Hosting.list.length - 1];
       // your Solaris servers that are running right now (Hosting page), with who's on them
-      const servers = (await api('hosted:list').catch(() => [])).filter((s) => s.state !== 'offline' && !s.missing);
+      const servers = (await api('hosted:list').catch(() => [])).filter((s) => s.state !== 'offline' && !s.missing && s.software !== 'bedrock');
       if (!box.isConnected) return;
       box.innerHTML = (h ? `<div class="row" style="gap:8px"><span class="chip ok">Online</span><span class="mono small ellipsis grow" title="${esc(h.address)}">${esc(h.address)}</span><button class="btn sm primary" id="fr-invite">${icon('copy')}Invite link</button></div>` : '')
         + servers.map((s) => `<div class="row" style="gap:8px;margin-top:6px"><span class="chip ${s.state === 'online' ? 'ok' : 'warn'}">${s.state === 'online' ? `${s.players.length}/${s.maxPlayers}` : 'Starting'}</span><span class="small ellipsis grow" title="${esc(s.players.join(', '))}"><b>${esc(s.name)}</b>${s.players.length ? ` · ${esc(s.players.slice(0, 4).join(', '))}${s.players.length > 4 ? '…' : ''}` : ''}</span>${s.address || s.knownAddress ? `<button class="btn sm" data-jc="${esc(s.id)}">${icon('key')}Join code</button>` : ''}<button class="btn sm ghost" data-hs="${esc(s.id)}">Open</button></div>`).join('')

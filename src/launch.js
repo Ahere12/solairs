@@ -192,7 +192,9 @@ async function launchInner(instanceId, opts = {}) {
   let inst = instances.get(instanceId);
   const s = settings.get();
   status(instanceId, 'Signing in');
-  const auth = await accounts.getLaunchAuth({ allowStale: true });
+  // Signing in (a Microsoft refresh can take a few seconds) runs while the files are checked.
+  const authP = accounts.getLaunchAuth({ allowStale: true });
+  authP.catch(() => {}); // awaited below; this only stops an early failure being reported twice
 
   if (inst.solarisModules) {
     status(instanceId, 'Updating Solaris modules');
@@ -210,7 +212,6 @@ async function launchInner(instanceId, opts = {}) {
   fs.mkdirSync(inst.gameDir, { recursive: true });
   let gameDir = inst.gameDir;
   try { gameDir = fs.realpathSync.native(gameDir); } catch {}
-  await offlineSkin(inst, auth, gameDir);
 
   const javaPath = await resolveJava(inst, version, (d, t) => status(instanceId, 'Installing Java', d / t, `${d}/${t}`));
   setGpuPreference(javaPath);
@@ -226,19 +227,28 @@ async function launchInner(instanceId, opts = {}) {
   tasks.push(...libs.classpath, ...libs.natives);
   status(instanceId, 'Checking assets');
   const assetInfo = await versions.assetTasks(version);
-  tasks.push(...assetInfo.tasks);
   // "Repair game files" sets a flag: verify every file by checksum once (normally only sizes are checked).
   const repairFlag = paths.file('repair.flag');
   const repairing = fs.existsSync(repairFlag);
+  // Sounds and textures (thousands of files) are checked before the game only the first time; after that the check
+  // runs while the game loads, so Play doesn't wait on it. Anything missing is still downloaded.
+  const assetsOk = assetInfo.index ? path.join(paths.assets(), 'indexes', assetInfo.id + '.checked') : null;
+  const assetsLater = !repairing && assetsOk && fs.existsSync(assetsOk) && !assetInfo.index.virtual && !assetInfo.index.map_to_resources;
+  if (!assetsLater) tasks.push(...assetInfo.tasks);
   if (repairing) for (const t of tasks) t.verify = true;
   await downloadAll(tasks, { concurrency: s.concurrency || 16, onProgress: (d, t) => { if (d % 20 === 0 || d === t) status(instanceId, repairing ? 'Verifying game files' : 'Downloading game files', d / t, `${d}/${t}`); } });
   if (repairing) { try { fs.unlinkSync(repairFlag); } catch {} }
+  if (assetsOk && !assetsLater) { try { fs.writeFileSync(assetsOk, new Date().toISOString()); } catch {} }
 
   let clientJar = baseJar;
   if (version.id !== jarId) {
     clientJar = path.join(paths.versions(), version.id, version.id + '.jar');
     if (!fs.existsSync(clientJar) || fs.statSync(clientJar).size !== fs.statSync(baseJar).size) fs.copyFileSync(baseJar, clientJar);
   }
+
+  status(instanceId, 'Signing in');
+  const auth = await authP;
+  await offlineSkin(inst, auth, gameDir);
 
   status(instanceId, 'Preparing');
   const nativesDir = path.join(paths.natives(), version.id);
@@ -323,6 +333,13 @@ async function launchInner(instanceId, opts = {}) {
       if (!running.size) events.emit('window', 'restore');
     }
   });
+
+  if (assetsLater) {
+    downloadAll(assetInfo.tasks, { concurrency: 4 }).catch((e) => {
+      try { fs.unlinkSync(assetsOk); } catch {} // check everything before the next launch instead
+      push('game:log', { runId, instanceId, line: '[Solaris] Some sounds/textures could not be downloaded: ' + e.message });
+    });
+  }
 
   instances.save({ ...instances.get(instanceId), lastPlayed: Date.now() });
   push('launch:started', { runId, instanceId, name: inst.name });

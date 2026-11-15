@@ -338,6 +338,12 @@ const SIDE = {
     manual: (port) => `On playit.gg: Add Tunnel → “MC: Simple Voice Chat” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris — it finds that tunnel and sets voice_host for you.` },
   bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', oldType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'NetherNet',
     manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock (NetherNet)” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris.` },
+  // a resource pack .zip from the player's PC: Solaris serves it over HTTP through a free TCP tunnel
+  pack: { label: 'resource pack', portType: 'tcp', tunnelType: 'minecraft-java', oldType: 'minecraft-java', ports: { type: 'custom-tcp', details: 1 }, is: (t) => isJava(t), kind: 'TCP',
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Java” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris. (Or paste a download link for the pack instead.)` },
+  // the main tunnel of a Bedrock Dedicated Server (Mojang's server speaks RakNet: “Minecraft Bedrock”)
+  bds: { label: 'Bedrock server', portType: 'udp', tunnelType: 'minecraft-bedrock', oldType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'Minecraft Bedrock',
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris.` },
 };
 /**
  * Creates a voice chat / Bedrock tunnel to this PC's `port` and returns its id. Solaris tries the ways playit.gg
@@ -412,7 +418,7 @@ async function waitConnected(ms = 45000) {
 
 // ---------- used by hostserver.js ----------
 /** Create Server / Start / Restart tunnel: link (once), start the agent, make the tunnel, get the address. */
-async function setupServer({ id, port, name, tunnelId, voice, bedrock }, onStep) {
+async function setupServer({ id, port, name, tunnelId, voice, bedrock, pack, main = 'java' }, onStep) {
   users.set(id, { port, name });
   try {
     await waitForLink(onStep);
@@ -420,9 +426,10 @@ async function setupServer({ id, port, name, tunnelId, voice, bedrock }, onStep)
     await ensureAgent();
     onStep && onStep('Starting playit.gg agent…');
     await waitConnected();
+    if (main === 'bds') { await refresh().catch(() => {}); return await ensureSideTunnel('bds', { port, name, tunnelId }, onStep); }
     const t = await ensureTunnel({ port, name, tunnelId }, onStep);
     // voice chat and Bedrock are extras: a problem there never stops the Minecraft address from working
-    for (const [kind, want] of [['voice', voice], ['bedrock', bedrock]]) {
+    for (const [kind, want] of [['voice', voice], ['bedrock', bedrock], ['pack', pack]]) {
       if (want) { try { t[kind] = await ensureSideTunnel(kind, { port: want.port, name, tunnelId: want.tunnelId }, onStep); } catch (e) { t[kind + 'Error'] = e.message; } }
     }
     return t;
@@ -440,7 +447,7 @@ function statusFor(m, serverRunning, stopped) {
   if (!linked()) return { ok: false, state: 'off', text: claim?.state === 'waiting' ? 'Waiting for you to approve Solaris on playit.gg' : 'playit.gg not connected', needsLink: claim?.state !== 'waiting' };
   if (stopped) return { ok: false, state: 'off', text: 'Tunnel stopped — the server is only on your network' };
   if (!serverRunning) return { ok: false, state: 'off', text: m.playitAddress ? 'Public again when the server starts' : 'Public when the server starts (playit.gg)' };
-  const t = run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => isJava(x) && portOf(x) === m.port);
+  const t = mainTunnel(m);
   if (!agent?.proc) return { ok: false, state: 'warn', text: agent?.lastError ? 'playit.gg agent stopped — ' + agent.lastError : 'Starting the playit.gg agent…' };
   if (agent.state === 'starting') return { ok: false, state: 'warn', text: 'Connecting to playit.gg…' };
   if (agent.state === 'reconnecting') return { ok: false, state: 'warn', text: 'playit.gg reconnecting…' };
@@ -449,10 +456,40 @@ function statusFor(m, serverRunning, stopped) {
   return { ok: true, state: 'ok', text: 'Public via playit.gg' };
 }
 /** The live address for a server (only from playit.gg's own data). */
+const mainTunnel = (m) => run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => (m.software === 'bedrock' ? !isJava(x) : isJava(x)) && portOf(x) === m.port);
 function liveAddress(m) {
-  const t = run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => isJava(x) && portOf(x) === m.port);
-  return t?.display_address || null;
+  const t = mainTunnel(m);
+  if (!t) return null;
+  // Bedrock players always need the port: keep the saved "host:port" when playit.gg shows the name alone
+  if (m.software === 'bedrock' && !/:\d+$/.test(t.display_address || '')) return m.playitAddress || null;
+  return t.display_address || null;
 }
+
+// ---------- tunnel management (Hosting → Tunnels) ----------
+const TYPE_NAMES = { 'minecraft-java': 'Java (TCP)', 'minecraft-bedrock': 'Bedrock (UDP)', nethernet: 'Bedrock NetherNet (UDP)', 'mc-simple-voice-chat': 'Voice chat (UDP)' };
+/** Every tunnel on the linked playit.gg account, in plain words. */
+async function listTunnels() {
+  if (!linked()) return { linked: false, tunnels: [] };
+  await refresh().catch(() => {});
+  let full = [];
+  try { const d = await call('/v1/tunnels/list', {}); full = Array.isArray(d) ? d : d?.tunnels || []; } catch {}
+  const byId = new Map(full.map((t) => [t.id, t]));
+  const ids = [...new Set([...run.tunnels.map((t) => t.id), ...full.map((t) => t.id)])];
+  const tunnels = ids.map((id) => {
+    const r = run.tunnels.find((t) => t.id === id) || {}, f = byId.get(id) || {};
+    const type = f.tunnel_type || r.tunnel_type || null;
+    const ca = f.connect_addresses || [];
+    const a = ca.find((x) => x.type === 'domain') || ca.find((x) => x.type === 'auto') || ca[0];
+    const fromFull = a?.value?.address ? a.value.address + (a.value.port && !/:\d+$/.test(a.value.address) && type !== 'minecraft-java' ? ':' + a.value.port : '') : null;
+    const fields = f.origin?.data?.config?.fields || [];
+    const lp = portOf(r) || Number((fields.find((x) => /port/i.test(x.name)) || {}).value || f.origin?.data?.local_port || 0) || null;
+    const udp = r.port_type ? !isJava(r) : type ? type !== 'minecraft-java' : false;
+    return { id, name: f.name || r.name || '', type, typeName: TYPE_NAMES[type] || (udp ? 'UDP' : 'TCP'), udp, address: r.display_address || fromFull, localPort: lp, enabled: f.user_enabled !== false && !r.disabled_reason, disabledReason: r.disabled_reason || null };
+  });
+  return { linked: true, tunnels, account: run.account };
+}
+async function enableTunnel(tunnelId, enabled) { await call('/tunnels/enable', { tunnel_id: tunnelId, enabled: !!enabled }); await refresh().catch(() => {}); return listTunnels(); }
+async function removeTunnel(tunnelId) { await call('/tunnels/delete', { tunnel_id: tunnelId }); await refresh().catch(() => {}); return listTunnels(); }
 function status() {
   return {
     linked: linked(), problem: authProblem,
@@ -465,4 +502,4 @@ function status() {
 }
 function emit() { push('playit:state', status()); }
 
-module.exports = { status, useKey, deleteTunnel, startClaim, cancelClaim, unlink, setupServer, releaseServer, statusFor, liveAddress, stopAgent, restartAgent, refresh, waitForLink };
+module.exports = { listTunnels, enableTunnel, removeTunnel, status, useKey, deleteTunnel, startClaim, cancelClaim, unlink, setupServer, releaseServer, statusFor, liveAddress, stopAgent, restartAgent, refresh, waitForLink };

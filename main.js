@@ -177,6 +177,7 @@ function init() {
   const startHidden = s.startMinimized || process.argv.includes('--hidden');
   // Servers marked "Start with Windows" (or with Solaris): start them a few seconds after launch.
   setTimeout(() => { try { require('./src/hostserver').autoStartAll(require('./src/launch').resolveJava); } catch {} }, 5000);
+  setTimeout(() => { try { require('./src/connect').init(); } catch (e) { console.error('Solaris Connect:', e); } }, 6000); // server monitoring + desktop alerts
   win.once('ready-to-show', () => { if (!startHidden) win.show(); else if (!tray) win.minimize(); });
   win.on('close', (e) => {
     if (app.isQuitting) return;

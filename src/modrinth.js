@@ -403,13 +403,33 @@ async function syncModules(instanceId, onProgress) {
     if (!r) report.unavailable.push('solaris-client');
     else if (r.fresh) report.installed.push('Solaris Client mod');
   } else disableOwnMod(inst);
+  // Checked for updates recently with the same modules, and every file is still there: start right away.
+  const key = `${inst.versionId}|${inst.loader?.type}|${[...wanted].sort().join(',')}`;
+  const recent = inst.modulesChecked && inst.modulesChecked.key === key && Date.now() - inst.modulesChecked.at < MODULE_CHECK_EVERY;
+  const slugs = wanted.filter((s) => s !== 'solaris-client');
+  if (recent) {
+    const bySlug = Object.values(record).filter((r) => r.slug);
+    const allThere = slugs.every((s) => bySlug.some((r) => r.slug === s && fs.existsSync(path.join(inst.gameDir, 'mods', r.file))) || (inst.modulesChecked.unavailable || []).includes(s));
+    if (allThere) { disableUnwanted(inst, wanted); return report; }
+  }
   if (!(await reachable())) { report.offline = true; return report; }
-  let i = 0;
-  for (const slug of wanted.filter((s) => s !== 'solaris-client')) {
-    onProgress && onProgress(i++ / wanted.length, slug);
+  // Look every module up at the same time (one after another took up to 10 seconds); installs stay one at a time.
+  let looked = 0;
+  const found = new Map();
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(8, slugs.length) }, async () => {
+    while (next < slugs.length) {
+      const slug = slugs[next++];
+      try { const p = await project(slug); found.set(slug, { p, v: await bestVersion(p.id, inst, 'mod') }); }
+      catch (e) { found.set(slug, { error: e }); }
+      onProgress && onProgress(++looked / (slugs.length + 1), slug);
+    }
+  }));
+  let failed = false;
+  for (const slug of slugs) {
     try {
-      const p = await project(slug);
-      const v = await bestVersion(p.id, inst, 'mod');
+      const { p, v, error } = found.get(slug) || {};
+      if (error) { failed = true; throw error; }
       if (!v) { report.unavailable.push(slug); continue; }
       const had = record[p.id];
       if (had) {
@@ -422,10 +442,17 @@ async function syncModules(instanceId, onProgress) {
       }
       const rec = readRecord(inst);
       if (rec[p.id]) { rec[p.id].slug = slug; writeRecord(inst, rec); }
-    } catch (e) { report.unavailable.push(slug); }
+    } catch (e) { failed = true; report.unavailable.push(slug); }
   }
+  // Remember the check so the next launches skip it (a failed lookup or install is tried again next time).
+  if (!failed) { try { instances.save({ ...instances.get(instanceId), modulesChecked: { at: Date.now(), key, unavailable: [...report.unavailable] } }); } catch {} }
   report.unavailable = report.unavailable.filter((s) => !companions.includes(s)); // a missing helper library isn't news
-  // Disable modules the user turned off (only ones Solaris installed).
+  disableUnwanted(inst, wanted);
+  return report;
+}
+const MODULE_CHECK_EVERY = 6 * 60 * 60 * 1000; // look for module updates at most every 6 hours
+/** Disable modules the user turned off (only ones Solaris installed). */
+function disableUnwanted(inst, wanted) {
   const fresh = readRecord(inst);
   for (const m of MODULES) {
     if (wanted.includes(m.slug)) continue;
@@ -433,7 +460,6 @@ async function syncModules(instanceId, onProgress) {
       if (r.slug === m.slug) { const f = path.join(inst.gameDir, 'mods', r.file); if (fs.existsSync(f)) fs.renameSync(f, f + '.disabled'); }
     }
   }
-  return report;
 }
 
 module.exports = { readRecord, modpackVersions, updateModpack, search, project, versions, version, tags, install, installModpack, checkUpdates, applyUpdate, modules, moduleAvailability, syncModules, bestVersion };
