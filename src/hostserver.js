@@ -342,7 +342,8 @@ const cleanSchedule = (sc) => ({ backupHours: Math.max(0, Math.min(168, Number(s
 // ---------- Simple Voice Chat (mod or plugin) + its own playit.gg UDP tunnel ----------
 const VOICE_ID = '9eGKb6K1'; // Modrinth project "simple-voice-chat"
 const voiceFile = (m) => path.join(m.dir, SOFTWARE[m.software].kind === 'plugins' ? 'plugins' : 'config', 'voicechat', 'voicechat-server.properties');
-const voiceReq = (m) => (m.voice?.on && m.tunnel === 'playit' ? { port: m.voice.port, tunnelId: m.voice.tunnelId || null } : null);
+// (an address the player set by hand means they made the tunnel themselves: Solaris doesn't make another)
+const voiceReq = (m) => (m.voice?.on && m.tunnel === 'playit' && !m.voice.manualAddress ? { port: m.voice.port, tunnelId: m.voice.tunnelId || null } : null);
 function udpFree(port) {
   return new Promise((resolve) => { const sock = require('dgram').createSocket('udp4'); sock.once('error', () => resolve(false)); sock.bind(port, '0.0.0.0', () => sock.close(() => resolve(true))); });
 }
@@ -357,12 +358,30 @@ function writeVoiceConfig(m) {
   const file = voiceFile(m);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let lines = []; try { lines = fs.readFileSync(file, 'utf8').split(/\r?\n/); } catch {}
-  const left = { port: String(m.voice.port), voice_host: m.tunnel === 'playit' && m.voice.address ? m.voice.address : '' };
+  // voice_host: an address the player typed in Settings wins, then the playit.gg tunnel Solaris found or made.
+  // With playit.gg but no address yet, an existing voice_host is left alone (it may be one the player set by hand);
+  // on the home network it's empty, so players connect to the same address they joined with.
+  const vh = m.voice.manualAddress || (m.tunnel === 'playit' ? m.voice.address : null);
+  const left = { port: String(m.voice.port) };
+  if (vh) left.voice_host = vh;
+  else if (m.tunnel !== 'playit') left.voice_host = '';
   lines = lines.map((l) => { const k = (l.match(/^([a-z_]+)=/) || [])[1]; if (k && k in left) { const v = left[k]; delete left[k]; return `${k}=${v}`; } return l; });
   while (lines.length && !lines[lines.length - 1]) lines.pop();
   if (!lines.length) lines.push('# Simple Voice Chat — port and voice_host are set by Solaris');
   for (const [k, v] of Object.entries(left)) lines.push(`${k}=${v}`);
   fs.writeFileSync(file, lines.join('\n') + '\n');
+}
+/** The voice chat address typed in Settings (e.g. a tunnel made on playit.gg by hand). Empty = automatic. */
+function setVoiceAddress(id, address) {
+  const m = meta(id);
+  if (!m.voice?.on) throw new Error('Turn voice chat on first.');
+  const a = String(address || '').trim().replace(/^udp:\/\//i, '');
+  if (a && !/^[A-Za-z0-9.-]+:\d{1,5}$/.test(a)) throw new Error('Enter the address with its port, like scooter-unanimous.tun.ply.gg:50761 (both are shown on playit.gg).');
+  if (a) m.voice.manualAddress = a; else delete m.voice.manualAddress;
+  writeVoiceConfig(m); save(m);
+  if (running.has(id)) log(id, '[Solaris] Voice chat address saved — restart the server so players use it.');
+  emit(id);
+  return get(id);
 }
 /** Installs the mod/plugin and picks a free UDP port. */
 async function addVoice(m) {
@@ -1589,5 +1608,5 @@ module.exports = {
   softwareVersions, worlds, setActiveWorld, deleteWorld, people, addPerson, removePerson, backups, backup, restore, deleteBackup,
   logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, modSources, instanceMods, copyFromInstance, addContentFiles, modpackVersions,
   tunnelStop, tunnelStart, tunnelRestart,
-  setVoice, setBedrock, diagnose, applyFix, pregen, lagCheck, setDiscord, testDiscord, makeInstance, setupCode, readSetupCode, joinCode, readJoinCode, setSchedule, setAutoStart, autoStartAll, bans, pardon,
+  setVoice, setVoiceAddress, setBedrock, diagnose, applyFix, pregen, lagCheck, setDiscord, testDiscord, makeInstance, setupCode, readSetupCode, joinCode, readJoinCode, setSchedule, setAutoStart, autoStartAll, bans, pardon,
 };

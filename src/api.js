@@ -192,6 +192,7 @@ module.exports = (getWin) => ({
   'hosted:searchModpacks': async (q, sw, mc) => { const facets = [['project_type:modpack'], [`categories:${sw}`], [`versions:${mc}`]]; const r = await getJSON(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(q || '')}&facets=${encodeURIComponent(JSON.stringify(facets))}&limit=12&index=${q ? 'relevance' : 'downloads'}`); return r.hits.map((h) => ({ id: h.project_id, title: h.title, icon: h.icon_url, downloads: h.downloads, description: h.description })); },
   // ---------- playit.gg ----------
   'hosted:setVoice': (id, on) => require('./hostserver').setVoice(id, !!on),
+  'hosted:setVoiceAddress': (id, addr) => require('./hostserver').setVoiceAddress(id, addr),
   'hosted:setBedrock': (id, on) => require('./hostserver').setBedrock(id, !!on),
   'hosted:diagnose': (id) => require('./hostserver').diagnose(id),
   'hosted:applyFix': (id, fix) => require('./hostserver').applyFix(id, fix),

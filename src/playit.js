@@ -331,7 +331,9 @@ async function udpAddress(t) {
 const SIDE = {
   // tunnelType: a playit.gg tunnel type with the right protocol — "minecraft-bedrock" is one UDP port (fine for
   // voice chat), "nethernet" is TCP + UDP on one port (exactly what Geyser's NetherNet needs)
-  voice: { label: 'voice chat', portType: 'udp', tunnelType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: isUdp, kind: 'UDP' },
+  // voice chat accepts a UDP tunnel or a TCP+UDP one (players often make either by hand on playit.gg)
+  voice: { label: 'voice chat', portType: 'udp', tunnelType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'UDP',
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock Edition” (it’s UDP and free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris — it finds that tunnel and sets voice_host for you.` },
   bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
 };
 /**
@@ -343,7 +345,7 @@ const SIDE = {
  *      made, which works on every account
  *   3. POST /v1/tunnels/create with a custom port
  */
-const REQUEST_PROBLEM = /validation|path-not-found|InvalidOrigin|InvalidPortCount|DefaultAgentNotSupported|InvalidTunnelConfig|^playit\.gg: auth\b/i;
+const REQUEST_PROBLEM = /validation|path-not-found|TunnelTypeRequires|InvalidOrigin|InvalidPortCount|DefaultAgentNotSupported|InvalidTunnelConfig|^playit\.gg: auth\b/i;
 async function createPortTunnel(k, name, port) {
   const tname = String(name).replace(/[^\x20-\x7e]/g, '').slice(0, 40);
   const fields = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
@@ -360,7 +362,8 @@ async function createPortTunnel(k, name, port) {
     if (typeof id === 'string' && id) return id;
     throw new Error('playit.gg didn’t return the new tunnel.');
   }
-  throw errors[1] || errors[0]; // the tunnel-type answer explains the most
+  // every answer, so a problem can be told apart (e.g. "auth — …; TunnelTypeRequiresDescription; validation — …")
+  throw new Error(errors.map((e) => e.message.replace(/^playit\.gg: /, '')).join('; '));
 }
 async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
   const k = SIDE[kind];
@@ -371,7 +374,11 @@ async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
   let id = t?.id || (run.pending.some((p) => p.id === tunnelId) ? tunnelId : null);
   if (!id) {
     onStep && onStep(`Creating ${k.label} tunnel (${k.kind})…`);
-    try { id = await createPortTunnel(k, `Solaris ${kind} ${String(name || 'server')}`, port); } catch (e) { throw new Error(`${k.label[0].toUpperCase() + k.label.slice(1)} tunnel: ${e.message} (You can add it on playit.gg yourself: type ${k.kind}, local port ${port}.)`); }
+    try { id = await createPortTunnel(k, `Solaris ${kind} ${String(name || 'server')}`, port); }
+    catch (e) {
+      const err = new Error(`playit.gg didn’t let Solaris make the ${k.label} tunnel (${e.message}). ${k.manual ? k.manual(port) : `You can add it on playit.gg yourself: type ${k.kind}, local port ${port}, then press Restart tunnel.`}`);
+      err.manual = true; throw err;
+    }
   }
   onStep && onStep(`Waiting for the ${k.label} address…`);
   const until = Date.now() + 90000;
