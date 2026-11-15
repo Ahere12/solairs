@@ -1,6 +1,31 @@
 [
   {
     "product": "launcher",
+    "version": "1.10.2",
+    "date": "2026-11-15",
+    "title": "Hosting in its own window",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Pop out: open Hosting in its own window from the Hosting page or any server. Clicking it again brings that window forward on the server you clicked."
+          },
+          {
+            "type": "feature",
+            "text": "Both windows stay live — console, players, tunnels and crash help update in each. The Solaris button brings the main window back, and the Hosting window remembers its size and place."
+          },
+          {
+            "type": "feature",
+            "text": "Closing the main window while the Hosting window is open keeps Solaris running, so you can host from the small window alone."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.10.1",
     "date": "2026-11-15",
     "title": "Voice chat and Bedrock tunnels fixed",
