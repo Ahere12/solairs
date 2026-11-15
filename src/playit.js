@@ -51,14 +51,14 @@ function keyRejected() {
   emit();
 }
 
-async function call(p, body, secret = loadSecret()) {
+async function call(p, body, secret = loadSecret(), probe = false) {
   const r = await fetch(API + p, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(secret ? { Authorization: 'Agent-Key ' + secret } : {}) }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(15000) });
   if (r.status === 429) throw new Error('playit.gg is busy (too many requests). Try again in a minute.');
   const j = await r.json().catch(() => null);
   if (!j) throw new Error(`playit.gg answered HTTP ${r.status}`);
   if (j.status === 'success') return j.data;
   const why = typeof j.data === 'string' ? j.data : j.data?.type || j.data?.message || JSON.stringify(j.data);
-  if (secret && /InvalidAgentKey|NoLongerValid|AgentKeyNotFound/i.test(JSON.stringify(j))) { keyRejected(); throw new Error(authProblem); }
+  if (secret && /InvalidAgentKey|NoLongerValid|AgentKeyNotFound/i.test(JSON.stringify(j))) { if (probe) throw new Error('playit.gg didn’t accept that key. Copy the whole secret key from playit.gg and try again.'); keyRejected(); throw new Error(authProblem); }
   const e = new Error(friendly(why)); e.playit = j.data; throw e;
 }
 /** playit.gg's error names → something a player can act on. */
@@ -115,6 +115,26 @@ async function waitForLink(onStep) {
   onStep && onStep('Approve Solaris on playit.gg (one time) — a browser tab opened');
   await startClaim();
   await new Promise((resolve, reject) => { if (linked()) return resolve(); claimWaiters.push((e) => (e ? reject(e) : resolve())); });
+}
+/**
+ * Setup code: link this PC with a secret key made on playit.gg (Agents → Add agent → self-managed / Docker shows a
+ * SECRET_KEY) instead of approving in the browser. Checked with playit.gg before it's saved.
+ */
+async function useKey(input) {
+  const key = String(input || '').trim().replace(/^(?:export\s+)?SECRET_KEY\s*[=:]\s*/i, '').replace(/^["']|["']$/g, '').trim();
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(key)) throw new Error('That doesn’t look like a playit.gg secret key. It’s a long code of letters and numbers (about 64 characters).');
+  const d = await call('/v1/agents/rundata', {}, key, true);
+  claim = null; authProblem = null;
+  // an agent still running with the old key must restart with the new one
+  const wasRunning = !!agent?.proc;
+  if (wasRunning) stopAgent();
+  saveSecret(key);
+  agentId = d.agent_id;
+  run = { tunnels: d.tunnels || [], pending: d.pending || [], notices: d.notices || [], account: d.permissions?.account_status || null };
+  push('toast', { type: 'ok', text: 'playit.gg connected with your setup code.' });
+  claimDone(null);
+  if (users.size || wasRunning) ensureAgent().catch(() => {});
+  return status();
 }
 function unlink() {
   stopAgent();
@@ -228,6 +248,9 @@ function readLog() {
 }
 
 // ---------- tunnels ----------
+const isUdp = (t) => t.port_type === 'udp';
+const isBoth = (t) => t.port_type === 'both';
+const isJava = (t) => !isUdp(t) && !isBoth(t); // the Minecraft Java (TCP) tunnel, never a voice or Bedrock one
 function portOf(t) {
   const f = (t.agent_config?.fields || []).find((x) => /port/i.test(x.name));
   return f ? Number(f.value) : null;
@@ -253,7 +276,7 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
     call('/tunnels/delete', { tunnel_id: t.id }).catch(() => {});
     t = null; tunnelId = null;
   }
-  if (!t) t = run.tunnels.find((x) => portOf(x) === port);
+  if (!t) t = run.tunnels.find((x) => isJava(x) && portOf(x) === port);
   let id = t?.id || (run.pending.some((p) => p.id === tunnelId) ? tunnelId : null);
   if (!id) {
     onStep && onStep('Creating public tunnel…');
@@ -284,6 +307,56 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
     await new Promise((r) => setTimeout(r, 2500));
   }
 }
+/** The "host:port" players' voice chat connects to (UDP tunnels always need the port). */
+async function udpAddress(t) {
+  if (/:\d{1,5}$/.test(t.display_address || '')) return t.display_address;
+  // no port in the display address: read the public port from playit.gg's full tunnel data
+  try {
+    const d = await call('/agents/rundata', {});
+    const v = (d.tunnels || []).find((x) => x.id === t.id);
+    if (v?.port?.from) return `${v.custom_domain || v.assigned_domain || String(t.display_address).replace(/:\d+$/, '')}:${v.port.from}`;
+  } catch {}
+  return null; // never hand voice chat an address without its port
+}
+// Side tunnels next to the Minecraft Java one:
+//   voice   — Simple Voice Chat, UDP
+//   bedrock — Geyser, TCP + UDP on the same port (Bedrock's NetherNet signaling uses TCP, the game itself UDP)
+const SIDE = {
+  voice: { label: 'voice chat', ports: { type: 'custom-udp', details: 1 }, is: isUdp, kind: 'UDP' },
+  bedrock: { label: 'Bedrock', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
+};
+async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
+  const k = SIDE[kind];
+  if (!(port >= 1 && port <= 65535)) throw new Error(`Invalid ${k.label} port ${port}.`);
+  let t = run.tunnels.find((x) => x.id === tunnelId);
+  if (t && (portOf(t) !== port || !k.is(t))) { call('/tunnels/delete', { tunnel_id: t.id }).catch(() => {}); t = null; tunnelId = null; }
+  if (!t) t = run.tunnels.find((x) => k.is(x) && portOf(x) === port);
+  let id = t?.id || (run.pending.some((p) => p.id === tunnelId) ? tunnelId : null);
+  if (!id) {
+    onStep && onStep(`Creating ${k.label} tunnel (${k.kind})…`);
+    try {
+      const made = await call('/v1/tunnels/create', {
+        name: `Solaris ${kind} ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40),
+        ports: k.ports,
+        origin: { type: 'agent', data: { agent_id: agentId, config: { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] } } },
+        enabled: true, alloc: null, firewall_id: null,
+      });
+      id = made?.id || made;
+    } catch (e) { throw new Error(`${k.label[0].toUpperCase() + k.label.slice(1)} tunnel: ${e.message} (You can add it on playit.gg yourself: type ${k.kind}, local port ${port}.)`); }
+  }
+  onStep && onStep(`Waiting for the ${k.label} address…`);
+  const until = Date.now() + 90000;
+  for (;;) {
+    await refresh().catch(() => {});
+    t = run.tunnels.find((x) => x.id === id);
+    if (t && t.display_address) { const address = await udpAddress(t); if (address) return { tunnelId: t.id, address }; }
+    if (Date.now() > until) throw new Error(`playit.gg hasn’t given the ${k.label} tunnel an address with a port yet — Solaris tries again next start.`);
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+}
+const ensureVoiceTunnel = (o, onStep) => ensureSideTunnel('voice', o, onStep);
+/** Removes a tunnel Solaris made (best effort). */
+function deleteTunnel(tunnelId) { if (tunnelId && linked()) return call('/tunnels/delete', { tunnel_id: tunnelId }).catch(() => {}); }
 /** Waits until the agent reports it is connected to playit.gg (or fails). */
 async function waitConnected(ms = 45000) {
   const until = Date.now() + ms;
@@ -298,7 +371,7 @@ async function waitConnected(ms = 45000) {
 
 // ---------- used by hostserver.js ----------
 /** Create Server / Start / Restart tunnel: link (once), start the agent, make the tunnel, get the address. */
-async function setupServer({ id, port, name, tunnelId }, onStep) {
+async function setupServer({ id, port, name, tunnelId, voice, bedrock }, onStep) {
   users.set(id, { port, name });
   try {
     await waitForLink(onStep);
@@ -306,7 +379,12 @@ async function setupServer({ id, port, name, tunnelId }, onStep) {
     await ensureAgent();
     onStep && onStep('Starting playit.gg agent…');
     await waitConnected();
-    return await ensureTunnel({ port, name, tunnelId }, onStep);
+    const t = await ensureTunnel({ port, name, tunnelId }, onStep);
+    // voice chat and Bedrock are extras: a problem there never stops the Minecraft address from working
+    for (const [kind, want] of [['voice', voice], ['bedrock', bedrock]]) {
+      if (want) { try { t[kind] = await ensureSideTunnel(kind, { port: want.port, name, tunnelId: want.tunnelId }, onStep); } catch (e) { t[kind + 'Error'] = e.message; } }
+    }
+    return t;
   } finally { emit(); }
 }
 /** The server no longer needs its tunnel (stopped, or "Stop tunnel"): stop the agent when nothing else needs it. */
@@ -321,7 +399,7 @@ function statusFor(m, serverRunning, stopped) {
   if (!linked()) return { ok: false, state: 'off', text: claim?.state === 'waiting' ? 'Waiting for you to approve Solaris on playit.gg' : 'playit.gg not connected', needsLink: claim?.state !== 'waiting' };
   if (stopped) return { ok: false, state: 'off', text: 'Tunnel stopped — the server is only on your network' };
   if (!serverRunning) return { ok: false, state: 'off', text: m.playitAddress ? 'Public again when the server starts' : 'Public when the server starts (playit.gg)' };
-  const t = run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => portOf(x) === m.port);
+  const t = run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => isJava(x) && portOf(x) === m.port);
   if (!agent?.proc) return { ok: false, state: 'warn', text: agent?.lastError ? 'playit.gg agent stopped — ' + agent.lastError : 'Starting the playit.gg agent…' };
   if (agent.state === 'starting') return { ok: false, state: 'warn', text: 'Connecting to playit.gg…' };
   if (agent.state === 'reconnecting') return { ok: false, state: 'warn', text: 'playit.gg reconnecting…' };
@@ -331,7 +409,7 @@ function statusFor(m, serverRunning, stopped) {
 }
 /** The live address for a server (only from playit.gg's own data). */
 function liveAddress(m) {
-  const t = run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => portOf(x) === m.port);
+  const t = run.tunnels.find((x) => x.id === m.playitTunnelId) || run.tunnels.find((x) => isJava(x) && portOf(x) === m.port);
   return t?.display_address || null;
 }
 function status() {
@@ -341,9 +419,9 @@ function status() {
     agent: agent ? { state: agent.proc ? agent.state : 'offline', restarts: agent.restarts, lastError: agent.lastError } : { state: 'offline' },
     account: run.account,
     notices: (run.notices || []).map((n) => ({ message: n.message, link: n.resolve_link || null })),
-    tunnels: run.tunnels.map((t) => ({ id: t.id, name: t.name, address: t.display_address, port: portOf(t), disabled: t.disabled_reason || null })),
+    tunnels: run.tunnels.map((t) => ({ id: t.id, name: t.name, address: t.display_address, port: portOf(t), udp: isUdp(t), both: isBoth(t), disabled: t.disabled_reason || null })),
   };
 }
 function emit() { push('playit:state', status()); }
 
-module.exports = { status, startClaim, cancelClaim, unlink, setupServer, releaseServer, statusFor, liveAddress, stopAgent, restartAgent, refresh, waitForLink };
+module.exports = { status, useKey, deleteTunnel, startClaim, cancelClaim, unlink, setupServer, releaseServer, statusFor, liveAddress, stopAgent, restartAgent, refresh, waitForLink };

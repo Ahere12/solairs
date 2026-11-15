@@ -11,8 +11,8 @@ Pages.friends = {
       <div class="together">
         <div class="card"><h3>${icon('globe')}Host your world</h3><p>No port forwarding. In a Solaris Client instance, press <b>Esc → Open to LAN → Start LAN World</b>. Solaris shows the address here and in the sidebar so you can send it.</p>
           <div id="host-status" class="row"></div></div>
-        <div class="card"><h3>${icon('users')}Join a friend</h3><p>Got an address or a <span class="mono">solaris://server/…</span> invite link? Paste it here — or just click the link.</p>
-          <div class="row"><input type="text" id="fr-join-addr" class="grow" placeholder="abc.e4mc.link or play.server.net" spellcheck="false"><button class="btn primary" id="fr-join">${icon('play')}Join</button></div></div>
+        <div class="card"><h3>${icon('users')}Join a friend</h3><p>Got an address, a <span class="mono">JOIN-</span> code or a <span class="mono">solaris://server/…</span> invite link? Paste it here — or just click the link.</p>
+          <div class="row"><input type="text" id="fr-join-addr" class="grow" placeholder="abc.e4mc.link, play.server.net or a JOIN- code" spellcheck="false"><button class="btn primary" id="fr-join">${icon('play')}Join</button></div></div>
         <div class="card"><h3>${icon('sun')}In-game friends</h3><p>Turn on <b>World Host</b> in the Solaris Client to see friends online and join their worlds from inside Minecraft (1.21.5 and older).</p>
           <div class="row"><button class="btn sm" id="fr-client">${icon('sun')}Open Solaris Client</button></div></div>
       </div>
@@ -51,22 +51,30 @@ Pages.friends = {
     };
     const load = async () => { list = await api('friends:list'); if (el.isConnected) draw(); };
     $('#fr-q', el).oninput = (e) => { q = e.target.value.toLowerCase(); draw(); };
-    const drawHost = () => {
+    const drawHost = async () => {
       const box = $('#host-status', el); if (!box) return;
       const h = Hosting.list[Hosting.list.length - 1];
-      box.innerHTML = h
-        ? `<span class="chip ok">Online</span><span class="mono small ellipsis grow" title="${esc(h.address)}">${esc(h.address)}</span><button class="btn sm primary" id="fr-invite">${icon('copy')}Invite link</button>`
-        : '<span class="faint small">Not hosting right now.</span>';
+      // your Solaris servers that are running right now (Hosting page), with who's on them
+      const servers = (await api('hosted:list').catch(() => [])).filter((s) => s.state !== 'offline' && !s.missing);
+      if (!box.isConnected) return;
+      box.innerHTML = (h ? `<div class="row" style="gap:8px"><span class="chip ok">Online</span><span class="mono small ellipsis grow" title="${esc(h.address)}">${esc(h.address)}</span><button class="btn sm primary" id="fr-invite">${icon('copy')}Invite link</button></div>` : '')
+        + servers.map((s) => `<div class="row" style="gap:8px;margin-top:6px"><span class="chip ${s.state === 'online' ? 'ok' : 'warn'}">${s.state === 'online' ? `${s.players.length}/${s.maxPlayers}` : 'Starting'}</span><span class="small ellipsis grow" title="${esc(s.players.join(', '))}"><b>${esc(s.name)}</b>${s.players.length ? ` · ${esc(s.players.slice(0, 4).join(', '))}${s.players.length > 4 ? '…' : ''}` : ''}</span>${s.address || s.knownAddress ? `<button class="btn sm" data-jc="${esc(s.id)}">${icon('key')}Join code</button>` : ''}<button class="btn sm ghost" data-hs="${esc(s.id)}">Open</button></div>`).join('')
+        || '<span class="faint small">Not hosting right now.</span>';
       if (h) $('#fr-invite', box).onclick = () => { api('clipboard:write', Hosting.invite(h.address)); toast('Invite link copied'); };
+      $$('[data-jc]', box).forEach((b) => (b.onclick = async () => { try { const c = await api('hosted:joinCode', b.dataset.jc); api('clipboard:write', c); toast(`Join code copied: ${c}`); } catch (e) { toastErr(e); } }));
+      $$('[data-hs]', box).forEach((b) => (b.onclick = () => Router.go('host', { id: b.dataset.hs })));
     };
     drawHost();
     ctx.on('hosting', drawHost);
     $('#fr-client', el).onclick = () => Router.go('solaris');
-    $('#fr-join', el).onclick = () => {
+    $('#fr-join', el).onclick = async () => {
       let a = $('#fr-join-addr', el).value.trim().replace(/^solaris:\/\/server\//i, '').replace(/\/+$/, '');
-      if (!/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(a)) return toast('Enter a server address like abc.e4mc.link', 'error');
-      Pages.servers.join(a);
+      let opts = {};
+      if (/^JOIN-/i.test(a)) { try { const j = await api('hosted:readJoinCode', a); a = j.address; opts = { mc: j.mc || undefined, modded: j.modded || '' }; } catch (e) { return toastErr(e); } }
+      if (!/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(a)) return toast('Enter a server address (like abc.e4mc.link) or a JOIN- code', 'error');
+      Pages.servers.join(a, opts);
     };
+    ctx.on('hosted', () => drawHost());
     $('#fr-join-addr', el).onkeydown = (e) => { if (e.key === 'Enter') $('#fr-join', el).click(); };
     $('#fr-add', el).onclick = async () => {
       const n = await promptDialog('Add friend', { placeholder: 'Minecraft username', ok: 'Add' });

@@ -126,6 +126,8 @@ function init() {
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   const startHidden = s.startMinimized || process.argv.includes('--hidden');
+  // Servers marked "Start with Windows" (or with Solaris): start them a few seconds after launch.
+  setTimeout(() => { try { require('./src/hostserver').autoStartAll(require('./src/launch').resolveJava); } catch {} }, 5000);
   win.once('ready-to-show', () => { if (!startHidden) win.show(); else if (!tray) win.minimize(); });
   win.on('close', (e) => {
     if (app.isQuitting) return;

@@ -1,6 +1,8 @@
 Pages.servers = {
   /** Join a server. `opts.mc` (your own hosted servers) lists only instances of that Minecraft version. */
   async join(address, opts = {}) {
+    // a hosted server's own matching instance: launch it straight away
+    if (opts.instance && State.instances.some((i) => i.id === opts.instance)) return play(opts.instance, { server: address });
     const pick = State.instances.find((i) => i.id === State.settings.selectedInstance);
     const same = opts.mc ? State.instances.filter((i) => i.versionId === opts.mc) : [];
     const note = opts.mc

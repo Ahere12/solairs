@@ -1,6 +1,96 @@
 [
   {
     "product": "launcher",
+    "version": "1.10.0",
+    "date": "2026-11-14",
+    "title": "Bedrock players, crash helper, voice chat and setup codes",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Simple Voice Chat in one click: Solaris installs the mod or plugin, makes a UDP tunnel on playit.gg and sets voice_host for you. Turn it on when creating a server or in its Settings."
+          },
+          {
+            "type": "feature",
+            "text": "Setup codes: copy a server’s whole setup (software, version, game settings, mods/plugins, voice chat, schedules) as one code and paste it into New server to make the same server again."
+          },
+          {
+            "type": "feature",
+            "text": "Join codes: send friends a short JOIN- code; they paste it in Hosting → Join with code."
+          },
+          {
+            "type": "feature",
+            "text": "Connect playit.gg with a setup code (the secret key from playit.gg) instead of approving in the browser."
+          },
+          {
+            "type": "feature",
+            "text": "New server now lets you set game mode, difficulty, world type, seed, view distance, MOTD, PvP, hardcore, whitelist, offline accounts, the playit.gg tunnel name, and starter extras like EssentialsX, LuckPerms, Chunky, WorldEdit, spark and ViaVersion."
+          },
+          {
+            "type": "feature",
+            "text": "Automation: automatic backups (keeps the newest ones), scheduled restarts with a 1-minute warning, and start servers with Windows."
+          },
+          {
+            "type": "feature",
+            "text": "Players: change game mode, teleport, heal, message, make or remove operators, ban and unban from the Players tab."
+          },
+          {
+            "type": "feature",
+            "text": "Bedrock players: phone, Xbox, PlayStation, Switch and Windows players can join your Java server. Solaris installs Geyser + Floodgate, sets them up and makes the playit.gg tunnel."
+          },
+          {
+            "type": "feature",
+            "text": "Crash helper: when a server stops by itself, Solaris explains why in plain words (missing mod, mod for another version, game-only mod, out of memory, port in use…) with a one-click fix. Also under “Why did it stop?”."
+          },
+          {
+            "type": "feature",
+            "text": "Pre-generate the world with Chunky from the Worlds tab, with a progress bar — less lag when players explore."
+          },
+          {
+            "type": "feature",
+            "text": "Lag check: TPS, tick time and CPU in plain words, plus a spark report that shows what causes lag."
+          },
+          {
+            "type": "feature",
+            "text": "Discord alerts: post to a channel when the server goes online, stops, crashes, or players join and leave."
+          },
+          {
+            "type": "feature",
+            "text": "Game instance for a server: one click makes an instance with the server’s version, loader and mods (plus voice chat); Join uses it straight away."
+          },
+          {
+            "type": "feature",
+            "text": "Friends: your running servers show with who’s on them and a join-code button; friends who join your server show as online; the Join box takes JOIN- codes."
+          }
+        ]
+      },
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Copy from an instance: pick one of your instances and copy its mods into your server in one click. Mods that only work in the game (Sodium, minimaps, zoom and so on) are left out for you."
+          },
+          {
+            "type": "feature",
+            "text": "Add files from PC: pick .jar mods or plugins from your computer, or drag them onto the Mods/Plugins tab."
+          },
+          {
+            "type": "feature",
+            "text": "Solaris checks every mod before adding it: wrong mod loader, client-only mods and the Solaris client mod are skipped with a reason, and mods made for another Minecraft version are flagged, because they usually stop the server from starting."
+          },
+          {
+            "type": "fix",
+            "text": "Adding a newer copy of a mod or plugin replaces the old one instead of keeping both."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.9.1",
     "date": "2026-11-14",
     "title": "Hosting fixes: player count, whitelist, duplicate mods",

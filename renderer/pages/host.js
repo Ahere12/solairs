@@ -1,6 +1,7 @@
 /* Hosting: create, run and manage Minecraft servers on this PC, and make them public (e4mc or playit.gg). */
 const HOST_SW = [['vanilla', 'Vanilla'], ['paper', 'Paper'], ['purpur', 'Purpur'], ['fabric', 'Fabric'], ['forge', 'Forge'], ['neoforge', 'NeoForge']];
 const HOST_E4MC = ['fabric', 'forge', 'neoforge'];
+const HOST_BEDROCK = ['paper', 'purpur', 'fabric', 'neoforge']; // Geyser runs on these
 const fmtUp = (ms) => { if (!ms) return '—'; const s = Math.floor(ms / 1000); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
 Pages.host = {
@@ -14,7 +15,7 @@ Pages.host = {
       if (!el.isConnected) return;
       el.innerHTML = `
         <div class="page-head"><div><h1>Hosting</h1><div class="sub">Run Minecraft servers on this PC — friends join from anywhere, no paid hosting.</div></div>
-          <div class="actions"><button class="btn primary" id="hs-new">${icon('plus')}New server</button></div></div>
+          <div class="actions"><button class="btn" id="hs-joincode">${icon('users')}Join with code</button><button class="btn" id="hs-paste">${icon('download')}Use setup code</button><button class="btn primary" id="hs-new">${icon('plus')}New server</button></div></div>
         ${this.playitPanel(pl)}
         ${list.length ? `<div class="hs-grid">${list.map((s) => this.card(s)).join('')}</div>` : `
           <div class="hs-empty">
@@ -28,6 +29,8 @@ Pages.host = {
         <p class="faint small" style="margin-top:18px">Your PC runs the servers, so they’re online while Solaris and your PC are on. Public addresses: <b>e4mc</b> (Fabric/Forge/NeoForge, no account) or <b>playit.gg</b> (any server, free account).</p>`;
       $('#hs-new', el).onclick = () => this.create();
       if ($('#hs-new2', el)) $('#hs-new2', el).onclick = () => this.create();
+      $('#hs-paste', el).onclick = () => this.pasteSetupCode();
+      $('#hs-joincode', el).onclick = () => this.joinWithCode();
       this.bindPlayit(el, draw);
       this.bindCards(el, draw);
     };
@@ -46,9 +49,9 @@ Pages.host = {
       const notices = (pl.notices || []).map((n) => `<div class="small warn-text">${icon('alert')} ${esc(n.message)}${n.link ? ` <a href="#" data-pl-notice="${esc(n.link)}">Fix on playit.gg</a>` : ''}</div>`).join('');
       return `<div class="card hs-playit ok">${icon('globe')}<div class="grow"><b>playit.gg connected</b>${pl.account === 'guest' ? ' <span class="chip">guest account</span>' : ''}<div class="faint small">Agent: ${agentText}${pl.agent?.lastError && a !== 'connected' ? ` · <span class="danger-text">${esc(pl.agent.lastError)}</span>` : ''}</div>${notices}</div><button class="btn sm ghost" data-pl="dash">${icon('external')}Dashboard</button><button class="btn sm ghost" data-pl="unlink">Disconnect</button></div>`;
     }
-    if (pl.problem) return `<div class="card hs-playit wait">${icon('alert')}<div class="grow"><b>Connect playit.gg again</b><div class="faint small">${esc(pl.problem)}</div></div><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
+    if (pl.problem) return `<div class="card hs-playit wait">${icon('alert')}<div class="grow"><b>Connect playit.gg again</b><div class="faint small">${esc(pl.problem)}</div></div><button class="btn sm ghost" data-pl="key">${icon('key')}Setup code</button><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
     const msg = pl.claim?.state === 'rejected' ? 'You declined on playit.gg.' : pl.claim?.state === 'expired' ? 'The approval timed out.' : pl.claim?.state === 'error' ? esc(pl.claim.error || 'Something went wrong.') : '';
-    return `<div class="card hs-playit">${icon('globe')}<div class="grow"><b>playit.gg — public address for any server</b><div class="faint small">Free. You approve this PC once on playit.gg, then Solaris creates the tunnels for you. ${msg}</div></div><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
+    return `<div class="card hs-playit">${icon('globe')}<div class="grow"><b>playit.gg — public address for any server</b><div class="faint small">Free. Approve this PC once on playit.gg (or paste a setup code), then Solaris makes the tunnels for you — including voice chat. ${msg}</div></div><button class="btn sm ghost" data-pl="key">${icon('key')}Setup code</button><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
   },
   bindPlayit(root, redraw) {
     $$('[data-pl-notice]', root).forEach((l) => (l.onclick = (e) => { e.preventDefault(); api('shell:open', l.dataset.plNotice); }));
@@ -56,6 +59,7 @@ Pages.host = {
       const a = b.dataset.pl;
       try {
         if (a === 'connect') { b.disabled = true; await api('playit:connect'); }
+        if (a === 'key') return this.playitKey(redraw);
         if (a === 'open') api('shell:open', this.playit?.claim?.url);
         if (a === 'cancel') await api('playit:cancel');
         if (a === 'dash') api('shell:open', 'https://playit.gg/account/tunnels');
@@ -63,6 +67,112 @@ Pages.host = {
       } catch (e) { toastErr(e); }
       redraw && redraw();
     }));
+  },
+
+  /** Link playit.gg with a secret key from the playit.gg website instead of the browser approval. */
+  playitKey(redraw) {
+    const m = modal({
+      title: 'playit.gg setup code',
+      body: `<ol class="small" style="margin:0 0 12px 18px;line-height:1.7">
+          <li>On <a href="#" data-open-agents>playit.gg → Agents</a>, press <b>Add Agent</b>.</li>
+          <li>Pick <b>Docker</b> / <b>self-managed</b> — playit.gg shows a <b>SECRET_KEY</b>.</li>
+          <li>Copy that key and paste it here.</li></ol>
+        <input type="password" id="pk-key" class="mono" style="width:100%" placeholder="Paste the secret key" spellcheck="false" autocomplete="off">
+        <p class="faint small">The key is checked with playit.gg and saved encrypted on this PC only.</p>`,
+      footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>${icon('link')}Connect</button>`,
+    });
+    m.$('[data-open-agents]').onclick = (e) => { e.preventDefault(); api('shell:open', 'https://playit.gg/account/agents'); };
+    m.$('[data-x]').onclick = () => m.close();
+    const go = m.$('[data-go]');
+    go.onclick = async () => {
+      go.disabled = true; go.innerHTML = `${icon('refresh', 'spin')}Checking…`;
+      try { await api('playit:useKey', m.$('#pk-key').value); m.close(); redraw && redraw(); }
+      catch (e) { toastErr(e); go.disabled = false; go.innerHTML = `${icon('link')}Connect`; }
+    };
+    setTimeout(() => m.$('#pk-key')?.focus(), 50);
+  },
+  /** Paste a Solaris setup code (SOLARIS-…) and open New server with everything filled in. */
+  pasteSetupCode() {
+    const m = modal({
+      title: 'Use a setup code',
+      body: `<p class="muted small">A setup code holds a whole server setup — software, version, game settings, mods/plugins, voice chat and schedules. Get one from a server’s <b>Settings → Setup code</b>.</p><textarea id="sc-code" class="mono" rows="4" style="width:100%" placeholder="SOLARIS-…" spellcheck="false"></textarea>`,
+      footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>${icon('plus')}Continue</button>`,
+    });
+    m.$('[data-x]').onclick = () => m.close();
+    m.$('[data-go]').onclick = async () => {
+      try { const t = await api('hosted:readSetupCode', m.$('#sc-code').value); m.close(); this.create(t); } catch (e) { toastErr(e); }
+    };
+  },
+  /** A friend's join code (JOIN-…): straight into the game. */
+  joinWithCode() {
+    const m = modal({
+      title: 'Join with code',
+      body: `<p class="muted small">Paste the join code your friend sent you (it starts with <span class="mono">JOIN-</span>). A normal server address works too.</p><input type="text" id="jc-code" class="mono" style="width:100%" placeholder="JOIN-…" spellcheck="false">`,
+      footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>${icon('play')}Join</button>`,
+    });
+    m.$('[data-x]').onclick = () => m.close();
+    m.$('[data-go]').onclick = async () => {
+      const v = m.$('#jc-code').value.trim();
+      try {
+        const j = /^JOIN-/i.test(v) ? await api('hosted:readJoinCode', v) : /^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(v) ? { address: v } : null;
+        if (!j) throw new Error('That isn’t a join code or server address.');
+        m.close();
+        Pages.servers.join(j.address, { mc: j.mc || undefined, modded: j.modded || '' });
+      } catch (e) { toastErr(e); }
+    };
+    setTimeout(() => m.$('#jc-code')?.focus(), 50);
+  },
+
+  /** "Why did it stop?": plain-words reasons from the last run's log, each with a one-click fix when there is one. */
+  async showDiagnosis(id, pre = null) {
+    let d = pre;
+    if (!d) { try { d = await api('hosted:diagnose', id); } catch (e) { return toastErr(e); } }
+    const m = modal({
+      title: `Why ${d.name} stopped`,
+      body: !d.hasLog ? '<p class="muted">Solaris has no log from this server yet — start it once first.</p>'
+        : d.normal ? `<p>${icon('check')} The last run ended normally — it was stopped, it didn’t crash. Nothing to fix.</p>`
+        : `${d.findings.length ? `<div class="stack" style="gap:8px">${d.findings.map((f, i) => `<div class="card row" style="gap:10px;padding:10px 12px">${icon('alert')}<span class="grow">${esc(f.text)}</span>${f.fix ? `<button class="btn sm primary" data-fix="${i}">${esc(f.fix.label)}</button>` : ''}</div>`).join('')}</div>`
+          : '<p class="muted">Solaris didn’t find a known cause. The last errors from the log are below — the Console tab and Log files show everything.</p>'}
+          ${d.errors.length ? `<details style="margin-top:12px" ${d.findings.length ? '' : 'open'}><summary class="small">Last errors in the log</summary><pre class="console" style="max-height:220px;overflow:auto;white-space:pre-wrap">${esc(d.errors.join('\n'))}</pre></details>` : ''}
+          <p class="faint small" style="margin-top:10px">After a fix, press Start to try again.</p>`,
+      footer: `<button class="btn" data-x>${T('Close')}</button><button class="btn primary" data-start>${icon('play')}Start</button>`,
+    });
+    m.$('[data-x]').onclick = () => m.close();
+    m.$('[data-start]').onclick = () => { m.close(); this.start(id); };
+    $$('[data-fix]', m.el).forEach((b) => (b.onclick = async () => {
+      const f = d.findings[+b.dataset.fix].fix;
+      if (f.type === 'backups') { m.close(); return Router.go('host', { id, tab: 'backups' }); }
+      b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Fixing…`;
+      try { toast(await api('hosted:applyFix', id, f)); b.innerHTML = `${icon('check')}Done`; } catch (e) { toastErr(e); b.disabled = false; b.textContent = f.label; }
+    }));
+  },
+  /** Lag check: TPS, tick time and CPU in plain words, plus a spark report that shows what takes the time. */
+  async lagCheck(id, s) {
+    const m = modal({ title: `Lag check — ${s.name}`, body: `<div id="lg-body"><p class="muted">${icon('refresh', 'spin')} Measuring for about 30 seconds… keep playing normally, it doesn’t stop the server.</p></div>`, footer: `<button class="btn" data-x>${T('Close')}</button>` });
+    m.$('[data-x]').onclick = () => m.close();
+    const body = m.$('#lg-body');
+    try {
+      const r = await api('hosted:lagCheck', id);
+      if (!body.isConnected) return;
+      if (r.installed) { body.innerHTML = `<p>${esc(r.message)}</p>`; return; }
+      const tile = (label, v, good) => `<div class="card" style="padding:10px 12px;text-align:center"><div class="faint small">${label}</div><div style="font-size:22px;font-weight:700" class="${good == null ? '' : good ? 'ok-text' : 'warn-text'}">${v ?? '—'}</div></div>`;
+      body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+          ${tile('TPS (20 is perfect)', r.tps, r.tps == null ? null : r.tps >= 19.5)}${tile('Tick time (ms)', r.msptMedian, r.msptMedian == null ? null : r.msptMedian < 40)}${tile('Slowest ticks (ms)', r.mspt95, r.mspt95 == null ? null : r.mspt95 < 50)}${tile('CPU', r.cpu != null ? r.cpu + '%' : null, r.cpu == null ? null : r.cpu < 85)}</div>
+        <ul style="margin:12px 0 0 18px;line-height:1.6">${r.verdict.map((v) => `<li>${esc(v)}</li>`).join('') || '<li>No problems found.</li>'}</ul>
+        ${r.url ? `<p style="margin-top:10px">${icon('chart')} <a href="#" data-report>Open the spark report</a> <span class="faint small">— the biggest bars are what uses the most time (a mod, plugin, or lots of mobs/redstone in one place).</span></p>` : '<p class="faint small">The detailed spark report couldn’t be made (spark needs internet to upload it).</p>'}`;
+      const a = $('[data-report]', body); if (a) a.onclick = (e) => { e.preventDefault(); api('shell:open', r.url); };
+    } catch (e) { if (body.isConnected) body.innerHTML = `<p class="danger-text">${esc(e.message)}</p>`; }
+  },
+  /** One game instance with the server's version, loader and mods (plus voice chat), to play on it. */
+  async makeInstance(id, s, btn) {
+    if (btn) { btn.disabled = true; btn.innerHTML = `${icon('refresh', 'spin')}Making…`; }
+    try {
+      const r = await api('hosted:makeInstance', id);
+      await refreshInstances();
+      toast(`${r.updated ? 'Updated' : 'Made'} “${r.instance.name}”${r.added.length ? ` with ${r.added.length} mod${r.added.length === 1 ? '' : 's'}` : ''}. Press Join to play on ${s.name}.`, 'ok', 8000);
+      if (r.skipped.length) toast(`Left out: ${r.skipped.join('; ')}`, 'info', 10000);
+      return r;
+    } catch (e) { toastErr(e); } finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = `${icon('library')}Make game instance`; } }
   },
 
   statsHtml(s) {
@@ -135,13 +245,15 @@ Pages.host = {
   },
 
   // ---------- create ----------
-  async create() {
+  async create(pre = null) {
     const totalGb = (State.info?.totalMem || 8 * 1024 ** 3) / 1024 ** 3;
     const def = totalGb <= 8 ? 2048 : 4096;
-    let sw = 'fabric', folder = null, pack = null;
+    let sw = 'fabric', folder = null, pack = null, preContent = [];
+    const sel = (id, opts, cur) => `<select id="${id}">${opts.map(([v, n]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
     const m = modal({
       title: 'New server', wide: true,
       body: `<div class="hs-create">
+        <div class="row hc-codebar"><span class="faint small grow">${icon('key')} Have a setup code? Paste it to fill everything in.</span><input type="text" id="hc-code" class="mono" style="width:260px" placeholder="SOLARIS-…" spellcheck="false"><button class="btn sm" id="hc-code-use">Use</button></div>
         <label class="field">Name<input type="text" id="hc-name" maxlength="40" placeholder="My server"></label>
         <div class="field">Server software<div class="seg hc-sw">${HOST_SW.map(([k, n]) => `<button data-sw="${k}" class="${k === sw ? 'on' : ''}">${n}</button>`).join('')}</div><div class="faint small" id="hc-sw-note"></div></div>
         <div class="row"><label class="field grow">Minecraft version<select id="hc-mc"><option>Loading…</option></select></label>
@@ -150,7 +262,31 @@ Pages.host = {
         <label class="field">Memory <span class="faint small" id="hc-memv">${def / 1024} GB</span><input type="range" id="hc-mem" min="1024" max="${Math.max(2048, Math.floor(totalGb * 0.7) * 1024)}" step="512" value="${def}"></label>
         <div class="field">Folder<div class="row"><span class="mono small grow ellipsis" id="hc-dir">Default (inside Solaris data)</span><button class="btn sm" id="hc-pick">${icon('folder')}Choose…</button></div></div>
         <div class="field">Public address<div class="seg" id="hc-tun"><button data-t="playit">Playit.gg</button><button data-t="e4mc">e4mc</button><button data-t="none">Home network only</button></div><div class="faint small" id="hc-tun-note"></div></div>
+        <label class="field" id="hc-tname-wrap">Tunnel name on playit.gg <span class="faint small">(optional)</span><input type="text" id="hc-tname" maxlength="40" placeholder="Same as the server name"></label>
         <div class="field" id="hc-pack-wrap">Modpack <span class="faint small">(optional, from Modrinth)</span><div class="row"><span class="grow small" id="hc-pack">None</span><button class="btn sm" id="hc-pack-pick">${icon('search')}Choose modpack…</button></div></div>
+        <details class="hc-more" open><summary><b>Game settings</b></summary>
+          <div class="row"><label class="field grow">Game mode${sel('hc-gm', [['survival', 'Survival'], ['creative', 'Creative'], ['adventure', 'Adventure'], ['spectator', 'Spectator']], 'survival')}</label>
+            <label class="field grow">Difficulty${sel('hc-df', [['peaceful', 'Peaceful'], ['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], 'normal')}</label>
+            <label class="field grow">World type${sel('hc-lt', [['minecraft:normal', 'Normal'], ['minecraft:flat', 'Superflat'], ['minecraft:large_biomes', 'Large biomes'], ['minecraft:amplified', 'Amplified']], 'minecraft:normal')}</label></div>
+          <div class="row"><label class="field grow">World seed <span class="faint small">(blank = random)</span><input type="text" id="hc-seed" maxlength="60"></label>
+            <label class="field" style="width:140px">View distance<input type="number" id="hc-vd" min="3" max="32" value="10"></label></div>
+          <label class="field">Message of the day <span class="faint small">(shown in the server list)</span><input type="text" id="hc-motd" maxlength="120" placeholder="${esc('<name> — hosted with Solaris')}"></label>
+          <div class="hc-checks">
+            <label><input type="checkbox" id="hc-pvp" checked>PvP</label>
+            <label><input type="checkbox" id="hc-hc">Hardcore</label>
+            <label><input type="checkbox" id="hc-fly">Allow flying (for mods)</label>
+            <label><input type="checkbox" id="hc-cb">Command blocks</label>
+            <label><input type="checkbox" id="hc-wl">Whitelist (only added players)</label>
+            <label title="Lets offline/cracked accounts join. Anyone could use any name — turn the whitelist on too."><input type="checkbox" id="hc-off">Allow offline (cracked) accounts</label>
+          </div></details>
+        <details class="hc-more" id="hc-extras-wrap" open><summary><b>Extras</b> <span class="faint small">installed for you</span></summary>
+          <label class="hc-voice"><input type="checkbox" id="hc-voice" checked><span><b>Simple Voice Chat</b> — proximity voice chat. Solaris installs it, makes the UDP tunnel on playit.gg and sets <span class="mono">voice_host</span> automatically.</span></label>
+          <label class="hc-voice" id="hc-bedrock-wrap"><input type="checkbox" id="hc-bedrock"><span><b>Bedrock players</b> — friends on phone, Xbox, PlayStation, Switch and Windows can join too (Geyser + Floodgate, no Java account needed). Solaris makes the playit.gg tunnel for them.</span></label>
+          <div class="hc-checks" id="hc-extras"></div></details>
+        <details class="hc-more"><summary><b>Automation</b></summary>
+          <div class="hc-checks"><label><input type="checkbox" id="hc-auto">Start this server automatically (also when Windows starts)</label></div>
+          <div class="row"><label class="field grow">Auto backup every${sel('hc-bk', [['0', 'Off'], ['1', '1 hour'], ['3', '3 hours'], ['6', '6 hours'], ['12', '12 hours'], ['24', 'Day']], '0')}</label>
+            <label class="field grow">Auto restart every${sel('hc-rs', [['0', 'Off'], ['6', '6 hours'], ['12', '12 hours'], ['24', 'Day']], '0')}</label></div></details>
         <label class="row" style="gap:10px;align-items:flex-start"><input type="checkbox" id="hc-eula"><span>I accept the <a href="#" id="hc-eula-link">Minecraft EULA</a> — required to run a Minecraft server.</span></label>
         <div class="hc-progress hidden" id="hc-progress"></div>
       </div>`,
@@ -162,6 +298,7 @@ Pages.host = {
       if (t === 'e4mc' && !HOST_E4MC.includes(sw)) t = 'playit';
       tun = t;
       $$('[data-t]', m.el).forEach((b) => { b.classList.toggle('on', b.dataset.t === t); b.disabled = b.dataset.t === 'e4mc' && !HOST_E4MC.includes(sw); });
+      m.$('#hc-tname-wrap').classList.toggle('hidden', t !== 'playit');
       m.$('#hc-tun-note').innerHTML = t === 'playit'
         ? `<b>Playit.gg</b> — Automatically generate a public Minecraft server address using Playit.gg. No manual tunnel configuration required.${this.playit?.linked ? '' : '<br>The first time, playit.gg asks you to approve Solaris once in your browser (sign in or continue as a guest).'}`
         : t === 'e4mc' ? 'Instant public address through the free e4mc relay, nothing to sign up for (Fabric, Forge and NeoForge).'
@@ -183,19 +320,61 @@ Pages.host = {
     const offTask = window.solaris.on('task', (t) => { if (gone()) return; if (t.id === 'hosted-create' && t.detail && steps[steps.length - 1] !== t.detail) { steps.push(t.detail); drawProg(); } });
     const offPl = window.solaris.on('playit:state', () => { if (gone()) return; if (steps.length) drawProg(); });
     const closeModal = m.close; m.close = () => { offTask(); offPl(); closeModal(); };
+    let wantMc = null;
     const loadVersions = async () => {
-      const sel = m.$('#hc-mc'); sel.innerHTML = '<option>Loading…</option>'; sel.disabled = true;
-      try { const vs = await api('hosted:versions', sw); if (!m.el.isConnected) return; sel.innerHTML = vs.slice(0, 80).map((v) => `<option>${esc(v)}</option>`).join(''); }
-      catch (e) { sel.innerHTML = '<option value="">Couldn’t load versions</option>'; toastErr(e); }
-      sel.disabled = false;
+      const vsel = m.$('#hc-mc'); vsel.innerHTML = '<option>Loading…</option>'; vsel.disabled = true;
+      try {
+        const vs = await api('hosted:versions', sw); if (!m.el.isConnected) return;
+        const list = vs.slice(0, 80); if (wantMc && !list.includes(wantMc) && vs.includes(wantMc)) list.unshift(wantMc);
+        vsel.innerHTML = list.map((v) => `<option ${v === wantMc ? 'selected' : ''}>${esc(v)}</option>`).join('');
+        if (wantMc && !vs.includes(wantMc)) toast(`${HOST_SW.find((x) => x[0] === sw)[1]} has no Minecraft ${wantMc} — pick another version.`, 'warn');
+        wantMc = null;
+      } catch (e) { vsel.innerHTML = '<option value="">Couldn’t load versions</option>'; toastErr(e); }
+      vsel.disabled = false;
+    };
+    // Starter mods/plugins that fit each kind of server, by Modrinth project ID (setup codes store the same IDs).
+    const EXTRAS = {
+      plugins: [['hXiIvTyT', 'EssentialsX', 'homes, warps, /tpa, kits'], ['Vebnzrzj', 'LuckPerms', 'permissions and ranks'], ['fALzjamp', 'Chunky', 'pre-generate the world, less lag'], ['1u6JkXh5', 'WorldEdit', 'build tools'], ['P1OZGk5p', 'ViaVersion', 'newer game versions can join']],
+      mods: [['Vebnzrzj', 'LuckPerms', 'permissions and ranks'], ['fALzjamp', 'Chunky', 'pre-generate the world, less lag'], ['l6YH9Als', 'spark', 'find what causes lag'], ['1u6JkXh5', 'WorldEdit', 'build tools']],
+    };
+    const drawExtras = () => {
+      const kind = ['paper', 'purpur'].includes(sw) ? 'plugins' : sw === 'vanilla' ? 'none' : 'mods';
+      m.$('#hc-extras-wrap').classList.toggle('hidden', kind === 'none');
+      m.$('#hc-bedrock-wrap').classList.toggle('hidden', !HOST_BEDROCK.includes(sw));
+      const list = EXTRAS[kind] || [];
+      m.$('#hc-extras').innerHTML = list.map(([k, n, d]) => `<label title="${esc(d)}"><input type="checkbox" data-ex="${k}" ${preContent.includes(k) ? 'checked' : ''}>${n} <span class="faint small">${esc(d)}</span></label>`).join('');
     };
     const setSw = (k) => {
       sw = k; pack = null; m.$('#hc-pack').textContent = 'None';
       $$('[data-sw]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.sw === k));
-      m.$('#hc-sw-note').textContent = { vanilla: 'The official server — no mods or plugins.', paper: 'Fast, plugin server (Bukkit/Spigot/Paper plugins).', purpur: 'Paper with extra options and plugin support.', fabric: 'Lightweight mod server — great for performance mods and modpacks.', forge: 'Classic mod server for Forge mods and modpacks.', neoforge: 'Modern Forge fork for NeoForge mods and modpacks.' }[k];
+      m.$('#hc-sw-note').textContent = { vanilla: 'The official server — no mods or plugins (no voice chat either).', paper: 'Fast, plugin server (Bukkit/Spigot/Paper plugins).', purpur: 'Paper with extra options and plugin support.', fabric: 'Lightweight mod server — great for performance mods and modpacks.', forge: 'Classic mod server for Forge mods and modpacks.', neoforge: 'Modern Forge fork for NeoForge mods and modpacks.' }[k];
       m.$('#hc-pack-wrap').classList.toggle('hidden', !['fabric', 'forge', 'neoforge'].includes(k));
-      setTun(tun); loadVersions();
+      drawExtras(); setTun(tun); loadVersions();
     };
+    // Fill the dialog from a setup code.
+    const applyPre = (t) => {
+      wantMc = t.mc || null; preContent = t.content || [];
+      if (t.name) m.$('#hc-name').value = t.name;
+      m.$('#hc-max').value = t.maxPlayers || 10;
+      const mem = m.$('#hc-mem'); mem.value = Math.min(+mem.max, t.memory || def); m.$('#hc-memv').textContent = `${mem.value / 1024} GB`;
+      const p = t.props || {};
+      if (p.gamemode) m.$('#hc-gm').value = p.gamemode;
+      if (p.difficulty) m.$('#hc-df').value = p.difficulty;
+      if (p['level-type'] && $(`#hc-lt option[value="${CSS.escape(p['level-type'])}"]`, m.el)) m.$('#hc-lt').value = p['level-type'];
+      if (p['level-seed']) m.$('#hc-seed').value = p['level-seed'];
+      if (p['view-distance']) m.$('#hc-vd').value = p['view-distance'];
+      m.$('#hc-pvp').checked = p.pvp !== 'false'; m.$('#hc-hc').checked = p.hardcore === 'true'; m.$('#hc-fly').checked = p['allow-flight'] === 'true';
+      m.$('#hc-cb').checked = p['enable-command-block'] === 'true'; m.$('#hc-wl').checked = p['white-list'] === 'true'; m.$('#hc-off').checked = p['online-mode'] === 'false';
+      m.$('#hc-voice').checked = !!t.voice; m.$('#hc-bedrock').checked = !!t.bedrock;
+      m.$('#hc-bk').value = String(t.schedule?.backupHours || 0); m.$('#hc-rs').value = String(t.schedule?.restartHours || 0);
+      if (t.tunnel) tun = t.tunnel;
+      setSw(t.software || 'fabric');
+      if (t.modpack) { pack = { versionId: t.modpack.versionId }; m.$('#hc-pack').textContent = 'Modpack from the setup code'; }
+      const extra = preContent.filter((c) => !$(`[data-ex="${CSS.escape(c)}"]`, m.el));
+      if (extra.length) m.$('#hc-sw-note').textContent += ` · The setup code also adds ${extra.length} more mod${extra.length === 1 ? '' : 's'}/plugin${extra.length === 1 ? '' : 's'}.`;
+      toast('Setup code loaded — check the settings, then press Create server');
+    };
+    m.$('#hc-code-use').onclick = async () => { try { applyPre(await api('hosted:readSetupCode', m.$('#hc-code').value)); } catch (e) { toastErr(e); } };
     $$('[data-sw]', m.el).forEach((b) => (b.onclick = () => setSw(b.dataset.sw)));
     $$('[data-t]', m.el).forEach((b) => (b.onclick = () => setTun(b.dataset.t)));
     m.$('#hc-mem').oninput = (e) => (m.$('#hc-memv').textContent = `${e.target.value / 1024} GB`);
@@ -208,13 +387,65 @@ Pages.host = {
       go.disabled = true; go.innerHTML = `${icon('refresh', 'spin')}Setting up…`;
       steps.length = 0;
       try {
-        const s = await api('hosted:create', { name: m.$('#hc-name').value.trim() || undefined, software: sw, mc: m.$('#hc-mc').value, memory: +m.$('#hc-mem').value, maxPlayers: +m.$('#hc-max').value, port: m.$('#hc-port').value ? +m.$('#hc-port').value : undefined, dir: folder, tunnel: tun, eula: m.$('#hc-eula').checked, modpack: pack ? { versionId: pack.versionId } : null });
+        const ticked = $$('[data-ex]', m.el).filter((b) => b.checked).map((b) => b.dataset.ex);
+        const shown = $$('[data-ex]', m.el).map((b) => b.dataset.ex);
+        const content = [...ticked, ...preContent.filter((c) => !shown.includes(c))];
+        const props = {
+          gamemode: m.$('#hc-gm').value, difficulty: m.$('#hc-df').value, 'level-type': m.$('#hc-lt').value, 'level-seed': m.$('#hc-seed').value.trim(),
+          'view-distance': Math.max(3, Math.min(32, +m.$('#hc-vd').value || 10)), pvp: m.$('#hc-pvp').checked, hardcore: m.$('#hc-hc').checked,
+          'allow-flight': m.$('#hc-fly').checked, 'enable-command-block': m.$('#hc-cb').checked, 'white-list': m.$('#hc-wl').checked, 'online-mode': !m.$('#hc-off').checked,
+        };
+        if (m.$('#hc-motd').value.trim()) props.motd = m.$('#hc-motd').value.trim();
+        const s = await api('hosted:create', {
+          name: m.$('#hc-name').value.trim() || undefined, software: sw, mc: m.$('#hc-mc').value, memory: +m.$('#hc-mem').value, maxPlayers: +m.$('#hc-max').value,
+          port: m.$('#hc-port').value ? +m.$('#hc-port').value : undefined, dir: folder, tunnel: tun, eula: m.$('#hc-eula').checked, modpack: pack ? { versionId: pack.versionId } : null,
+          props, tunnelName: tun === 'playit' ? m.$('#hc-tname').value.trim() : '', content, voice: sw !== 'vanilla' && m.$('#hc-voice').checked, bedrock: HOST_BEDROCK.includes(sw) && m.$('#hc-bedrock').checked,
+          autoStart: m.$('#hc-auto').checked, schedule: { backupHours: +m.$('#hc-bk').value, restartHours: +m.$('#hc-rs').value, keepBackups: 10 },
+        });
         m.close();
         toast(s.knownAddress ? `${s.name} is ready — public address ${s.knownAddress}. Press Start.` : `${s.name} is ready — press Start`);
         Router.go('host', { id: s.id });
       } catch (e) { drawProg(e.message); toastErr(e); go.disabled = false; go.innerHTML = `${icon('refresh')}Try again`; }
     };
-    setSw('fabric');
+    if (pre) applyPre(pre); else setSw('fabric');
+  },
+  /** Copy mods from one of your instances into a hosted server: pick the instance, tick the mods, Copy. */
+  async copyMods(id, s, report) {
+    const sources = await api('hosted:modSources', id).catch((e) => (toastErr(e), null));
+    if (!sources) return;
+    const m = modal({ title: `Copy mods into ${s.name}`, body: `<p class="muted small">Pick one of your ${esc(s.softwareName)} instances. Mods that only work in the game (like minimaps or shaders) are left out for you.</p><div id="cm-body"></div>`, footer: `<button class="btn" data-x>Cancel</button><button class="btn primary" data-copy disabled>${icon('download')}Copy</button>` });
+    m.$('[data-x]').onclick = () => m.close();
+    const body = m.$('#cm-body'), go = m.$('[data-copy]');
+    const pickInst = () => {
+      go.disabled = true;
+      body.innerHTML = sources.length ? `<div class="list">${sources.map((i) => `<div class="list-row" style="cursor:pointer" data-inst="${esc(i.id)}"><div class="info"><div class="title">${esc(i.name)}</div><div class="desc">${esc(i.mc)} · ${i.count} mod${i.count === 1 ? '' : 's'}${i.sameVersion ? '' : ` · <span class="warn-text">server is ${esc(s.mc)}</span>`}</div></div>${icon('fwd')}</div>`).join('')}</div>`
+        : `<div class="empty small">None of your instances use ${esc(s.softwareName)} with mods yet.</div>`;
+      $$('[data-inst]', body).forEach((r) => (r.onclick = () => pickMods(r.dataset.inst)));
+    };
+    const pickMods = async (instId) => {
+      body.innerHTML = `<div class="faint">${icon('refresh', 'spin')} Checking mods…</div>`;
+      let d; try { d = await api('hosted:instanceMods', id, instId); } catch (e) { toastErr(e); return pickInst(); }
+      const ok = d.mods.filter((x) => !x.why);
+      body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm ghost" data-back>${icon('back')}Instances</button><b class="grow ellipsis">${esc(d.name)} <span class="faint small">${esc(d.mc)}</span></b>${ok.length ? `<label class="row small" style="gap:6px"><input type="checkbox" id="cm-all" checked>All</label>` : ''}</div>
+        ${d.sameVersion ? '' : `<p class="warn-text small">This instance is Minecraft ${esc(d.mc)} but the server is ${esc(s.mc)} — mods made for another version may stop the server from starting.</p>`}
+        <div class="stack" style="gap:2px;max-height:52vh;overflow:auto">${d.mods.map((x) => `<label class="row hs-person ${x.why ? 'off' : ''}" style="gap:8px" ${x.why ? `title="${esc(x.why)}"` : ''}>
+          <input type="checkbox" data-f="${esc(x.file)}" ${x.why ? 'disabled' : x.otherVersion ? '' : 'checked'}>${x.icon ? `<img src="${esc(x.icon)}" alt="" style="width:20px;height:20px;border-radius:4px">` : ''}
+          <span class="grow ellipsis">${esc(x.name)} <span class="faint small">${esc(x.version)}</span></span>
+          ${x.why ? `<span class="faint small">${esc(x.why)}</span>` : x.otherVersion ? `<span class="warn-text small" title="Mods for another Minecraft version usually stop the server from starting">made for ${esc(x.otherVersion)}</span>` : x.onServer ? '<span class="chip">on server — update</span>' : ''}</label>`).join('') || '<div class="faint small">This instance has no mods turned on.</div>'}</div>`;
+      $('[data-back]', body).onclick = pickInst;
+      const boxes = $$('[data-f]:not([disabled])', body);
+      const sync = () => { const n = boxes.filter((b) => b.checked).length; go.disabled = !n; go.innerHTML = `${icon('download')}Copy ${n} mod${n === 1 ? '' : 's'}`; const a = $('#cm-all', body); if (a) a.checked = n === boxes.length; };
+      boxes.forEach((b) => (b.onchange = sync));
+      const all = $('#cm-all', body); if (all) all.onchange = () => { boxes.forEach((b) => (b.checked = all.checked)); sync(); };
+      sync();
+      go.onclick = async () => {
+        go.disabled = true; go.innerHTML = `${icon('refresh', 'spin')}Copying…`;
+        try { report(await api('hosted:copyFromInstance', id, instId, boxes.filter((b) => b.checked).map((b) => b.dataset.f))); m.close(); } catch (e) { toastErr(e); sync(); }
+      };
+    };
+    // one instance with the same version: go straight to its mods
+    const same = sources.filter((i) => i.sameVersion);
+    if (same.length === 1 && sources.length === 1) pickMods(same[0].id); else pickInst();
   },
   pickModpack(sw, mc) {
     return new Promise((resolve) => {
@@ -250,12 +481,14 @@ Pages.host = {
     $('#hs-back', el).onclick = (e) => { e.preventDefault(); Router.go('host'); };
     const drawHead = () => {
       $('#hs-chip', el).innerHTML = this.stateChip(s);
-      $('#hs-actions', el).innerHTML = s.state === 'offline' ? `<button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
-        : `<button class="btn lg" id="a-join" ${s.state !== 'online' ? 'disabled' : ''}>${icon('sun')}Join</button><button class="btn lg" id="a-restart" ${s.state !== 'online' ? 'disabled' : ''}>${icon('refresh')}Restart</button><button class="btn lg danger" id="a-stop" ${/stopping|restarting/.test(s.state) ? 'disabled' : ''}>${icon('power')}Stop</button>`;
+      $('#hs-actions', el).innerHTML = s.state === 'offline' ? `<button class="btn lg" id="a-why" title="Read the last run’s log and explain what went wrong">${icon('bug')}Why did it stop?</button><button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
+        : `<button class="btn lg" id="a-lag" ${s.state !== 'online' ? 'disabled' : ''} title="Measure lag and find what causes it">${icon('chart')}Lag check</button><button class="btn lg" id="a-join" ${s.state !== 'online' ? 'disabled' : ''}>${icon('sun')}Join</button><button class="btn lg" id="a-restart" ${s.state !== 'online' ? 'disabled' : ''}>${icon('refresh')}Restart</button><button class="btn lg danger" id="a-stop" ${/stopping|restarting/.test(s.state) ? 'disabled' : ''}>${icon('power')}Stop</button>`;
+      if ($('#a-why', el)) $('#a-why', el).onclick = () => this.showDiagnosis(id);
+      if ($('#a-lag', el)) $('#a-lag', el).onclick = () => this.lagCheck(id, s);
       if ($('#a-start', el)) $('#a-start', el).onclick = (e) => this.start(id, e.currentTarget);
       if ($('#a-stop', el)) $('#a-stop', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:stop', id).catch(toastErr); };
       if ($('#a-restart', el)) $('#a-restart', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:restart', id).catch(toastErr); };
-      if ($('#a-join', el)) $('#a-join', el).onclick = () => Pages.servers.join(`localhost:${s.port}`, { mc: s.mc, modded: s.contentKind === 'mods' ? s.softwareName : '' });
+      if ($('#a-join', el)) $('#a-join', el).onclick = () => Pages.servers.join(`localhost:${s.port}`, { mc: s.mc, modded: s.contentKind === 'mods' ? s.softwareName : '', instance: s.playInstance });
       const ts = s.tunnelStatus || {}, share = $('#hs-share', el);
       const pl = s.tunnel === 'playit';
       const addr = s.address || s.knownAddress; // live address, or the saved playit.gg one while not public
@@ -266,12 +499,19 @@ Pages.host = {
           ${!ts.needsLink ? `<button class="btn sm" id="hs-trestart" ${s.tunnelBusy ? 'disabled' : ''} title="Restart the playit.gg agent and check the tunnel">${icon('refresh', s.tunnelBusy ? 'spin' : '')}${s.tunnelBusy ? 'Working…' : 'Restart tunnel'}</button>` : ''}
           ${!ts.needsLink ? (s.playitStopped ? `<button class="btn sm" id="hs-tstart">${icon('play')}Start tunnel</button>` : `<button class="btn sm" id="hs-tstop" ${s.state === 'offline' ? 'disabled title="The tunnel only runs while the server runs"' : ''}>${icon('power')}Stop tunnel</button>`) : ''}
         </div>` : '';
-      const joinBtns = addr ? `<button class="btn" data-c="addr">${icon('copy')}Copy</button><button class="btn" data-c="how">${icon('info')}How to join</button>${s.address ? `<button class="btn primary" data-c="inv">${icon('users')}Invite link</button>` : ''}` : '';
+      const joinBtns = addr ? `<button class="btn" data-c="addr">${icon('copy')}Copy</button><button class="btn" data-c="code" title="A short code friends paste into Solaris → Hosting → Join with code">${icon('key')}Join code</button><button class="btn" data-c="how">${icon('info')}How to join</button>${s.address ? `<button class="btn primary" data-c="inv">${icon('users')}Invite link</button>` : ''}` : '';
+      const vc = s.voice?.on ? `<div class="small hs-voice-line">${icon('mic')} Voice chat: ${s.tunnel !== 'playit' ? '<span class="faint">on your network only — use playit.gg for friends outside</span>' : s.voice.address ? `<span class="mono">${esc(s.voice.address)}</span> <span class="faint">(UDP → port ${s.voice.port}, set as voice_host)</span>` : s.voice.error ? `<span class="danger-text">${esc(s.voice.error)}</span>` : '<span class="faint">the UDP tunnel is made when the server starts</span>'}</div>` : '';
+      const br = s.bedrock?.on ? (() => {
+        const [bh, bp] = String(s.bedrock.address || '').split(/:(?=\d+$)/);
+        return `<div class="small hs-voice-line">${icon('globe')} Bedrock: ${s.tunnel !== 'playit' ? `<span class="faint">on your network only (port ${s.bedrock.port}) — use playit.gg for friends outside</span>` : s.bedrock.address ? `<span class="faint">Server address</span> <span class="mono">${esc(bh)}</span> <span class="faint">Port</span> <span class="mono">${esc(bp || '')}</span> <button class="icon-btn" data-c="bedrock" title="Copy Bedrock address">${icon('copy')}</button>` : s.bedrock.error ? `<span class="danger-text">${esc(s.bedrock.error)}</span>` : '<span class="faint">the Bedrock tunnel is made when the server starts</span>'}</div>`;
+      })() : '';
       share.innerHTML = addr
-        ? `<div class="hs-tdot ${esc(ts.state || 'off')}" title="${esc(ts.text || '')}"></div><div class="grow" style="min-width:0"><div class="faint small">${esc(ts.text || '')}${s.address ? ' — send this to friends' : ''}</div><div class="hs-big mono ellipsis ${s.address ? '' : 'dim'}">${esc(addr)}</div>${s.address ? '' : `<div class="faint small">This is your server’s ${pl ? 'playit.gg' : ''} address — it works while the server and its tunnel are running.</div>`}</div>${joinBtns}${btns}`
-        : `<div class="hs-tdot ${esc(ts.state || 'off')}"></div><div class="grow"><div class="faint small">${esc(ts.text || '')}</div><div class="hs-big mono">${esc(s.lan)}</div><div class="faint small">On this PC use <span class="mono">localhost:${s.port}</span>${s.tunnel === 'none' ? ' · friends on your network use your PC’s local IP' : ''}${s.playitSetupError && !s.address ? ` · <span class="danger-text">${esc(s.playitSetupError)}</span>` : ''}</div></div>${btns}`;
+        ? `<div class="hs-tdot ${esc(ts.state || 'off')}" title="${esc(ts.text || '')}"></div><div class="grow" style="min-width:0"><div class="faint small">${esc(ts.text || '')}${s.address ? ' — send this to friends' : ''}</div><div class="hs-big mono ellipsis ${s.address ? '' : 'dim'}">${esc(addr)}</div>${s.address ? '' : `<div class="faint small">This is your server’s ${pl ? 'playit.gg' : ''} address — it works while the server and its tunnel are running.</div>`}${vc}${br}</div>${joinBtns}${btns}`
+        : `<div class="hs-tdot ${esc(ts.state || 'off')}"></div><div class="grow"><div class="faint small">${esc(ts.text || '')}</div><div class="hs-big mono">${esc(s.lan)}</div><div class="faint small">On this PC use <span class="mono">localhost:${s.port}</span>${s.tunnel === 'none' ? ' · friends on your network use your PC’s local IP' : ''}${s.playitSetupError && !s.address ? ` · <span class="danger-text">${esc(s.playitSetupError)}</span>` : ''}</div>${vc}${br}</div>${btns}`;
       $$('[data-c]', share).forEach((b) => (b.onclick = () => {
         if (b.dataset.c === 'how') return this.howToJoin(s, addr);
+        if (b.dataset.c === 'bedrock') { api('clipboard:write', s.bedrock.address); return toast('Bedrock address copied — in Minecraft Bedrock: Play → Servers → Add Server, then put the part before the colon in Server Address and the number in Port', 'info', 10000); }
+        if (b.dataset.c === 'code') return api('hosted:joinCode', id).then((c) => { api('clipboard:write', c); toast(`Join code copied: ${c} — friends paste it in Solaris → Hosting → Join with code`, 'info', 9000); }).catch(toastErr);
         const t = b.dataset.c === 'addr' ? addr : `solaris://server/${addr}`;
         api('clipboard:write', t); toast(b.dataset.c === 'addr' ? 'Address copied' : 'Invite link copied — friends with Solaris click it to join');
       }));
@@ -329,10 +569,14 @@ Pages.host = {
     },
 
     async players(box, id, s) {
-      const [wl, ops, props] = await Promise.all([api('hosted:people', id, 'whitelist'), api('hosted:people', id, 'ops'), api('hosted:settings', id)]);
+      const [wl, ops, props, banned] = await Promise.all([api('hosted:people', id, 'whitelist'), api('hosted:people', id, 'ops'), api('hosted:settings', id), api('hosted:bans', id).catch(() => [])]);
       const head = (n) => `<img class="hs-head" src="https://mc-heads.net/avatar/${encodeURIComponent(n)}/24" alt="">`;
+      const isOp = (n) => ops.some((o) => o.name.toLowerCase() === n.toLowerCase());
       box.innerHTML = `<div class="hs-cols">
-        <div class="card"><h3>${icon('users')} Online now <span class="faint small">${s.players.length}</span></h3>${s.players.length ? s.players.map((p) => `<div class="row hs-person">${head(p)}<span class="grow">${esc(p)}</span><button class="btn sm ghost" data-op="${esc(p)}">Op</button><button class="btn sm ghost" data-kick="${esc(p)}">Kick</button></div>`).join('') : `<div class="faint small">${s.state === 'offline' ? 'The server is stopped.' : 'Nobody is online.'}</div>`}</div>
+        <div class="card"><h3>${icon('users')} Online now <span class="faint small">${s.players.length}</span></h3>${s.players.length ? s.players.map((p) => `<div class="row hs-person">${head(p)}<span class="grow ellipsis">${esc(p)}${isOp(p) ? ' <span class="chip">op</span>' : ''}</span>
+            <select class="hs-gm" data-gm="${esc(p)}" title="Game mode"><option value="">Mode…</option><option>survival</option><option>creative</option><option>adventure</option><option>spectator</option></select>
+            <button class="icon-btn" data-pmore="${esc(p)}" title="More">${icon('more')}</button></div>`).join('') : `<div class="faint small">${s.state === 'offline' ? 'The server is stopped.' : 'Nobody is online.'}</div>`}
+          ${banned.length ? `<h3 style="margin-top:14px">${icon('alert')} Banned</h3>${banned.map((b) => `<div class="row hs-person">${head(b.name)}<span class="grow ellipsis" title="${esc(b.reason)}">${esc(b.name)}</span><button class="btn sm ghost" data-pardon="${esc(b.name)}">Unban</button></div>`).join('')}` : ''}</div>
         <div class="card"><h3>${icon('shield')} Whitelist</h3>
           <label class="row small" style="gap:8px;margin-bottom:8px"><input type="checkbox" id="wl-on" ${props.props['white-list'] === 'true' ? 'checked' : ''}>Only whitelisted players can join</label>
           <div class="row"><input type="text" id="wl-name" class="grow" placeholder="Player name"><button class="btn sm primary" id="wl-add">${icon('plus')}Add</button></div>
@@ -342,8 +586,22 @@ Pages.host = {
           <div class="stack" style="gap:4px;margin-top:8px">${ops.map((p) => `<div class="row hs-person">${head(p.name)}<span class="grow">${esc(p.name)}</span><span class="faint small">level ${p.level || 4}</span><button class="icon-btn" data-op-rm="${esc(p.name)}">${icon('close')}</button></div>`).join('') || '<div class="faint small">No operators.</div>'}</div></div>
       </div>`;
       const redo = () => this.tabs.players.call(this, box, id, s);
-      $$('[data-kick]', box).forEach((b) => (b.onclick = () => api('hosted:command', id, `kick ${b.dataset.kick}`).catch(toastErr)));
-      $$('[data-op]', box).forEach((b) => (b.onclick = async () => { await api('hosted:addPerson', id, 'ops', b.dataset.op).catch(toastErr); toast(`${b.dataset.op} is now an operator`); setTimeout(redo, 800); }));
+      const cmd = (c, done) => api('hosted:command', id, c).then(() => done && toast(done)).catch(toastErr);
+      $$('[data-gm]', box).forEach((sl) => (sl.onchange = () => { if (sl.value) cmd(`gamemode ${sl.value} ${sl.dataset.gm}`, `${sl.dataset.gm} → ${sl.value}`); sl.value = ''; }));
+      $$('[data-pardon]', box).forEach((b) => (b.onclick = async () => { await api('hosted:pardon', id, b.dataset.pardon).catch(toastErr); toast(`${b.dataset.pardon} unbanned`); setTimeout(redo, s.state === 'offline' ? 0 : 800); }));
+      $$('[data-pmore]', box).forEach((b) => (b.onclick = (e) => {
+        const p = b.dataset.pmore, owner = State.accounts?.accounts?.find((a) => a.id === State.accounts.active)?.name;
+        contextMenu(e.clientX, e.clientY, [
+          isOp(p) ? { label: 'Remove operator', icon: 'key', action: async () => { await api('hosted:removePerson', id, 'ops', p).catch(toastErr); toast(`${p} is no longer an operator`); setTimeout(redo, 800); } }
+            : { label: 'Make operator', icon: 'key', action: async () => { await api('hosted:addPerson', id, 'ops', p).catch(toastErr); toast(`${p} is now an operator`); setTimeout(redo, 800); } },
+          ...(owner && owner !== p ? [{ label: `Teleport to ${owner}`, icon: 'fwd', action: () => cmd(`tp ${p} ${owner}`, `${p} teleported`) }, { label: `Teleport ${owner} here`, icon: 'back', action: () => cmd(`tp ${owner} ${p}`, `Teleported to ${p}`) }] : []),
+          { label: 'Heal', icon: 'heart', action: () => cmd(`effect give ${p} minecraft:instant_health 1 10 true`, `${p} healed`) },
+          { label: 'Send message…', icon: 'edit', action: async () => { const t = await promptDialog(`Message to ${p}`, { placeholder: 'Message', ok: 'Send' }); if (t) cmd(`tell ${p} ${t}`, 'Sent'); } },
+          '-',
+          { label: 'Kick', icon: 'logout', action: () => cmd(`kick ${p}`, `${p} kicked`) },
+          { label: 'Ban', icon: 'alert', danger: true, action: async () => { if (await confirmDialog(`Ban ${p} from ${s.name}? They can’t join again until you unban them.`, { danger: true, ok: 'Ban' })) { cmd(`ban ${p}`, `${p} banned`); setTimeout(redo, 900); } } },
+        ]);
+      }));
       $('#wl-on', box).onchange = async (e) => { await api('hosted:setSettings', id, { props: { 'white-list': e.target.checked, 'enforce-whitelist': e.target.checked } }); if (s.state !== 'offline') api('hosted:command', id, `whitelist ${e.target.checked ? 'on' : 'off'}`); toast(e.target.checked ? 'Whitelist on' : 'Whitelist off'); };
       const add = (kind, input) => async () => { const n = $(input, box).value.trim(); if (!n) return; try { await api('hosted:addPerson', id, kind, n); toast(`${n} added`); setTimeout(redo, s.state === 'offline' ? 0 : 800); } catch (e) { toastErr(e); } };
       $('#wl-add', box).onclick = add('whitelist', '#wl-name');
@@ -352,11 +610,29 @@ Pages.host = {
       $$('[data-op-rm]', box).forEach((b) => (b.onclick = async () => { await api('hosted:removePerson', id, 'ops', b.dataset.opRm); setTimeout(redo, s.state === 'offline' ? 0 : 800); }));
     },
 
-    async worlds(box, id, s) {
+    async worlds(box, id, s, ctx) {
       const ws = await api('hosted:worlds', id);
       box.innerHTML = `<div class="card"><div class="row" style="margin-bottom:10px"><h3 class="grow" style="margin:0">${icon('world')} Worlds</h3><button class="btn sm" id="w-open">${icon('folder')}Open folder</button></div>
         ${ws.length ? ws.map((w) => `<div class="row hs-person">${icon('world')}<b class="grow">${esc(w.name)}</b>${w.active ? '<span class="chip ok">Active</span>' : `<button class="btn sm" data-w-use="${esc(w.name)}" ${s.state !== 'offline' ? 'disabled' : ''}>Use</button>`}<span class="faint small">${timeAgo(w.modified)}</span><button class="btn sm danger" data-w-del="${esc(w.name)}" ${s.state !== 'offline' ? 'disabled' : ''}>${icon('trash')}${w.active ? 'Reset' : 'Delete'}</button></div>`).join('') : '<div class="faint small">No world yet — it’s created the first time the server starts.</div>'}
-        <p class="faint small">Stop the server to switch or delete worlds. Resetting the active world makes a fresh one on next start. Make a backup first if you might want it back.</p></div>`;
+        <p class="faint small">Stop the server to switch or delete worlds. Resetting the active world makes a fresh one on next start. Make a backup first if you might want it back.</p></div>
+        ${s.contentKind !== 'none' ? `<div class="card stack" style="margin-top:12px" id="pg-card"></div>` : ''}`;
+      const pg = $('#pg-card', box);
+      if (pg) {
+        const drawPg = (c) => {
+          const run = c && (c.state === 'running' || c.state === 'paused');
+          pg.innerHTML = `<h3 style="margin:0">${icon('world')} Pre-generate the world <span class="faint small">(Chunky)</span></h3>
+            <div class="faint small">Makes the land around spawn ahead of time, so exploring doesn’t lag for players. It runs while the server is online; players can stay on.</div>
+            ${run || c?.state === 'done' ? `<div class="row" style="gap:10px"><div class="hs-pregen-bar grow"><div style="width:${Math.min(100, c.percent || 0)}%"></div></div><b class="small">${(c.percent || 0).toFixed(1)}%</b>${c.eta && run ? `<span class="faint small">about ${esc(c.eta)} left</span>` : ''}${c.state === 'paused' ? '<span class="chip">Paused</span>' : ''}${c.state === 'done' ? '<span class="chip ok">Finished</span>' : ''}</div>` : ''}
+            <div class="row" style="gap:8px">${run ? `${c.state === 'paused' ? `<button class="btn sm primary" data-pg="continue">${icon('play')}Continue</button>` : `<button class="btn sm" data-pg="pause">${icon('stop')}Pause</button>`}<button class="btn sm ghost" data-pg="cancel">${T('Cancel')}</button>`
+              : `<label class="row small" style="gap:6px">Area<select id="pg-r"><option value="1000">Small — 2 × 2 km</option><option value="2000" selected>Medium — 4 × 4 km</option><option value="5000">Large — 10 × 10 km</option></select></label><button class="btn sm primary" data-pg="start">${icon('play')}Start</button>`}</div>`;
+          $$('[data-pg]', pg).forEach((b) => (b.onclick = async () => {
+            b.disabled = true;
+            try { const r = await api('hosted:pregen', id, { action: b.dataset.pg, radius: +($('#pg-r', pg)?.value || 2000) }); if (r.installed) toast(r.message, 'info', 9000); else drawPg(r.chunky); } catch (e) { toastErr(e); b.disabled = false; }
+          }));
+        };
+        drawPg(s.chunky);
+        if (ctx) ctx.on('hosted-chunky', (c) => { if (c.id === id && pg.isConnected) drawPg(c); });
+      }
       $('#w-open', box).onclick = () => api('hosted:openFolder', id);
       $$('[data-w-use]', box).forEach((b) => (b.onclick = async () => { await api('hosted:setWorld', id, b.dataset.wUse).catch(toastErr); this.tabs.worlds.call(this, box, id, s); }));
       $$('[data-w-del]', box).forEach((b) => (b.onclick = async () => { if (await confirmDialog(`Delete the world “${b.dataset.wDel}” forever?`, { danger: true, ok: 'Delete forever' })) { await api('hosted:deleteWorld', id, b.dataset.wDel).catch(toastErr); this.tabs.worlds.call(this, box, id, s); } }));
@@ -375,9 +651,25 @@ Pages.host = {
 
     async content(box, id, s) {
       const what = s.contentKind === 'plugins' ? 'plugins' : 'mods';
-      box.innerHTML = `<div class="hs-cols two">
+      box.innerHTML = `<div class="hs-cols two" id="ct-root">
         <div class="card"><h3>${icon('search')} Find ${what} <span class="faint small">for ${esc(s.softwareName)} ${esc(s.mc)} (Modrinth)</span></h3><div class="search" style="margin-bottom:10px">${icon('search')}<input type="search" id="ct-q" placeholder="Search ${what}…"></div><div id="ct-res" class="stack" style="gap:6px"></div></div>
-        <div class="card"><h3>${icon('package')} Installed <span class="faint small" id="ct-n"></span></h3><div id="ct-inst" class="stack" style="gap:4px"></div><p class="faint small">Changes apply after a restart.</p></div></div>`;
+        <div class="card"><h3 class="row" style="gap:8px">${icon('package')}<span class="grow">Installed <span class="faint small" id="ct-n"></span></span><button class="icon-btn" id="ct-open" title="Open the ${what} folder">${icon('folder')}</button></h3>
+          <div class="row wrap" style="gap:6px;margin-bottom:10px">${what === 'mods' ? `<button class="btn sm primary" id="ct-from">${icon('library')}Copy from an instance</button>` : ''}<button class="btn sm" id="ct-files">${icon('upload')}Add files from PC</button></div>
+          <div id="ct-inst" class="stack" style="gap:4px"></div><p class="faint small">You can also drag .jar files here. Changes apply after a restart.</p></div></div>`;
+      const report = (r) => {
+        if (r.added.length) toast(`Added ${r.added.length > 3 ? `${r.added.length} ${what}` : r.added.join(', ')} — restart the server to use ${r.added.length > 1 ? 'them' : 'it'}`);
+        if (r.warnings?.length) toast(`${r.warnings.map((w) => `${w.name} is made for Minecraft ${w.made}`).join('; ')} — this server is ${s.mc}, so it may not start. Remove ${r.warnings.length > 1 ? 'them' : 'it'} if it crashes.`, 'warn', 12000);
+        if (r.skipped.length) toast(`Skipped ${r.skipped.map((x) => `${x.name} (${x.why})`).join('; ')}`, 'warn', 10000);
+        if (!r.added.length && !r.skipped.length) toast(`Nothing to add — pick .jar ${what}.`, 'info');
+        drawInst(r.items);
+      };
+      const addFiles = (files) => api('hosted:addFiles', id, files).then(report).catch(toastErr);
+      $('#ct-files', box).onclick = async () => { const f = await api('dialog:open', { title: `Add ${what} to ${s.name}`, properties: ['openFile', 'multiSelections'], filters: [{ name: what === 'mods' ? 'Mods' : 'Plugins', extensions: ['jar'] }] }).catch(() => []); if (f?.length) addFiles(f); };
+      $('#ct-open', box).onclick = () => api('hosted:openFolder', id, what);
+      if ($('#ct-from', box)) $('#ct-from', box).onclick = () => this.copyMods(id, s, report);
+      const root = $('#ct-root', box);
+      root.ondragover = (e) => { if (!e.dataTransfer?.types.includes('Files')) return; e.preventDefault(); e.stopPropagation(); showDrop(`Drop to add to ${s.name}`); };
+      root.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); hideDrop(); const files = [...e.dataTransfer.files].map((f) => window.solaris.pathForFile(f)).filter(Boolean); if (files.length) addFiles(files); };
       const drawInst = async (items) => {
         items = items || (await api('hosted:content', id));
         $('#ct-n', box).textContent = items.length;
@@ -422,7 +714,7 @@ Pages.host = {
     async settings(box, id, s) {
       const set = await api('hosted:settings', id);
       box.innerHTML = `<div class="hs-cols two">
-        <div class="card stack"><h3>${icon('sliders')} General</h3>
+        <div class="stack"><div class="card stack"><h3>${icon('sliders')} General</h3>
           <label class="field">Name<input type="text" id="st-name" value="${esc(set.name)}" maxlength="40"></label>
           <label class="field">Message of the day<input type="text" id="st-motd" value="${esc(set.props.motd || '')}" maxlength="120"></label>
           <div class="row"><label class="field grow">Game mode<select id="st-gm">${['survival', 'creative', 'adventure', 'spectator'].map((g) => `<option ${set.props.gamemode === g ? 'selected' : ''}>${g}</option>`).join('')}</select></label>
@@ -433,14 +725,56 @@ Pages.host = {
           <label class="row small" style="gap:8px"><input type="checkbox" id="st-pvp" ${set.props.pvp !== 'false' ? 'checked' : ''}>PvP</label>
           <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="st-online" ${set.props['online-mode'] !== 'false' ? 'checked' : ''}><span>Require Microsoft accounts<br><span class="faint">Off lets offline accounts join — anyone could use any name. Turn the whitelist on if you do this.</span></span></label>
           <div class="row"><div class="grow faint small">Applies on next start.</div><button class="btn primary" id="st-save">${icon('check')}Save</button></div></div>
+          <div class="card stack"><h3>${icon('discord')} Discord alerts</h3>
+            <div class="faint small">Post to a Discord channel when the server goes online or stops, crashes, or someone joins. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.</div>
+            <input type="password" id="st-dc-url" class="mono" placeholder="https://discord.com/api/webhooks/…" value="${esc(set.discord?.url || '')}" spellcheck="false" autocomplete="off">
+            <div class="hc-checks">${[['online', 'Online'], ['stop', 'Stopped'], ['crash', 'Crashed'], ['join', 'Player joined'], ['leave', 'Player left']].map(([k, n]) => `<label><input type="checkbox" data-dc="${k}" ${set.discord ? (set.discord.events?.[k] ? 'checked' : '') : k === 'join' || k === 'leave' ? '' : 'checked'}>${n}</label>`).join('')}</div>
+            <div class="row" style="gap:8px"><div class="grow"></div><button class="btn sm" id="st-dc-test">${icon('discord')}Send test</button><button class="btn sm primary" id="st-dc-save">${icon('check')}Save</button></div></div>
+          <div class="card stack"><h3>${icon('library')} Game instance for this server</h3>
+            <div class="faint small">Makes an instance with Minecraft ${esc(set.mc)}${s.contentKind === 'mods' ? `, ${esc(s.softwareName)} and the server’s mods (server-only ones left out)` : ''}${set.voice?.on ? ', plus the voice chat mod' : ''}. <b>Join</b> then uses it straight away.</div>
+            <div class="row" style="gap:8px">${set.playInstance && State.instances.some((i) => i.id === set.playInstance) ? `<span class="chip ok">${esc(State.instances.find((i) => i.id === set.playInstance).name)}</span>` : ''}<div class="grow"></div><button class="btn sm primary" id="st-inst">${icon('library')}${set.playInstance ? 'Make it again' : 'Make game instance'}</button></div></div>
+          <div class="card stack"><h3>${icon('clock')} Automation</h3>
+            <label class="row small" style="gap:8px"><label class="switch"><input type="checkbox" id="st-auto" ${set.autoStart ? 'checked' : ''}><span></span></label>Start this server automatically when Solaris opens — and Solaris opens in the tray when Windows starts</label>
+            <div class="row"><label class="field grow">Auto backup every<select id="st-bk">${[[0, 'Off'], [1, '1 hour'], [3, '3 hours'], [6, '6 hours'], [12, '12 hours'], [24, 'Day']].map(([v, n]) => `<option value="${v}" ${(set.schedule?.backupHours || 0) === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+              <label class="field" style="width:110px">Keep<input type="number" id="st-keep" min="1" max="100" value="${set.schedule?.keepBackups || 10}"></label>
+              <label class="field grow">Auto restart every<select id="st-rs">${[[0, 'Off'], [6, '6 hours'], [12, '12 hours'], [24, 'Day']].map(([v, n]) => `<option value="${v}" ${(set.schedule?.restartHours || 0) === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+            <div class="row"><div class="grow faint small">Runs while the server is online. Players get a 1-minute warning before a restart.</div><button class="btn sm primary" id="st-sched">${icon('check')}Save</button></div></div>
+        </div>
         <div class="stack">
           <div class="card stack"><h3>${icon('globe')} Public address</h3>
             <div class="seg" id="st-tun"><button data-t="e4mc" ${HOST_E4MC.includes(set.software) ? '' : 'disabled'}>e4mc</button><button data-t="playit">playit.gg</button><button data-t="none">Home only</button></div>
-            <div class="faint small">${HOST_E4MC.includes(set.software) ? 'e4mc: instant, no account. playit.gg: free account, stable address.' : 'e4mc needs Fabric/Forge/NeoForge — use playit.gg for this server.'}</div></div>
+            <div class="faint small">${HOST_E4MC.includes(set.software) ? 'e4mc: instant, no account. playit.gg: free account, stable address.' : 'e4mc needs Fabric/Forge/NeoForge — use playit.gg for this server.'}</div>
+            ${set.tunnel === 'playit' ? `<div class="row"><label class="field grow">Tunnel name on playit.gg<input type="text" id="st-tname" maxlength="40" value="${esc(set.tunnelName)}" placeholder="${esc(set.name)}"></label><button class="btn sm" id="st-tname-save" style="align-self:flex-end">Save</button></div>` : ''}</div>
+          ${set.software !== 'vanilla' ? `<div class="card stack"><h3>${icon('mic')} Voice chat</h3>
+            <label class="row small" style="gap:8px;align-items:flex-start"><label class="switch"><input type="checkbox" id="st-voice" ${set.voice?.on ? 'checked' : ''}><span></span></label><span><b>Simple Voice Chat</b><br><span class="faint">Installs the ${s.contentKind === 'plugins' ? 'plugin' : 'mod'}, makes a UDP tunnel on playit.gg and sets voice_host for you. Friends need the Simple Voice Chat mod in their game too.</span></span></label>
+            ${set.voice?.on ? `<div class="small">UDP port <span class="mono">${set.voice.port}</span>${set.tunnel === 'playit' ? ` · voice_host <span class="mono">${esc(set.voice.address || 'set on next start')}</span>` : ' · <span class="faint">only on your network (playit.gg needed for friends outside)</span>'}</div>${set.voice.error ? `<div class="small danger-text">${esc(set.voice.error)}</div>` : ''}` : ''}</div>` : ''}
+          ${HOST_BEDROCK.includes(set.software) ? `<div class="card stack"><h3>${icon('globe')} Bedrock players</h3>
+            <label class="row small" style="gap:8px;align-items:flex-start"><label class="switch"><input type="checkbox" id="st-bedrock" ${set.bedrock?.on ? 'checked' : ''}><span></span></label><span><b>Let Bedrock Edition join</b><br><span class="faint">Phone, Xbox, PlayStation, Switch and Windows players join with Geyser + Floodgate (no Java account needed). Solaris makes the playit.gg tunnel and sets Geyser up.</span></span></label>
+            ${set.bedrock?.on ? `<div class="small">Port <span class="mono">${set.bedrock.port}</span>${set.tunnel === 'playit' ? ` · public <span class="mono">${esc(set.bedrock.address || 'set on next start')}</span>` : ' · <span class="faint">only on your network (playit.gg needed for friends outside)</span>'}</div>${set.bedrock.error ? `<div class="small danger-text">${esc(set.bedrock.error)}</div>` : ''}<div class="faint small">With the whitelist on, add Bedrock friends in the console with <span class="mono">fwhitelist add Name</span>.</div>` : ''}</div>` : ''}
+          <div class="card stack"><h3>${icon('key')} Setup code</h3><div class="faint small">One code with this server’s whole setup (software, version, game settings, mods/plugins, voice chat, schedules). Paste it in <b>Hosting → Use setup code</b> to make the same server again, or send it to a friend. It doesn’t contain your world or any passwords.</div><div class="row"><button class="btn sm" id="st-code">${icon('copy')}Copy setup code</button></div></div>
           <div class="card stack"><h3>${icon('folder')} Files</h3><div class="mono small" style="word-break:break-all">${esc(set.dir)}</div><div class="row"><button class="btn sm" id="st-folder">${icon('folder')}Open folder</button></div></div>
           <div class="card stack"><h3>${icon('trash')} Delete server</h3><div class="faint small">Removes the folder, worlds and backups forever.</div><div class="row"><button class="btn sm danger" id="st-del" ${s.state !== 'offline' ? 'disabled title="Stop the server first"' : ''}>${icon('trash')}Delete forever</button></div></div>
         </div></div>`;
       $$('#st-tun [data-t]', box).forEach((b) => { b.classList.toggle('on', b.dataset.t === set.tunnel); b.onclick = async () => { try { await api('hosted:setTunnel', id, b.dataset.t); toast('Public address setting saved'); this.tabs.settings.call(this, box, id, s); } catch (e) { toastErr(e); } }; });
+      const again = () => this.tabs.settings.call(this, box, id, s);
+      if ($('#st-tname-save', box)) $('#st-tname-save', box).onclick = async () => { try { await api('hosted:setSettings', id, { tunnelName: $('#st-tname', box).value }); toast('Saved — a new tunnel name shows on playit.gg for new tunnels'); } catch (e) { toastErr(e); } };
+      if ($('#st-voice', box)) $('#st-voice', box).onchange = async (e) => {
+        const on = e.target.checked; e.target.disabled = true;
+        try { s = await api('hosted:setVoice', id, on); toast(on ? (s.voice?.address ? `Voice chat ready — ${s.voice.address}` : 'Voice chat added — it’s fully set up when the server starts') : 'Voice chat removed'); } catch (er) { toastErr(er); }
+        again();
+      };
+      if ($('#st-bedrock', box)) $('#st-bedrock', box).onchange = async (e) => {
+        const on = e.target.checked; e.target.disabled = true;
+        try { s = await api('hosted:setBedrock', id, on); toast(on ? (s.bedrock?.address ? `Bedrock ready — ${s.bedrock.address}` : 'Bedrock support added — it’s fully set up when the server starts') : 'Bedrock support removed'); } catch (er) { toastErr(er); }
+        again();
+      };
+      const dcEvents = () => Object.fromEntries($$('[data-dc]', box).map((c) => [c.dataset.dc, c.checked]));
+      $('#st-dc-save', box).onclick = async () => { try { await api('hosted:setDiscord', id, { url: $('#st-dc-url', box).value, events: dcEvents() }); toast($('#st-dc-url', box).value.trim() ? 'Discord alerts saved' : 'Discord alerts off'); } catch (e) { toastErr(e); } };
+      $('#st-dc-test', box).onclick = async (e) => { const b = e.currentTarget; b.disabled = true; try { await api('hosted:testDiscord', id, $('#st-dc-url', box).value); toast('Test sent — check your Discord channel'); } catch (er) { toastErr(er); } b.disabled = false; };
+      $('#st-inst', box).onclick = async (e) => { if (await this.makeInstance(id, s, e.currentTarget)) again(); };
+      $('#st-auto', box).onchange = async (e) => { try { await api('hosted:setAutoStart', id, e.target.checked); toast(e.target.checked ? 'This server starts when Windows starts' : 'Auto start off'); } catch (er) { toastErr(er); } };
+      $('#st-sched', box).onclick = async () => { try { await api('hosted:setSchedule', id, { backupHours: +$('#st-bk', box).value, restartHours: +$('#st-rs', box).value, keepBackups: +$('#st-keep', box).value }); toast('Schedule saved'); } catch (e) { toastErr(e); } };
+      $('#st-code', box).onclick = async () => { try { api('clipboard:write', await api('hosted:setupCode', id)); toast('Setup code copied'); } catch (e) { toastErr(e); } };
       $('#st-folder', box).onclick = () => api('hosted:openFolder', id);
       $('#st-del', box).onclick = () => this.remove(id);
       $('#st-save', box).onclick = async () => {
@@ -456,11 +790,12 @@ Pages.host = {
 window.solaris.on('hosted:state', (s) => Bus.emit('hosted', s));
 window.solaris.on('hosted:stats', (s) => { Pages.host.stats.set(s.id, s); Bus.emit('hosted-stats', s); });
 Bus.on('hosted-lines', (p) => { const l = Pages.host.logs.get(p.id) || []; l.push(...p.lines); if (l.length > 4000) l.splice(0, l.length - 4000); Pages.host.logs.set(p.id, l); Bus.emit('hosted-log', p); });
-window.solaris.on('hosted:stopped', async ({ id, crashed }) => {
-  if (!crashed) return;
-  const s = await api('hosted:get', id).catch(() => null);
-  toast(`${s?.name || 'A server'} stopped unexpectedly — check its console.`, 'error', 9000, { label: 'Open console', run: () => Router.go('host', { id }) });
+// A server stopped by itself: say why (from its log) with the fix right there.
+window.solaris.on('hosted:crash', (d) => {
+  const why = d.findings?.[0]?.text;
+  toast(`${d.name} stopped unexpectedly${why ? ' — ' + why : '.'}`, 'error', 12000, { label: d.findings?.length ? 'See why and fix' : 'See why', run: () => Pages.host.showDiagnosis(d.id, d) });
 });
+window.solaris.on('hosted:chunky', (c) => Bus.emit('hosted-chunky', c));
 // Someone was turned away by the whitelist (often the owner after a modpack turned it on): offer the fix right there.
 window.solaris.on('hosted:notWhitelisted', ({ id, name }) => {
   toast(`${name} couldn’t join — they’re not on this server’s whitelist.`, 'warn', 12000, {
