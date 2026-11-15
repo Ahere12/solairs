@@ -288,12 +288,15 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
   if (!id) {
     onStep && onStep('Creating public tunnel…');
     try {
-      const made = await call('/v1/tunnels/create', {
-        name: `Solaris ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40),
-        ports: { type: 'tunnel-type', details: 'minecraft-java' },
-        origin: { type: 'agent', data: { agent_id: agentId, config: { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] } } },
-        enabled: true, alloc: null, firewall_id: null,
-      });
+      const tname = `Solaris ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40);
+      const config = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
+      let made;
+      try { made = await call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: 'minecraft-java' }, origin: { type: 'agent', data: { agent_id: agentId, config } }, enabled: true, alloc: null, firewall_id: null }); }
+      catch (e) {
+        if (!REQUEST_PROBLEM.test(e.message)) throw e;
+        // the way the playit.gg website asks today (in case the older form stops being accepted)
+        made = await call('/v1/tunnels/create', { name: tname, protocol: { type: 'tunnel-type', details: 'minecraft-java' }, origin: { type: 'agent', data: { agent_id: agentId, config } }, endpoint: { type: 'region', details: { region: 'global', port: null } }, enabled: true });
+      }
       id = made?.id || made;
     } catch (e) {
       // e.g. account limits: the player can still add it on playit.gg by hand — Solaris picks it up by port.
@@ -325,33 +328,35 @@ async function udpAddress(t) {
   } catch {}
   return null; // never hand voice chat an address without its port
 }
-// Side tunnels next to the Minecraft Java one:
-//   voice   — Simple Voice Chat, UDP
-//   bedrock — Geyser, TCP + UDP on the same port (Bedrock's NetherNet signaling uses TCP, the game itself UDP)
+// Side tunnels next to the Minecraft Java one. playit.gg has free tunnel types for both (as listed on playit.gg's
+// "Add Tunnel" page, checked against the playit.gg website's own code):
+//   voice   — "MC: Simple Voice Chat"        = mc-simple-voice-chat (UDP, default local port 24454)
+//   bedrock — "Minecraft Bedrock (NetherNet)" = nethernet            (what Geyser 2.12+ uses)
+// A tunnel the player made by hand counts too, whether playit.gg lists it as UDP or TCP+UDP.
 const SIDE = {
-  // tunnelType: a playit.gg tunnel type with the right protocol — "minecraft-bedrock" is one UDP port (fine for
-  // voice chat), "nethernet" is TCP + UDP on one port (exactly what Geyser's NetherNet needs)
-  // voice chat accepts a UDP tunnel or a TCP+UDP one (players often make either by hand on playit.gg)
-  voice: { label: 'voice chat', portType: 'udp', tunnelType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'UDP',
-    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock Edition” (it’s UDP and free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris — it finds that tunnel and sets voice_host for you.` },
-  bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
+  voice: { label: 'voice chat', portType: 'udp', tunnelType: 'mc-simple-voice-chat', oldType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'UDP',
+    manual: (port) => `On playit.gg: Add Tunnel → “MC: Simple Voice Chat” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris — it finds that tunnel and sets voice_host for you.` },
+  bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', oldType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'NetherNet',
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock (NetherNet)” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris.` },
 };
 /**
- * Creates a UDP / TCP+UDP tunnel to this PC's `port` and returns its id. playit.gg has several ways to ask; Solaris
- * tries them in order and moves on only while playit.gg says the *request* isn't right (an account answer such as
+ * Creates a voice chat / Bedrock tunnel to this PC's `port` and returns its id. Solaris tries the ways playit.gg
+ * accepts in order and moves on only while playit.gg says the *request* isn't right (an account answer such as
  * "verify your account" or "tunnel limit" stops right away, it would be the same for every way):
- *   1. POST /tunnels/create  — port_type + port_count + the agent's local address (playit.gg's current API)
- *   2. POST /v1/tunnels/create with a tunnel type of that protocol — the same way the Minecraft Java tunnel is
- *      made, which works on every account
- *   3. POST /v1/tunnels/create with a custom port
+ *   1. POST /v1/tunnels/create the way the playit.gg website does it today: protocol = the tunnel type,
+ *      origin = this PC's agent and local port, endpoint = the free Global region
+ *   2. POST /tunnels/create — port_type + port_count + the agent's local address
+ *   3. POST /v1/tunnels/create in the older form (the one that makes the Minecraft Java tunnel)
+ *   4. the older form with a custom port
  */
 const REQUEST_PROBLEM = /validation|path-not-found|TunnelTypeRequires|InvalidOrigin|InvalidPortCount|DefaultAgentNotSupported|InvalidTunnelConfig|^playit\.gg: auth\b/i;
 async function createPortTunnel(k, name, port) {
   const tname = String(name).replace(/[^\x20-\x7e]/g, '').slice(0, 40);
   const fields = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
   const tries = [
+    () => call('/v1/tunnels/create', { name: tname, protocol: { type: 'tunnel-type', details: k.tunnelType }, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, endpoint: { type: 'region', details: { region: 'global', port: null } }, enabled: true }),
     () => call('/tunnels/create', { name: tname, tunnel_type: null, port_type: k.portType, port_count: 1, origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: port } }, enabled: true, alloc: null, firewall_id: null, proxy_protocol: null }),
-    () => call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: k.tunnelType }, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, enabled: true, alloc: null, firewall_id: null }),
+    () => call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: k.oldType }, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, enabled: true, alloc: null, firewall_id: null }),
     () => call('/v1/tunnels/create', { name: tname, ports: k.ports, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, enabled: true, alloc: null, firewall_id: null }),
   ];
   const errors = [];
