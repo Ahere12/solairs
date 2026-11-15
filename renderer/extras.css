@@ -156,3 +156,7 @@
 
 .hs-pregen-bar { height: 8px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; }
 .hs-pregen-bar > div { height: 100%; background: var(--accent, #ff9a1f); transition: width .4s; }
+
+/* Hosting window ("Pop out"): only the Hosting page, no sidebar */
+body.popout .body { grid-template-columns: 1fr; }
+body.popout .sidebar, body.popout #tb-changelog, body.popout #tb-update { display: none !important; }

@@ -188,6 +188,14 @@ document.addEventListener('drop', async (e) => {
 });
 
 /* ---------- boot ---------- */
+// This page is the Hosting window ("Pop out" on the Hosting page) instead of the main launcher window.
+const POPOUT = new URLSearchParams(location.search).get('popout');
+if (POPOUT === 'host') {
+  document.body.classList.add('popout');
+  document.title = 'Solaris Hosting';
+  const brand = document.querySelector('.titlebar .brand span'); if (brand) brand.textContent = 'Solaris Hosting';
+  window.solaris.on('popout:go', (p) => Router.go('host', p && p.id ? { id: p.id } : {}));
+}
 (async function boot() {
   $('#nav-back').innerHTML = icon('back');
   $('#nav-fwd').innerHTML = icon('fwd');
@@ -214,6 +222,14 @@ document.addEventListener('drop', async (e) => {
   renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
   // real Minecraft icons from the player's own game files (cached after the first time)
   if (!McIcons.ready()) McIcons.init().then((ok) => { if (ok) { Bus.emit('instances', State.instances); renderAccountChip(); } }).catch(() => {});
+  if (POPOUT === 'host') {
+    // the Hosting window: only Hosting, the main window keeps everything else
+    const q = new URLSearchParams(location.search);
+    Router.go('host', q.get('id') ? { id: q.get('id') } : {});
+    AuthGate.sync();
+    Splash.done();
+    return;
+  }
   Router.go('home');
   if (State.settings.firstRun) await saveSettings({ firstRun: false });
   AuthGate.sync(); // sign-in screen first: the launcher can't be used without an account

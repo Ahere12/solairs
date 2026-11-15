@@ -5,6 +5,50 @@ const fs = require('fs');
 let win = null;
 let tray = null;
 let hiddenForGame = false;
+let hostWin = null;   // Hosting popped out into its own window
+let callerWin = null; // the window whose request is being handled right now
+
+/** Sends an event to every open Solaris window. */
+function toAll(...args) {
+  for (const w of [win, hostWin]) if (w && !w.isDestroyed()) w.webContents.send(...args);
+}
+
+/** Hosting in its own window. One at a time: clicking Pop out again brings it forward (on the clicked server). */
+function openHostWindow(params = {}) {
+  const id = typeof params.id === 'string' ? params.id : '';
+  if (hostWin && !hostWin.isDestroyed()) {
+    if (hostWin.isMinimized()) hostWin.restore();
+    hostWin.show(); hostWin.focus();
+    if (id) hostWin.webContents.send('event', 'popout:go', { id });
+    return hostWin;
+  }
+  const settings = require('./src/settings');
+  const b = settings.get().hostWindowBounds || {};
+  hostWin = new BrowserWindow({
+    width: b.width || 1120, height: b.height || 780, x: b.x, y: b.y, minWidth: 820, minHeight: 560,
+    frame: false, backgroundColor: '#0d0b12', show: false, title: 'Solaris Hosting',
+    icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')),
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
+  });
+  const w = hostWin;
+  w.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { popout: 'host', id } });
+  w.once('ready-to-show', () => w.show());
+  w.on('maximize', () => w.webContents.send('event', 'window:maximized', true));
+  w.on('unmaximize', () => w.webContents.send('event', 'window:maximized', false));
+  w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  w.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:\/\//.test(url)) shell.openExternal(url); } });
+  // remember where the player put it
+  w.on('close', () => { try { if (!w.isMaximized() && !w.isMinimized()) settings.set({ hostWindowBounds: w.getBounds() }); } catch {} });
+  w.on('closed', () => {
+    if (hostWin === w) hostWin = null;
+    // The main window was closed earlier (only hidden because this one was open): now Solaris closes too — unless
+    // it lives in the tray anyway, a game or server still runs, or the main window was hidden for a game.
+    if (app.isQuitting || !win || win.isDestroyed() || win.isVisible() || hiddenForGame || settings.get().minimizeToTray) return;
+    if (require('./src/launch').anyRunning() || require('./src/hostserver').anyRunning()) quitWhenGamesClose = true;
+    else { app.isQuitting = true; app.quit(); }
+  });
+  return w;
+}
 let quitWhenGamesClose = false; // window was closed while a game was running
 
 // GPU acceleration can be turned off in Settings → Performance (read before the app is ready; never creates folders).
@@ -80,14 +124,19 @@ function showWindow() {
 function init() {
   const { events } = require('./src/util');
   const settings = require('./src/settings');
-  const api = require('./src/api')(() => win);
+  const api = require('./src/api')(() => (callerWin && !callerWin.isDestroyed() ? callerWin : win));
   const discord = require('./src/discord');
 
   ipcMain.handle('api', async (_e, name, args) => {
     const fn = api[name];
     if (!fn) throw new Error('Unknown API: ' + name);
+    // window buttons and dialogs belong to the window that asked (the main one or the Hosting window)
+    callerWin = BrowserWindow.fromWebContents(_e.sender);
     return fn(...(args || []));
   });
+  // Hosting in its own window ("Pop out"): opens it, or brings it forward on the server that was clicked.
+  api['win:popHost'] = (params = {}) => { openHostWindow(params); return true; };
+  api['win:showMain'] = () => { showWindow(); return true; };
 
   // Log lines (games, hosted servers) arrive by the thousand while modded games start: send them in batches
   // every 60 ms instead of one IPC message per line. Other events flush the batch first, so order is kept.
@@ -97,7 +146,7 @@ function init() {
     clearTimeout(logTimer); logTimer = null;
     if (!logQueue.length) return;
     const q = logQueue; logQueue = [];
-    if (win && !win.isDestroyed()) win.webContents.send('event', 'logs:batch', q);
+    toAll('event', 'logs:batch', q);
   };
   events.on('send', (channel, payload) => {
     if (LOG_CHANNELS.has(channel)) {
@@ -107,7 +156,7 @@ function init() {
       return;
     }
     flushLogs();
-    if (win && !win.isDestroyed()) win.webContents.send('event', channel, payload);
+    toAll('event', channel, payload); // the main window and the Hosting window both stay live
   });
   events.on('window', (action) => {
     if (!win) return;
@@ -132,6 +181,8 @@ function init() {
   win.on('close', (e) => {
     if (app.isQuitting) return;
     if (settings.get().minimizeToTray) { e.preventDefault(); win.hide(); return; }
+    // the Hosting window is still open: keep Solaris running behind it (the tray icon brings this window back)
+    if (hostWin && !hostWin.isDestroyed()) { e.preventDefault(); win.hide(); return; }
     // A game is running: keep Solaris alive in the tray so play time and logs are still recorded,
     // then quit by itself once the last game closes.
     if (require('./src/launch').anyRunning() || require('./src/hostserver').anyRunning()) {

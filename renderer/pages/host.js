@@ -15,7 +15,7 @@ Pages.host = {
       if (!el.isConnected) return;
       el.innerHTML = `
         <div class="page-head"><div><h1>Hosting</h1><div class="sub">Run Minecraft servers on this PC — friends join from anywhere, no paid hosting.</div></div>
-          <div class="actions"><button class="btn" id="hs-joincode">${icon('users')}Join with code</button><button class="btn" id="hs-paste">${icon('download')}Use setup code</button><button class="btn primary" id="hs-new">${icon('plus')}New server</button></div></div>
+          <div class="actions">${this.popBtn()}<button class="btn" id="hs-joincode">${icon('users')}Join with code</button><button class="btn" id="hs-paste">${icon('download')}Use setup code</button><button class="btn primary" id="hs-new">${icon('plus')}New server</button></div></div>
         ${this.playitPanel(pl)}
         ${list.length ? `<div class="hs-grid">${list.map((s) => this.card(s)).join('')}</div>` : `
           <div class="hs-empty">
@@ -29,6 +29,7 @@ Pages.host = {
         <p class="faint small" style="margin-top:18px">Your PC runs the servers, so they’re online while Solaris and your PC are on. Public addresses: <b>e4mc</b> (Fabric/Forge/NeoForge, no account) or <b>playit.gg</b> (any server, free account).</p>`;
       $('#hs-new', el).onclick = () => this.create();
       if ($('#hs-new2', el)) $('#hs-new2', el).onclick = () => this.create();
+      this.bindPop(el);
       $('#hs-paste', el).onclick = () => this.pasteSetupCode();
       $('#hs-joincode', el).onclick = () => this.joinWithCode();
       this.bindPlayit(el, draw);
@@ -69,6 +70,15 @@ Pages.host = {
     }));
   },
 
+  /** "Pop out": Hosting in its own window. Inside that window the same spot brings the main Solaris window back. */
+  popBtn(id = '') {
+    return typeof POPOUT !== 'undefined' && POPOUT === 'host'
+      ? `<button class="btn" data-pop="main" title="Show the main Solaris window">${icon('home')}Solaris</button>`
+      : `<button class="btn" data-pop="host" data-pop-id="${esc(id)}" title="Open Hosting in its own window">${icon('external')}Pop out</button>`;
+  },
+  bindPop(root) {
+    $$('[data-pop]', root).forEach((b) => (b.onclick = () => (b.dataset.pop === 'main' ? api('win:showMain') : api('win:popHost', b.dataset.popId ? { id: b.dataset.popId } : {}))));
+  },
   /** Link playit.gg with a secret key from the playit.gg website instead of the browser approval. */
   playitKey(redraw) {
     const m = modal({
@@ -481,8 +491,9 @@ Pages.host = {
     $('#hs-back', el).onclick = (e) => { e.preventDefault(); Router.go('host'); };
     const drawHead = () => {
       $('#hs-chip', el).innerHTML = this.stateChip(s);
-      $('#hs-actions', el).innerHTML = s.state === 'offline' ? `<button class="btn lg" id="a-why" title="Read the last run’s log and explain what went wrong">${icon('bug')}Why did it stop?</button><button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
-        : `<button class="btn lg" id="a-lag" ${s.state !== 'online' ? 'disabled' : ''} title="Measure lag and find what causes it">${icon('chart')}Lag check</button><button class="btn lg" id="a-join" ${s.state !== 'online' ? 'disabled' : ''}>${icon('sun')}Join</button><button class="btn lg" id="a-restart" ${s.state !== 'online' ? 'disabled' : ''}>${icon('refresh')}Restart</button><button class="btn lg danger" id="a-stop" ${/stopping|restarting/.test(s.state) ? 'disabled' : ''}>${icon('power')}Stop</button>`;
+      $('#hs-actions', el).innerHTML = this.popBtn(id).replace('class="btn"', 'class="btn lg"') + (s.state === 'offline' ? `<button class="btn lg" id="a-why" title="Read the last run’s log and explain what went wrong">${icon('bug')}Why did it stop?</button><button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
+        : `<button class="btn lg" id="a-lag" ${s.state !== 'online' ? 'disabled' : ''} title="Measure lag and find what causes it">${icon('chart')}Lag check</button><button class="btn lg" id="a-join" ${s.state !== 'online' ? 'disabled' : ''}>${icon('sun')}Join</button><button class="btn lg" id="a-restart" ${s.state !== 'online' ? 'disabled' : ''}>${icon('refresh')}Restart</button><button class="btn lg danger" id="a-stop" ${/stopping|restarting/.test(s.state) ? 'disabled' : ''}>${icon('power')}Stop</button>`);
+      this.bindPop($('#hs-actions', el));
       if ($('#a-why', el)) $('#a-why', el).onclick = () => this.showDiagnosis(id);
       if ($('#a-lag', el)) $('#a-lag', el).onclick = () => this.lagCheck(id, s);
       if ($('#a-start', el)) $('#a-start', el).onclick = (e) => this.start(id, e.currentTarget);
