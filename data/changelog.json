@@ -1,6 +1,27 @@
 [
   {
     "product": "launcher",
+    "version": "1.10.1",
+    "date": "2026-11-15",
+    "title": "Voice chat and Bedrock tunnels fixed",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "Voice chat and Bedrock tunnels are made on playit.gg again (playit.gg answered “validation” before). Solaris now uses the same request as the official playit.gg agent."
+          },
+          {
+            "type": "fix",
+            "text": "When playit.gg turns a tunnel down, Solaris shows its full reason instead of a single word."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.10.0",
     "date": "2026-11-14",
     "title": "Bedrock players, crash helper, voice chat and setup codes",

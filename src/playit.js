@@ -57,23 +57,28 @@ async function call(p, body, secret = loadSecret(), probe = false) {
   const j = await r.json().catch(() => null);
   if (!j) throw new Error(`playit.gg answered HTTP ${r.status}`);
   if (j.status === 'success') return j.data;
-  const why = typeof j.data === 'string' ? j.data : j.data?.type || j.data?.message || JSON.stringify(j.data);
+  // "fail" answers are a bare reason ("RequiresVerifiedAccount"); "error" answers are { type, message } — keep both
+  // parts, the message says what was wrong (a bare "validation" told the player nothing)
+  const why = typeof j.data === 'string' ? j.data
+    : j.data?.type && typeof j.data.message === 'string' ? (friendlyMap[j.data.message] ? j.data.message : `${j.data.type} — ${j.data.message}`)
+    : j.data?.type || j.data?.message || JSON.stringify(j.data);
   if (secret && /InvalidAgentKey|NoLongerValid|AgentKeyNotFound/i.test(JSON.stringify(j))) { if (probe) throw new Error('playit.gg didn’t accept that key. Copy the whole secret key from playit.gg and try again.'); keyRejected(); throw new Error(authProblem); }
   const e = new Error(friendly(why)); e.playit = j.data; throw e;
 }
 /** playit.gg's error names → something a player can act on. */
-function friendly(why) {
-  const map = {
-    RequiresVerifiedAccount: 'playit.gg wants you to verify your account (or turn your guest account into a free account) before it makes more tunnels. Open playit.gg, then try again.',
-    RequiresPlayitPremium: 'playit.gg only allows this with playit Premium.',
-    AgentVersionTooOld: 'playit.gg says this agent is too old — Solaris will download the newest one; try again.',
-    AgentNotFound: 'playit.gg doesn’t know this PC any more. Connect playit.gg again.',
-    InvalidTunnelConfig: 'playit.gg rejected the tunnel settings.',
-    TunnelNameIsNotAscii: 'The tunnel name has characters playit.gg doesn’t allow.',
-    RegionNotSupported: 'playit.gg doesn’t support that region for free accounts.',
-  };
-  return map[why] || 'playit.gg: ' + why;
-}
+const friendlyMap = {
+  RequiresVerifiedAccount: 'playit.gg wants you to verify your account (or turn your guest account into a free account) before it makes more tunnels. Open playit.gg, then try again.',
+  RequiresPlayitPremium: 'playit.gg only allows this with playit Premium (free accounts have a limited number of tunnels — remove unused ones on playit.gg).',
+  AgentVersionTooOld: 'playit.gg says this agent is too old — Solaris will download the newest one; try again.',
+  AgentNotFound: 'playit.gg doesn’t know this PC any more. Connect playit.gg again.',
+  InvalidTunnelConfig: 'playit.gg rejected the tunnel settings.',
+  TunnelNameIsNotAscii: 'The tunnel name has characters playit.gg doesn’t allow.',
+  InvalidTunnelName: 'playit.gg didn’t accept the tunnel name.',
+  RegionNotSupported: 'playit.gg doesn’t support that region for free accounts.',
+  InvalidPortCount: 'playit.gg didn’t accept the number of ports for this tunnel.',
+  PortAllocNotFound: 'playit.gg has no free port for this tunnel right now. Try again later.',
+};
+function friendly(why) { return friendlyMap[why] || 'playit.gg: ' + why; }
 
 // ---------- claim: link this PC to the player's playit.gg account (one time) ----------
 async function startClaim() {
@@ -322,9 +327,34 @@ async function udpAddress(t) {
 //   voice   — Simple Voice Chat, UDP
 //   bedrock — Geyser, TCP + UDP on the same port (Bedrock's NetherNet signaling uses TCP, the game itself UDP)
 const SIDE = {
-  voice: { label: 'voice chat', ports: { type: 'custom-udp', details: 1 }, is: isUdp, kind: 'UDP' },
-  bedrock: { label: 'Bedrock', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
+  voice: { label: 'voice chat', portType: 'udp', ports: { type: 'custom-udp', details: 1 }, is: isUdp, kind: 'UDP' },
+  bedrock: { label: 'Bedrock', portType: 'both', ports: { type: 'custom-both', details: 1 }, is: isBoth, kind: 'TCP + UDP' },
 };
+/**
+ * Creates a plain UDP / TCP+UDP tunnel. playit.gg's current request (POST /tunnels/create, the one its own agent
+ * uses: port_type + port_count + the agent's local address) first; the older /v1 request only if that one isn't
+ * accepted. Returns the new tunnel's id.
+ */
+async function createPortTunnel(k, name, port) {
+  const tname = String(name).replace(/[^\x20-\x7e]/g, '').slice(0, 40);
+  try {
+    const made = await call('/tunnels/create', {
+      name: tname, tunnel_type: null, port_type: k.portType, port_count: 1,
+      origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: port } },
+      enabled: true, alloc: null, firewall_id: null, proxy_protocol: null,
+    });
+    return made?.id || made;
+  } catch (e) {
+    // account limits and the like are real answers — only a request playit.gg doesn't understand falls back
+    if (!/validation|path-not-found/i.test(e.message)) throw e;
+    const made = await call('/v1/tunnels/create', {
+      name: tname, ports: k.ports,
+      origin: { type: 'agent', data: { agent_id: agentId, config: { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] } } },
+      enabled: true, alloc: null, firewall_id: null,
+    });
+    return made?.id || made;
+  }
+}
 async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
   const k = SIDE[kind];
   if (!(port >= 1 && port <= 65535)) throw new Error(`Invalid ${k.label} port ${port}.`);
@@ -334,15 +364,7 @@ async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
   let id = t?.id || (run.pending.some((p) => p.id === tunnelId) ? tunnelId : null);
   if (!id) {
     onStep && onStep(`Creating ${k.label} tunnel (${k.kind})…`);
-    try {
-      const made = await call('/v1/tunnels/create', {
-        name: `Solaris ${kind} ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40),
-        ports: k.ports,
-        origin: { type: 'agent', data: { agent_id: agentId, config: { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] } } },
-        enabled: true, alloc: null, firewall_id: null,
-      });
-      id = made?.id || made;
-    } catch (e) { throw new Error(`${k.label[0].toUpperCase() + k.label.slice(1)} tunnel: ${e.message} (You can add it on playit.gg yourself: type ${k.kind}, local port ${port}.)`); }
+    try { id = await createPortTunnel(k, `Solaris ${kind} ${String(name || 'server')}`, port); } catch (e) { throw new Error(`${k.label[0].toUpperCase() + k.label.slice(1)} tunnel: ${e.message} (You can add it on playit.gg yourself: type ${k.kind}, local port ${port}.)`); }
   }
   onStep && onStep(`Waiting for the ${k.label} address…`);
   const until = Date.now() + 90000;
