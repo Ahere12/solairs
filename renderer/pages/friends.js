@@ -28,19 +28,19 @@ Pages.friends = {
       box.innerHTML = shown.map((f) => `<div class="friend-card ${f.online ? 'online' : ''}" data-u="${esc(f.uuid)}">
         <div class="head lg" data-head="${esc(f.uuid)}"></div>
         <div class="grow" style="min-width:0">
-          <div class="row" style="gap:6px"><b class="ellipsis">${esc(f.name)}</b><span class="dot ${f.online ? "" : "off"}"></span></div>
-          <div class="faint small ellipsis">${f.online ? `Online on <a href="#" data-srv="${esc(f.online.server)}">${esc(f.online.server)}</a>` : 'Not seen online recently'}</div>
+          <div class="row" style="gap:6px"><b class="ellipsis">${esc(f.name)}</b><span class="dot ${f.online ? "" : "off"}"></span>${f.offline ? '<span class="chip" title="Plays with an offline (cracked) account">offline account</span>' : ''}</div>
+          <div class="faint small ellipsis">${f.online ? (f.online.yourServer ? `Playing on your server <b>${esc(f.online.yourServer)}</b>` : `Online on <a href="#" data-srv="${esc(f.online.server)}">${esc(f.online.server)}</a>`) : 'Not seen online recently'}</div>
           ${f.note ? `<div class="small muted ellipsis" title="${esc(f.note)}">${esc(f.note)}</div>` : ''}
         </div>
         ${f.online ? `<button class="btn sm primary" data-join="${esc(f.online.server)}">${icon('play')}Join</button>` : ''}
         <button class="icon-btn" data-more="${esc(f.uuid)}" title="More">${icon('more')}</button></div>`).join('') || '<div class="faint">No match.</div>';
-      $$('[data-head]', box).forEach((h) => this.head(h, h.dataset.head));
+      $$('[data-head]', box).forEach((h) => { const fr = list.find((x) => x.uuid === h.dataset.head); if (fr?.offline) renderHead(h, { uuid: fr.uuid, name: fr.name, skinUrl: null }); else this.head(h, h.dataset.head); });
       $$('[data-join]', box).forEach((b) => (b.onclick = () => Pages.servers.join(b.dataset.join)));
       $$('[data-srv]', box).forEach((a) => (a.onclick = (e) => { e.preventDefault(); Router.go('servers', { address: a.dataset.srv }); }));
       $$('[data-more]', box).forEach((b) => (b.onclick = (e) => {
         const f = list.find((x) => x.uuid === b.dataset.more);
         contextMenu(e.clientX, e.clientY, [
-          { label: 'Save skin to wardrobe', icon: 'skins', action: async () => { try { await api('skins:addFromUsername', f.name); toast(`${f.name}’s skin added to your wardrobe`); } catch (er) { toastErr(er); } } },
+          ...(f.offline ? [] : [{ label: 'Save skin to wardrobe', icon: 'skins', action: async () => { try { await api('skins:addFromUsername', f.name); toast(`${f.name}’s skin added to your wardrobe`); } catch (er) { toastErr(er); } } }]),
           { label: 'Copy name', icon: 'copy', action: () => { api('clipboard:write', f.name); toast('Name copied'); } },
           { label: 'Copy UUID', icon: 'copy', action: () => { api('clipboard:write', f.uuid); toast('UUID copied'); } },
           { label: 'Edit note', icon: 'edit', action: async () => { const n = await promptDialog(`Note for ${f.name}`, { value: f.note || '', placeholder: 'e.g. plays on Hypixel', ok: T('Save') }); if (n !== null && n !== undefined) { list = await api('friends:note', f.uuid, n); draw(); } } },
@@ -70,16 +70,32 @@ Pages.friends = {
     $('#fr-join', el).onclick = async () => {
       let a = $('#fr-join-addr', el).value.trim().replace(/^solaris:\/\/server\//i, '').replace(/\/+$/, '');
       let opts = {};
-      if (/^JOIN-/i.test(a)) { try { const j = await api('hosted:readJoinCode', a); a = j.address; opts = { mc: j.mc || undefined, modded: j.modded || '' }; } catch (e) { return toastErr(e); } }
-      if (!/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(a)) return toast('Enter a server address (like abc.e4mc.link) or a JOIN- code', 'error');
+      if (/^JOIN-/i.test(a)) {
+        let j; try { j = await api('hosted:readJoinCode', a); } catch (e) { return toastErr(e); }
+        a = j.address; opts = { mc: j.mc || undefined, modded: j.modded || '' };
+        if (!(await Pages.friends.accountCheck(j))) return;
+      }
+      const port = (a.match(/:(\d{1,5})$/) || [])[1];
+      if (!/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(a) || (port && (+port < 1 || +port > 65535))) return toast('Enter a server address (like abc.e4mc.link) or a JOIN- code', 'error');
       Pages.servers.join(a, opts);
     };
     ctx.on('hosted', () => drawHost());
     $('#fr-join-addr', el).onkeydown = (e) => { if (e.key === 'Enter') $('#fr-join', el).click(); };
-    $('#fr-add', el).onclick = async () => {
-      const n = await promptDialog('Add friend', { placeholder: 'Minecraft username', ok: 'Add' });
-      if (!n) return;
-      try { list = await api('friends:add', n.trim()); draw(); toast('Friend added'); } catch (e) { toastErr(e); }
+    $('#fr-add', el).onclick = () => {
+      const m = modal({
+        title: 'Add friend',
+        body: `<input type="text" id="af-name" style="width:100%" maxlength="16" placeholder="Minecraft username" spellcheck="false">
+          <label class="row small" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="af-off"><span><b>Offline account</b><br><span class="faint">They play with an offline (cracked) account, not a bought Minecraft account. Solaris then doesn’t look the name up on Mojang (it could belong to someone else).</span></span></label>`,
+        footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>${icon('plus')}Add</button>`,
+      });
+      const go = async () => {
+        const n = m.$('#af-name').value.trim(); if (!n) return;
+        try { list = await api('friends:add', n, { offline: m.$('#af-off').checked }); m.close(); draw(); toast(`${n} added`); } catch (e) { toastErr(e); }
+      };
+      m.$('[data-x]').onclick = () => m.close();
+      m.$('[data-go]').onclick = go;
+      m.$('#af-name').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+      setTimeout(() => m.$('#af-name')?.focus(), 50);
     };
     $('#fr-status', el).onclick = async (e) => {
       const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh')}Checking servers…`;
@@ -94,6 +110,12 @@ Pages.friends = {
     };
     ctx.on('accounts', () => Router.reload());
     await load();
+  },
+  /** A join code says the server needs a Microsoft account, and this account is offline: say so before launching. */
+  async accountCheck(j) {
+    const acct = State.accounts.accounts.find((x) => x.id === State.accounts.active);
+    if (j?.requiresMicrosoft !== true || !acct || acct.type === 'msa') return true;
+    return confirmDialog(`This server only lets in bought (Microsoft) Minecraft accounts, and you’re playing as the offline account “${acct.name}”, so it will turn you away. Ask your friend to untick “Require Microsoft accounts” for the server in Solaris (Hosting → the server → Settings), or switch to a Microsoft account. Join anyway?`, { ok: 'Join anyway' });
   },
   /** Draw a friend's head from their real skin (falls back to their default skin). */
   head(el, uuid) {

@@ -126,6 +126,7 @@ Pages.host = {
       try {
         const j = /^JOIN-/i.test(v) ? await api('hosted:readJoinCode', v) : /^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(v) ? { address: v } : null;
         if (!j) throw new Error('That isn’t a join code or server address.');
+        if (!(await Pages.friends.accountCheck(j))) return;
         m.close();
         Pages.servers.join(j.address, { mc: j.mc || undefined, modded: j.modded || '' });
       } catch (e) { toastErr(e); }
@@ -735,7 +736,7 @@ Pages.host = {
             <label class="field grow">Port<input type="number" id="st-port" min="1024" max="65535" value="${set.port}"></label>
             <label class="field grow">Memory (MB)<input type="number" id="st-mem" min="1024" max="65536" step="512" value="${set.memory}"></label></div>
           <label class="row small" style="gap:8px"><input type="checkbox" id="st-pvp" ${set.props.pvp !== 'false' ? 'checked' : ''}>PvP</label>
-          <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="st-online" ${set.props['online-mode'] !== 'false' ? 'checked' : ''}><span>Require Microsoft accounts<br><span class="faint">Off lets offline accounts join — anyone could use any name. Turn the whitelist on if you do this.</span></span></label>
+          <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="st-online" ${set.props['online-mode'] !== 'false' ? 'checked' : ''}><span>Require Microsoft accounts<br><span class="faint">Off lets offline (cracked) accounts join — anyone could use any name, so turn the whitelist on too. Everyone keeps their inventory and progress when you switch; Solaris moves it over on the next start.</span></span></label>
           <div class="row"><div class="grow faint small">Applies on next start.</div><button class="btn primary" id="st-save">${icon('check')}Save</button></div></div>
           <div class="card stack"><h3>${icon('discord')} Discord alerts</h3>
             <div class="faint small">Post to a Discord channel when the server goes online or stops, crashes, or someone joins. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.</div>
@@ -819,6 +820,28 @@ window.solaris.on('hosted:notWhitelisted', ({ id, name }) => {
   });
 });
 window.solaris.on('playit:state', (s) => { Pages.host.playit = s; Bus.emit('playit', s); });
+// Someone with an offline (cracked) account was turned away because the server needs Microsoft accounts.
+window.solaris.on('hosted:offlineKick', ({ id, name }) => {
+  toast(`${name} couldn’t join — they use an offline account, and this server only allows Microsoft accounts.`, 'warn', 15000, {
+    label: 'Allow offline accounts',
+    run: () => {
+      const m = modal({
+        title: 'Allow offline accounts?',
+        body: `<p>Players with offline (cracked) accounts can join. Minecraft can’t check who they really are, so anyone could use any name.</p>
+          <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="ao-wl" checked><span><b>Turn the whitelist on and add ${esc(name)}</b> (recommended)<br><span class="faint">Only you and the players you add can join. You can add more in the Players tab.</span></span></label>
+          <p class="faint small">Everyone keeps their inventory and progress — Solaris moves it over. The server restarts.</p>`,
+        footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>Allow offline accounts</button>`,
+      });
+      m.$('[data-x]').onclick = () => m.close();
+      m.$('[data-go]').onclick = async () => {
+        const b = m.$('[data-go]'); b.disabled = true;
+        const wl = m.$('#ao-wl').checked;
+        try { await api('hosted:allowOffline', id, { whitelist: wl, name }); m.close(); toast(`Offline accounts allowed${wl ? ` — ${name} is on the whitelist` : ''}. The server restarts if it’s running.`); }
+        catch (e) { toastErr(e); b.disabled = false; }
+      };
+    },
+  });
+});
 window.solaris.on('hosted:playit-manual', ({ port, reason }) => {
   const m = modal({ title: 'Add a playit.gg tunnel', body: `<p class="muted">Solaris couldn’t create the tunnel automatically (${esc(reason)}).</p><p>On playit.gg, add a tunnel: type <b>Minecraft Java</b>, local address <b class="mono">127.0.0.1</b>, local port <b class="mono">${port}</b>. Solaris picks it up within a few seconds.</p>`, footer: `<button class="btn ghost" data-x>Later</button><button class="btn primary" data-go>${icon('external')}Open playit.gg</button>` });
   m.$('[data-x]').onclick = () => m.close();

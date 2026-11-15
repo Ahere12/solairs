@@ -9,22 +9,38 @@ const load = () => readJSON(file(), { lists: {} });
 const listKey = () => { const a = accounts.active(); return a ? a.id : 'none'; };
 const seen = new Map(); // lower-case name -> { server, t }
 
+/** Players on your own running servers right now (Hosting) — live, not a 5-minute-old ping. */
+function onYourServers() {
+  const out = new Map();
+  try { for (const p of require('./hostserver').onlinePlayers()) out.set(p.name.toLowerCase().replace(/^\./, ''), p); } catch {}
+  return out;
+}
 function list() {
-  const d = load();
+  const d = load(), mine = onYourServers();
   const out = (d.lists[listKey()] || []).map((f) => {
-    const s = seen.get(f.name.toLowerCase());
+    const key = f.name.toLowerCase();
+    const here = mine.get(key);
+    if (here) return { ...f, online: { server: here.address, since: here.since, yourServer: here.serverName } };
+    const s = seen.get(key);
     return { ...f, online: s && Date.now() - s.t < 5 * 60000 ? { server: s.server, since: s.t } : null };
   });
   return out.sort((a, b) => (!!b.online - !!a.online) || a.name.localeCompare(b.name));
 }
 function withList(fn) { const d = load(); const k = listKey(); d.lists[k] = d.lists[k] || []; fn(d.lists[k]); writeJSON(file(), d); return list(); }
 
-async function add(name) {
+/**
+ * Add a friend by name. A friend with a bought (Microsoft) account is looked up on Mojang; a friend who plays with
+ * an offline (cracked) account is not — Mojang would find whoever really owns that name, with someone else's skin.
+ */
+async function add(name, { offline = false } = {}) {
   name = String(name || '').trim();
-  if (!/^[A-Za-z0-9_]{2,16}$/.test(name)) throw new Error('Enter a Minecraft username (letters, numbers and _).');
-  let prof;
-  prof = await require('./util').profileByName(name);
-  if (!prof?.id) throw new Error(`No Minecraft account is called “${name}”.`);
+  if (!/^[A-Za-z0-9_]{1,16}$/.test(name)) throw new Error('Enter a Minecraft username (1–16 letters, numbers and _).');
+  if (offline) {
+    const uuid = accounts.offlineUuid(name); // the same ID their game and offline servers use for that name
+    return withList((l) => { if (!l.some((f) => f.uuid === uuid || (f.offline && f.name.toLowerCase() === name.toLowerCase()))) l.push({ uuid, name, offline: true, added: Date.now(), note: '' }); });
+  }
+  const prof = await require('./util').profileByName(name);
+  if (!prof?.id) throw new Error(`No Minecraft account is called “${name}”. If your friend plays with an offline (cracked) account, tick “Offline account”.`);
   const uuid = prof.id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
   return withList((l) => { if (!l.some((f) => f.uuid === uuid)) l.push({ uuid, name: prof.name, added: Date.now(), note: '' }); });
 }

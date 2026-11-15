@@ -193,6 +193,7 @@ module.exports = (getWin) => ({
   // ---------- playit.gg ----------
   'hosted:setVoice': (id, on) => require('./hostserver').setVoice(id, !!on),
   'hosted:setVoiceAddress': (id, addr) => require('./hostserver').setVoiceAddress(id, addr),
+  'hosted:allowOffline': (id, o) => require('./hostserver').allowOffline(id, o || {}),
   'hosted:setBedrock': (id, on) => require('./hostserver').setBedrock(id, !!on),
   'hosted:diagnose': (id) => require('./hostserver').diagnose(id),
   'hosted:applyFix': (id, fix) => require('./hostserver').applyFix(id, fix),
@@ -267,7 +268,7 @@ module.exports = (getWin) => ({
 
   // ---------- friends ----------
   'friends:list': () => friends.list(),
-  'friends:add': (n) => friends.add(n),
+  'friends:add': (n, o) => friends.add(n, o || {}),
   'friends:remove': (u) => friends.remove(u),
   'friends:note': (u, n) => friends.setNote(u, n),
   'friends:skin': (u) => friends.skin(u),

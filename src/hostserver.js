@@ -447,15 +447,86 @@ function joinCode(id) {
   const v = view(meta(id)), addr = v.address || v.knownAddress;
   if (!addr) throw new Error('This server has no public address yet — start it with playit.gg or e4mc first.');
   let a = addr; for (const [suf, k] of JOIN_SUFFIX) if (a.endsWith(suf) || a.includes(suf + ':')) { a = a.replace(suf, k); break; }
-  return 'JOIN-' + b64u(`${a}|${v.mc}|${v.contentKind === 'mods' ? v.softwareName : ''}`);
+  const needsMs = readProps(id)['online-mode'] !== 'false';
+  return 'JOIN-' + b64u(`${a}|${v.mc}|${v.contentKind === 'mods' ? v.softwareName : ''}|${needsMs ? 'm' : 'o'}`);
 }
 function readJoinCode(code) {
   const mm = String(code || '').trim().match(/^JOIN-([A-Za-z0-9_-]+)$/i);
   if (!mm) throw new Error('That isn’t a join code. Join codes start with JOIN-');
-  const [a, mc, modded] = unb64u(mm[1]).toString('utf8').split('|');
+  const [a, mc, modded, acct] = unb64u(mm[1]).toString('utf8').split('|');
   let addr = a || ''; for (const [suf, k] of JOIN_SUFFIX) if (addr.includes(k)) { addr = addr.replace(k, suf); break; }
   if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(addr)) throw new Error('That join code is damaged — ask your friend for it again.');
-  return { address: addr, mc: mc || null, modded: modded || '' };
+  // requiresMicrosoft: true / false, or null for codes made before Solaris put it in
+  return { address: addr, mc: mc || null, modded: modded || '', requiresMicrosoft: acct === 'm' ? true : acct === 'o' ? false : null };
+}
+
+// ---------- players and account mode ----------
+/** Everyone on your running servers right now (the Friends tab shows them live). */
+function onlinePlayers() {
+  const out = [];
+  for (const [id, r] of running) {
+    let v; try { v = view(meta(id)); } catch { continue; }
+    const address = v.address || v.knownAddress || `localhost:${v.port}`;
+    for (const name of r.players) out.push({ name, serverId: id, serverName: v.name, address, since: r.joined?.get(name) || r.started });
+  }
+  return out;
+}
+/**
+ * "Require Microsoft accounts" decides which ID Minecraft gives a player: the Mojang one, or one made from the name
+ * (offline). Inventories, positions, advancements and stats are saved per ID, so after switching everyone would
+ * start over. Before the server starts, Solaris copies each known player's save to their ID for the new mode (the
+ * old files stay, so switching back finds them again). A save already made in the new mode is never overwritten.
+ */
+async function movePlayerData(m, say) {
+  const props = readProps(m.id);
+  const offlineMode = props['online-mode'] === 'false';
+  const accounts = require('./accounts');
+  const world = path.join(m.dir, props['level-name'] || 'world');
+  // who has played here: the server's own name ↔ ID list, plus the whitelist and operators
+  const known = new Map();
+  for (const p of [...readJSON(path.join(m.dir, 'usercache.json'), []), ...people(m.id, 'whitelist'), ...people(m.id, 'ops')]) {
+    if (!p?.name || !p?.uuid || !/^[A-Za-z0-9_]{1,16}$/.test(p.name)) continue;
+    const k = p.name.toLowerCase();
+    if (!known.has(k)) known.set(k, { name: p.name, ids: new Set() });
+    known.get(k).ids.add(String(p.uuid).toLowerCase());
+  }
+  const files = (id) => [['playerdata', `${id}.dat`], ['playerdata', `${id}.dat_old`], ['advancements', `${id}.json`], ['stats', `${id}.json`]].map(([d, f]) => path.join(world, d, f));
+  const hasSave = (id) => fs.existsSync(files(id)[0]);
+  const isMojangId = (id) => id[14] === '4'; // Mojang IDs are random (version 4); offline IDs come from the name (version 3)
+  let moved = 0;
+  for (const { name, ids } of known.values()) {
+    const offlineId = accounts.offlineUuid(name).toLowerCase();
+    ids.add(offlineId);
+    let target = offlineMode ? offlineId : [...ids].find(isMojangId);
+    const sources = () => [...ids].filter((id) => id !== target && hasSave(id));
+    if (!offlineMode && !target) {
+      // only ask Mojang when there is an offline save to bring over
+      if (!sources().length) continue;
+      try { const prof = await profileByName(name); target = prof?.id?.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5').toLowerCase(); } catch {}
+      if (!target) continue;
+    }
+    if (hasSave(target)) continue; // already has a save for this mode: never overwrite it
+    // the newest save under this player's other ID
+    const from = sources().sort((a, b) => fs.statSync(files(b)[0]).mtimeMs - fs.statSync(files(a)[0]).mtimeMs)[0];
+    if (!from) continue;
+    const [src, dst] = [files(from), files(target)];
+    for (let n = 0; n < src.length; n++) if (fs.existsSync(src[n])) { fs.mkdirSync(path.dirname(dst[n]), { recursive: true }); fs.copyFileSync(src[n], dst[n]); }
+    moved++;
+    say && say(`Kept ${name}’s inventory, position and progress for ${offlineMode ? 'offline' : 'Microsoft'} accounts.`);
+  }
+  return moved;
+}
+/** An offline (cracked) player was turned away: let offline accounts join (optionally whitelist on + add them). */
+async function allowOffline(id, { whitelist = true, name = '' } = {}) {
+  const props = { 'online-mode': false };
+  if (whitelist) { props['white-list'] = true; props['enforce-whitelist'] = true; }
+  setSettings(id, { props });
+  await convertPeople(id, false); // whitelist + operators get their offline IDs now (the owner stays an operator)
+  const owner = require('./accounts').active();
+  if (whitelist && owner?.name) { try { await addPerson(id, 'whitelist', owner.name); } catch {} }
+  if (whitelist && name && /^[A-Za-z0-9_]{1,16}$/.test(name)) await addPerson(id, 'whitelist', name);
+  if (running.has(id)) { log(id, '[Solaris] Offline accounts allowed — restarting so it takes effect.'); restart(id); }
+  return get(id);
 }
 
 // ---------- schedules (auto backups / restarts) and start with Windows ----------
@@ -917,6 +988,7 @@ async function start(id, resolveJava) {
     }
   } catch (e) { running.delete(id); emit(id); throw e; }
   writeProps(id, { 'server-port': m.port });
+  try { await movePlayerData(m, (t) => log(id, '[Solaris] ' + t)); } catch (e) { log(id, '[Solaris] Couldn’t move player progress: ' + e.message); }
   try { writeVoiceConfig(m); } catch {}
   await updateBedrock(m, (t) => log(id, '[Solaris] ' + t));
   if (r.cancelled) { running.delete(id); emit(id); return get(id); } // stopped while Geyser was updating
@@ -1086,13 +1158,16 @@ function onLine(id, line) {
   const PLAYER = '(\\.?[A-Za-z0-9_]{1,16})'; // Bedrock players (Floodgate) have a "." in front of their name
   const j = line.match(new RegExp(`\\]: (?:System chat: |\\[Server\\] )?${PLAYER} joined the game`)) || line.match(new RegExp(`\\]: ${PLAYER}\\[/[^\\]]*\\] logged in with entity id`));
   if (j && !r.players.has(j[1])) {
-    r.players.add(j[1]); emit(id);
+    r.players.add(j[1]); (r.joined = r.joined || new Map()).set(j[1], Date.now()); emit(id);
     try { const mm = meta(id), vv = view(mm); require('./friends').notePlayers(vv.address || vv.knownAddress || `localhost:${mm.port}`, [j[1]]); notifyDiscord(id, 'join', `➕ **${j[1]}** joined ${mm.name} (${r.players.size} online).`); } catch {}
   }
   const lft = line.match(new RegExp(`\\]: (?:System chat: |\\[Server\\] )?${PLAYER} left the game`)) || line.match(new RegExp(`\\]: ${PLAYER} lost connection: `));
   if (lft && r.players.has(lft[1])) { r.players.delete(lft[1]); emit(id); try { notifyDiscord(id, 'leave', `➖ **${lft[1]}** left ${meta(id).name} (${r.players.size} online).`); } catch {} }
   const nwl = line.match(/Disconnecting ([A-Za-z0-9_]{2,16}) .*not white-?listed/i);
   if (nwl) push('hosted:notWhitelisted', { id, name: nwl[1] });
+  // "Disconnecting Steve (/1.2.3.4:5): Failed to verify username!" (older: "...name=Steve,... lost connection: Failed to verify username!")
+  const unv = line.match(/Disconnecting (?:.*?name=)?([A-Za-z0-9_]{1,16})\b.*Failed to verify username/i) || line.match(/name=([A-Za-z0-9_]{1,16})\b.*lost connection: Failed to verify username/i);
+  if (unv && readProps(id)['online-mode'] !== 'false') push('hosted:offlineKick', { id, name: unv[1] });
   if (/You need to agree to the EULA/i.test(line)) push('toast', { type: 'error', text: 'The server needs the Minecraft EULA accepted.' });
   if (/FAILED TO BIND TO PORT/i.test(line)) push('toast', { type: 'error', text: 'Another program is using this server’s port. Close it, or change the port in Settings.' });
 }
@@ -1608,5 +1683,5 @@ module.exports = {
   softwareVersions, worlds, setActiveWorld, deleteWorld, people, addPerson, removePerson, backups, backup, restore, deleteBackup,
   logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, modSources, instanceMods, copyFromInstance, addContentFiles, modpackVersions,
   tunnelStop, tunnelStart, tunnelRestart,
-  setVoice, setVoiceAddress, setBedrock, diagnose, applyFix, pregen, lagCheck, setDiscord, testDiscord, makeInstance, setupCode, readSetupCode, joinCode, readJoinCode, setSchedule, setAutoStart, autoStartAll, bans, pardon,
+  setVoice, setVoiceAddress, setBedrock, onlinePlayers, movePlayerData, allowOffline, diagnose, applyFix, pregen, lagCheck, setDiscord, testDiscord, makeInstance, setupCode, readSetupCode, joinCode, readJoinCode, setSchedule, setAutoStart, autoStartAll, bans, pardon,
 };
