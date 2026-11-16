@@ -1,6 +1,86 @@
 [
   {
     "product": "launcher",
+    "version": "1.13.0",
+    "date": "2026-11-16",
+    "title": "Astra grows up: mod health, server tools, backups and more",
+    "groups": [
+      {
+        "area": "Your mods",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Mod health: the new Health button on a modded instance checks every mod for missing dependencies, wrong Minecraft or loader versions, duplicates and mods that can’t run together — with a score, what to do first, and one-click fixes you confirm."
+          },
+          {
+            "type": "feature",
+            "text": "Check for updates and compare two instances side by side from the same page."
+          }
+        ]
+      },
+      {
+        "area": "Servers",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Server details (ⓘ on your saved servers): how often it was online over the last week, which software it runs, your join history, notes, and an instance to always join with."
+          },
+          {
+            "type": "feature",
+            "text": "Alerts for a single server when it goes online or offline."
+          },
+          {
+            "type": "feature",
+            "text": "Connection test: when you can’t join, Astra checks each step (address, DNS, port, Minecraft, version) and tells you which one fails and why."
+          }
+        ]
+      },
+      {
+        "area": "Everything else",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Notifications: a bell in the title bar keeps everything Astra tells you — friends, servers, modpack updates, backups, new Minecraft versions. Choose what pops up."
+          },
+          {
+            "type": "feature",
+            "text": "Backups & Sync: back up your settings, servers and every instance’s setup, restore just what you pick, and sync between PCs through a OneDrive / Dropbox / Google Drive folder."
+          },
+          {
+            "type": "feature",
+            "text": "Discover: one search over Modrinth and CurseForge for mods, modpacks, resource packs, shaders, maps and community content."
+          },
+          {
+            "type": "feature",
+            "text": "Analytics: your play time per day, per instance and per version, session history and crash trends."
+          },
+          {
+            "type": "feature",
+            "text": "Assistant: explains crashes, launcher errors and server problems, points at the mods involved and suggests fixes — nothing changes until you confirm, and every fix can be undone."
+          },
+          {
+            "type": "feature",
+            "text": "Developer Hub (in Connect): add third-party integrations with permissions you control."
+          }
+        ]
+      },
+      {
+        "area": "Fixes",
+        "entries": [
+          {
+            "type": "bugfix",
+            "text": "Play time was counted twice for a game still running when you closed Astra while your hosted servers were stopping."
+          },
+          {
+            "type": "improvement",
+            "text": "Passwords, tokens and webhooks in mod config files are never put in backups."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.12.0",
     "date": "2026-11-15",
     "title": "Solaris is now Astra 🌙",
