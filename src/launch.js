@@ -183,12 +183,19 @@ async function launch(instanceId, opts = {}) {
 
 /** Save play time for games still running when Astra quits (the games themselves keep running). */
 function savePlaytimeOnQuit() {
+  // before-quit can fire twice (Astra waits for hosted servers, then quits again): count each game only once
   for (const r of running.values()) {
-    try { const cur = instances.get(r.instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + (Date.now() - r.start) }); } catch {}
+    if (r.savedOnQuit) continue;
+    r.savedOnQuit = true;
+    const end = Date.now();
+    try { const cur = instances.get(r.instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + (end - r.start) }); } catch {}
+    // Astra Analytics: the game keeps running, but Astra stops watching it here — record the part it saw
+    try { const cur = instances.get(r.instanceId); events.emit('game:session', { runId: r.runId, instanceId: r.instanceId, name: r.name, mc: cur.versionId, loader: cur.loader?.type || 'vanilla', start: r.start, end, launchMs: null, code: null, killed: false, crashed: false, crash: null, interrupted: true }); } catch {}
   }
 }
 
 async function launchInner(instanceId, opts = {}) {
+  const pressedAt = Date.now(); // for Astra Analytics: how long the launch took
   let inst = instances.get(instanceId);
   const s = settings.get();
   status(instanceId, 'Signing in');
@@ -353,7 +360,7 @@ async function launchInner(instanceId, opts = {}) {
     running.delete(runId);
     if (hosting.delete(runId)) push('host:offline', { runId, instanceId });
     const duration = Date.now() - run.start;
-    try { const cur = instances.get(instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + duration }); } catch {}
+    if (!run.savedOnQuit) { try { const cur = instances.get(instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + duration }); } catch {} } // else: already counted while Astra was quitting
     const killed = run.killed || signal === 'SIGTERM';
     let analysis = null;
     if (code !== 0 && !killed) {
@@ -363,6 +370,8 @@ async function launchInner(instanceId, opts = {}) {
       if (settings.get().notifications && Notification.isSupported()) new Notification({ title: `${inst.name} crashed`, body: analysis.causes[0].title }).show();
     }
     history.unshift({ runId, instanceId, name: inst.name, start: run.start, end: Date.now(), code, lines: run.lines, logFile, analysis });
+    // Astra Analytics: one session record (src/eco/analytics.js)
+    try { events.emit('game:session', { runId, instanceId, name: inst.name, mc: inst.versionId, loader: inst.loader?.type || 'vanilla', start: run.start, end: Date.now(), launchMs: run.start - pressedAt, code, killed, crashed: !!analysis, crash: analysis?.causes?.[0]?.title || null, server: opts.server || null, world: opts.world || null, memoryMb: maxMem }); } catch {}
     history.splice(20);
     push('launch:exited', { runId, instanceId, code, killed, duration, analysis });
     discord.gameEnded(runId);

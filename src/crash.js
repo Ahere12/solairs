@@ -59,4 +59,10 @@ function analyze({ code, lines, gameDir, since }) {
   };
 }
 
-module.exports = { analyze };
+/** The same rules for any text (a pasted crash report or log) — used by the Astra Assistant. */
+function explainText(text) {
+  const t = String(text || '');
+  return { causes: RULES.filter((r) => r.re.test(t)).map(({ title, fix }) => ({ title, fix })), description: (t.match(/^Description: (.+)$/m) || [])[1] || null, corrupt: /ZipException|zip END header not found|invalid LOC header|invalid CEN header|truncated class file|Incompatible magic value/i.test(t) };
+}
+
+module.exports = { analyze, explainText };

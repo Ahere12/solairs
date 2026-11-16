@@ -1,6 +1,8 @@
 Pages.servers = {
   /** Join a server. `opts.mc` (your own hosted servers) lists only instances of that Minecraft version. */
   async join(address, opts = {}) {
+    // a saved server with its own instance (Server details → Play with instance)
+    if (!opts.instance) { const saved = (await api('servers:list')).servers.find((s) => s.address === address && s.instanceId); if (saved && State.instances.some((i) => i.id === saved.instanceId)) opts = { ...opts, instance: saved.instanceId }; }
     // a hosted server's own matching instance: launch it straight away
     if (opts.instance && State.instances.some((i) => i.id === opts.instance)) return play(opts.instance, { server: address });
     const pick = State.instances.find((i) => i.id === State.settings.selectedInstance);
@@ -16,6 +18,8 @@ Pages.servers = {
     let data = await api('servers:list');
     let tab = params.tab || 'featured', region = 'all', tag = 'all', q = '';
     const pings = {};
+    let uptime = {}; // saved servers' uptime (Server details), filled in after the list shows
+    api('srv:overview').then((l) => { uptime = Object.fromEntries(l.map((x) => [x.id, x.uptime])); if (el.isConnected) redraw(); }).catch(() => {});
     el.innerHTML = `
       <div class="page-head"><div><h1>${T('Servers')}</h1><div class="sub">Find, ping and join servers</div></div>
         <div class="actions"><button class="btn" id="refresh">${icon('refresh')}Refresh</button><button class="btn primary" id="add">${icon('plus')}Add server</button></div></div>
@@ -37,13 +41,14 @@ Pages.servers = {
       return `<div class="server" data-addr="${esc(s.address)}">
         <img class="fav" ${p?.favicon ? `src="${esc(p.favicon)}"` : ''} alt="">
         <div class="grow" style="min-width:0">
-          <div class="row"><b style="cursor:pointer" data-detail="${esc(s.address)}">${esc(s.name)}</b>${s.region ? `<span class="chip">${esc(s.region)}</span>` : ''}${(s.tags || []).slice(0, 3).map((t) => `<span class="chip">${esc(t)}</span>`).join('')}${p?.version ? `<span class="faint small">${esc(p.version)}</span>` : ''}</div>
+          <div class="row"><b style="cursor:pointer" data-detail="${esc(s.address)}">${esc(s.name)}</b>${s.region ? `<span class="chip">${esc(s.region)}</span>` : ''}${s.id && uptime[s.id]?.week != null ? `<span class="chip ${uptime[s.id].week >= 95 ? 'ok' : uptime[s.id].week >= 50 ? 'warn' : 'danger'}" title="Online in the last 7 days, from ${uptime[s.id].checks} checks">${uptime[s.id].week}% up</span>` : ''}${(s.tags || []).slice(0, 3).map((t) => `<span class="chip">${esc(t)}</span>`).join('')}${p?.version ? `<span class="faint small">${esc(p.version)}</span>` : ''}</div>
           <div class="motd">${p ? (p.online ? motdHtml(p.motd) : `<span style="color:var(--danger)">Offline · ${esc(p.error || '')}</span>`) : '<span class="faint">Pinging…</span>'}</div>
         </div>
         <div class="players">${p?.online ? `<div class="n">${fmtNum(p.players.online)}<span class="faint small"> / ${fmtNum(p.players.max)}</span></div><div class="faint small">${p.latency != null ? icon('wifi') + ' ' + p.latency + ' ms' : ''}</div>` : '<div class="n faint">—</div>'}</div>
         <button class="icon-btn" data-fav="${esc(s.address)}" title="Favourite" style="color:${s.favorite ? 'var(--accent)' : ''}">${icon(s.favorite ? 'starFill' : 'star')}</button>
         <button class="icon-btn" data-copy="${esc(s.address)}" title="Copy IP">${icon('copy')}</button>
         <button class="icon-btn" data-detail="${esc(s.address)}" title="Statistics">${icon('chart')}</button>
+        ${s.id ? `<button class="icon-btn" data-sd="${esc(s.id)}" title="Details: uptime, instance, alerts, notes">${icon('info')}</button>` : ''}
         ${s.id ? `<button class="icon-btn" data-rm="${esc(s.id)}" title="Remove">${icon('trash')}</button>` : ''}
         <button class="btn sm primary" data-join="${esc(s.address)}">${icon('play')}Join</button></div>`;
     };
@@ -56,6 +61,7 @@ Pages.servers = {
       $$('[data-join]', el).forEach((b) => (b.onclick = () => this.join(b.dataset.join)));
       $$('[data-copy]', el).forEach((b) => (b.onclick = () => { api('clipboard:write', b.dataset.copy); toast('IP copied'); }));
       $$('[data-detail]', el).forEach((b) => (b.onclick = () => Router.go('servers', { address: b.dataset.detail })));
+      $$('[data-sd]', el).forEach((b) => (b.onclick = () => openServerDetails(b.dataset.sd)));
       $$('[data-rm]', el).forEach((b) => (b.onclick = async () => { data = await api('servers:remove', b.dataset.rm); drawList(); }));
       $$('[data-fav]', el).forEach((b) => (b.onclick = async () => {
         const addr = b.dataset.fav;

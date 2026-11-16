@@ -263,10 +263,11 @@ function showCrash({ instanceId, analysis, runId }) {
       ${analysis.description ? `<p class="muted">Crash report: <b>${esc(analysis.description)}</b></p>` : ''}
       <h3>What probably happened</h3>
       ${analysis.causes.map((c) => `<div class="crash-cause"><b>${esc(c.title)}</b><div class="muted small">${esc(c.fix)}</div></div>`).join('')}`,
-    footer: `${analysis.crashReport ? `<button class="btn ghost" data-report>${icon('folder')}Open crash report</button>` : ''}<button class="btn" data-share>${icon('share')}Share log</button><button class="btn" data-console>${icon('console')}Open console</button><button class="btn primary" data-retry>${icon('play')}Try again</button>`,
+    footer: `${analysis.crashReport ? `<button class="btn ghost" data-report>${icon('folder')}Open crash report</button>` : ''}<button class="btn" data-share>${icon('share')}Share log</button><button class="btn" data-assist>${icon('zap')}Ask the Assistant</button><button class="btn" data-console>${icon('console')}Open console</button><button class="btn primary" data-retry>${icon('play')}Try again</button>`,
   });
   if (analysis.crashReport) m.$('[data-report]').onclick = () => api('shell:showItem', analysis.crashReport);
   m.$('[data-console]').onclick = () => { m.close(); Router.go('console', { runId }); };
+  m.$('[data-assist]').onclick = () => { m.close(); Router.go('assistant', { runId }); };
   m.$('[data-retry]').onclick = () => { m.close(); play(instanceId); };
   m.$('[data-share]').onclick = () => shareLog(runId);
 }

@@ -14,11 +14,13 @@ Pages.instance = {
             <div class="launch-status" style="margin-top:6px">${esc(launchLabel(inst.id))}</div>
           </div>
           <div class="grow"></div>
+          ${inst.loader?.type && inst.loader.type !== 'vanilla' ? `<button class="btn" id="health" title="Check mods: dependencies, versions, duplicates, conflicts">${icon('shield')}Health</button>` : ''}
           <button class="icon-btn" id="fold" title="Open folder">${icon('folder')}</button>
           <button class="icon-btn" id="more" title="More">${icon('more')}</button>
           ${playButton(inst, { size: 'lg' })}
         </div>`;
       $('#fold', el).onclick = () => api('instances:openFolder', inst.id);
+      const hb = $('#health', el); if (hb) hb.onclick = () => Router.go('modhealth', { id: inst.id });
       $('#more', el).onclick = (e) => instanceMenu(e, inst);
       $('#icon-btn', el).onclick = () => changeInstanceIcon(inst);
     };

@@ -76,7 +76,7 @@ function withTimeout(p, ms) {
  * @param store    { read(): object, write(obj) } — where on/off, settings and errors are kept
  * @param secrets  { seal(string): string, unseal(string): string } — secret settings are only stored sealed
  */
-function createRegistry({ defs = [], store, secrets = { seal: (s) => s, unseal: (s) => s }, timeout = STATUS_TIMEOUT } = {}) {
+function createRegistry({ defs = [], store, secrets = { seal: (s) => s, unseal: (s) => s }, timeout = STATUS_TIMEOUT, onError = null } = {}) {
   if (!store) throw new Error('createRegistry needs a store');
   const byId = new Map();
   for (const d of defs) {
@@ -117,6 +117,7 @@ function createRegistry({ defs = [], store, secrets = { seal: (s) => s, unseal: 
     if (list[0]?.message === message && Date.now() - list[0].at < 60000) return; // the same problem again right away
     st.errors[id] = [{ at: Date.now(), message: String(message).slice(0, 500) }, ...list].slice(0, MAX_ERRORS);
     store.write(st);
+    if (onError) { try { onError(id, byId.get(id)?.name || id, String(message).slice(0, 500)); } catch {} } // a new problem (not a repeat)
   }
 
   async function status(id) {
@@ -143,6 +144,7 @@ function createRegistry({ defs = [], store, secrets = { seal: (s) => s, unseal: 
       compat: d.compat ? { software: d.compat.software || null, note: d.compat.note || '' } : null,
       canToggle: !d.planned && !d.unavailable && !d.core, core: !!d.core, enabled: isEnabled(d, st),
       config: (d.config || []).map((f) => ({ key: f.key, label: f.label || f.key, type: f.type, help: f.help || '', options: f.options || null, min: f.min ?? null, max: f.max ?? null })),
+      thirdParty: d.thirdParty || null, // installed through the Developer Hub: author, version, permissions
       hasDetails: typeof d.details === 'function', values: publicConfig(d, st), errors: (st.errors[d.id] || []).slice(0, 5), status: s || null,
     };
   }

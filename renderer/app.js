@@ -2,6 +2,7 @@
 const NAV = [
   { id: 'home', label: 'Home', icon: 'home', key: 'nav.home' },
   { id: 'browse', label: 'Browse', icon: 'browse', key: 'nav.browse' },
+  { id: 'discover', label: 'Discover', icon: 'globe', key: 'nav.discover' },
   { id: 'servers', label: 'Servers', icon: 'servers', key: 'nav.servers' },
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
   { id: 'friends', label: 'Friends', icon: 'users', key: 'nav.friends' },
@@ -13,10 +14,13 @@ const NAV = [
 const SIDE_TOOLS = [
   { id: 'console', label: 'Console', icon: 'console' },
   { id: 'gallery', label: 'Gallery', icon: 'gallery' },
+  { id: 'analytics', label: 'Analytics', icon: 'chart' },
+  { id: 'assistant', label: 'Assistant', icon: 'zap' },
+  { id: 'backups', label: 'Backups & Sync', icon: 'hdd' },
   { id: 'changelog', label: 'Changelog', icon: 'changelog' },
   { id: 'roadmap', label: 'Roadmap', icon: 'roadmap' },
 ];
-const ROUTE_ALIAS = { instance: 'library' };
+const ROUTE_ALIAS = { instance: 'library', modhealth: 'library', devhub: 'connect' };
 
 function selectedInstance() {
   const insts = State.instances;
@@ -221,6 +225,7 @@ if (POPOUT === 'host') {
   await Promise.all([refreshInstances(), refreshAccounts(), McIcons.loadCache().catch(() => false)]);
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
   renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
+  Inbox.init(); // notification bell in the title bar
   // real Minecraft icons from the player's own game files (cached after the first time)
   if (!McIcons.ready()) McIcons.init().then((ok) => { if (ok) { Bus.emit('instances', State.instances); renderAccountChip(); } }).catch(() => {});
   if (POPOUT === 'host') {

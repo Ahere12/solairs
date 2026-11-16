@@ -191,6 +191,7 @@ function init() {
   // Servers marked "Start with Windows" (or with Astra): start them a few seconds after launch.
   setTimeout(() => { try { require('./src/hostserver').autoStartAll(require('./src/launch').resolveJava); } catch {} }, 5000);
   setTimeout(() => { try { require('./src/connect').init(); } catch (e) { console.error('Astra Connect:', e); } }, 6000); // server monitoring + desktop alerts
+  try { require('./src/eco').init(); } catch (e) { console.error('Astra ecosystem:', e); } // session analytics, automatic backups, Minecraft / modpack update checks
   win.once('ready-to-show', () => { if (!startHidden) win.show(); else if (!tray) win.minimize(); });
   win.on('close', (e) => {
     if (app.isQuitting) return;
@@ -256,4 +257,7 @@ app.on('before-quit', (e) => {
 app.on('window-all-closed', () => app.quit());
 // The playit.gg agent is Astra's child: never leave it running in the background (e.g. Astra closed during
 // server setup). Its tunnels and the link to playit.gg are kept for next time.
-app.on('will-quit', () => { try { require('./src/playit').stopAgent(); } catch {} });
+app.on('will-quit', () => {
+  try { require('./src/playit').stopAgent(); } catch {}
+  try { require('./src/eco').shutdown(); } catch {} // unsaved uptime samples, background timers
+});

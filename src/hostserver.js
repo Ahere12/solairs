@@ -723,7 +723,7 @@ setInterval(async () => {
         const cur = meta(id); cur.lastAutoBackup = Date.now(); save(cur);
         for (const b of backups(id).filter((x) => /^auto-/.test(x.file)).slice(sc.keepBackups || 10)) fs.rmSync(path.join(backupsDir(id), b.file), { force: true });
         log(id, '[Astra] Automatic backup saved.');
-      } catch (e) { log(id, '[Astra] Automatic backup failed: ' + e.message); }
+      } catch (e) { log(id, '[Astra] Automatic backup failed: ' + e.message); try { require('./eco/notify').add({ category: 'backup', title: `${m.name}: automatic backup failed`, body: e.message, key: `hosted-backup-fail:${id}` }); } catch {} }
       finally { r.autoBackup = false; }
     }
     if (sc.restartHours && !r.restartWarned && now - r.started >= sc.restartHours * 3600000) {
@@ -1881,6 +1881,7 @@ async function backup(id, prefix = 'backup') {
     fs.mkdirSync(backupsDir(id), { recursive: true });
     const name = `${prefix === 'auto' ? 'auto' : 'backup'}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`;
     await zip.writeZipPromise(path.join(backupsDir(id), name));
+    try { require('./eco/notify').add({ category: 'backup', title: `${m.name}: backup saved`, body: `${name} (${Math.round(fs.statSync(path.join(backupsDir(id), name)).size / 1048576)} MB)`, key: `hosted-backup:${id}:${name}`, toast: prefix === 'auto', desktop: prefix === 'auto' }); } catch {}
     return backups(id);
   } finally { if (live && running.has(id)) command(id, bds ? 'save resume' : 'save-on'); }
 }

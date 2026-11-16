@@ -9,7 +9,7 @@ Pages.connect = {
 
   async render(el, params, ctx) {
     el.innerHTML = `<div class="page-head"><div><h1>Astra Connect</h1><div class="sub">Maps, friends, servers and player tools — every service Astra connects to, and whether it’s working right now.</div></div>
-        <div class="actions"><button class="btn" id="cn-refresh">${icon('refresh')}Check again</button></div></div>
+        <div class="actions"><button class="btn" id="cn-dev">${icon('bug')}Developer Hub</button><button class="btn" id="cn-refresh">${icon('refresh')}Check again</button></div></div>
       <div class="row cn-bar"><div class="hs-filter" id="cn-tabs"><button data-tab="installed">Installed</button><button data-tab="discover">Discover</button></div>
         <div class="hs-filter" id="cn-cats"></div><div class="grow"></div>
         <div class="search" style="max-width:260px">${icon('search')}<input type="search" id="cn-q" placeholder="Search integrations…"></div></div>
@@ -48,6 +48,7 @@ Pages.connect = {
     $$('#cn-tabs [data-tab]', el).forEach((b) => (b.onclick = () => { v.tab = b.dataset.tab; draw(); }));
     $('#cn-q', el).oninput = (e) => { v.q = e.target.value; draw(); };
     $('#cn-refresh', el).onclick = () => load();
+    $('#cn-dev', el).onclick = () => Router.go('devhub');
     await load(false);
     // statuses follow what happens elsewhere in Astra (servers starting, playit.gg connecting…)
     const soon = debounce(() => load(false), 1500);

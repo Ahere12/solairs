@@ -1,0 +1,29 @@
+{
+  "$schema": "../astra-integration.schema.json",
+  "manifestVersion": 1,
+  "id": "example-mcsrvstat",
+  "name": "Server status (mcsrvstat.us)",
+  "description": "Checks a Minecraft server through the public mcsrvstat.us API — useful when the server can't be pinged directly from your network.",
+  "version": "1.0.0",
+  "author": "Astra example",
+  "homepage": "https://api.mcsrvstat.us/",
+  "category": "servers",
+  "icon": "servers",
+  "astra": ">=1.12.0",
+  "permissions": ["network:api.mcsrvstat.us", "notifications"],
+  "config": [
+    { "key": "address", "label": "Server address", "type": "text", "required": true, "help": "For example play.example.com" }
+  ],
+  "status": {
+    "type": "http-json",
+    "url": "https://api.mcsrvstat.us/3/{{config.address}}",
+    "path": "online",
+    "connectedWhen": true,
+    "text": "{{config.address}}: {{players.online}}/{{players.max}} players",
+    "textOtherwise": "{{config.address}} is offline"
+  },
+  "notify": {
+    "title": "Server status changed",
+    "body": "It is now {{value}}"
+  }
+}

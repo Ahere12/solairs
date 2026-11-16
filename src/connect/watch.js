@@ -13,7 +13,7 @@ function createWatcher({ ping, savedServers, friendNames = () => [], notify = ()
 
   const targets = (cfg) => {
     const all = savedServers() || [];
-    const l = cfg.watch === 'all' ? all : all.filter((s) => s.favorite);
+    const l = cfg.watch === 'all' ? all : all.filter((s) => s.favorite || s.notify); // favourites + servers with alerts on (Server details)
     const seen = new Set();
     return l.filter((s) => s.address && !seen.has(key(s.address)) && seen.add(key(s.address)));
   };

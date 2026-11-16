@@ -26,6 +26,8 @@
       "src/**",
       "renderer/**",
       "data/**",
+      "docs/**",
+      "sdk/**",
       "assets/**",
       "node_modules/**"
     ],

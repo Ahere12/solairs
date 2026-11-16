@@ -19,7 +19,8 @@ const watcher = createWatcher({
   ping: (a) => require('../servers').ping(a),
   savedServers: () => require('../servers').list().servers,
   friendNames: () => require('../friends').list().map((f) => f.name),
-  notify: (n) => { push('toast', { type: n.kind === 'offline' ? 'warn' : 'info', text: `${n.title} — ${n.body}` }); desktopNotify(n); },
+  // into the Astra inbox (it shows the toast and, if allowed for that category, the desktop notification)
+  notify: (n) => require('../eco/notify').add({ category: n.kind === 'friend' ? 'friend' : 'server', title: n.title, body: n.body, key: `watch:${n.kind}:${n.address}:${n.title}`, action: n.address ? { kind: 'server', address: n.address } : null }),
   onChange: (v) => push('connect:watch', v),
 });
 
@@ -32,6 +33,8 @@ function init(active) {
   events.on('hosted:event', (e) => {
     const cfg = active('server-alerts');
     if (cfg && cfg[e.event]) desktopNotify({ title: e.name, body: e.text });
+    // the inbox keeps a record of hosted servers going online / crashing (no second pop-up: the alert above is it)
+    if (['online', 'crash', 'stop'].includes(e.event)) require('../eco/notify').add({ category: 'server', title: e.name, body: e.text, key: `hosted:${e.id}:${e.event}`, desktop: false });
   });
 }
 function restartWatch(active) { if (!started) return; watcher.stop(); watcher.start(() => active('server-watch'), { firstAfter: 500 }); }

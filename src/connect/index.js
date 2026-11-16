@@ -11,9 +11,16 @@ const secrets = {
   unseal: (s) => (s.startsWith('enc:') ? safeStorage.decryptString(Buffer.from(s.slice(4), 'base64')) : Buffer.from(s.slice(4), 'base64').toString()),
 };
 let reg = null;
-const registry = () => (reg = reg || createRegistry({ defs: INTEGRATIONS, store: { read: () => readJSON(file(), {}), write: (d) => writeJSON(file(), d) }, secrets }));
+/** Integrations installed through the Developer Hub (a broken one is left out, never stops Connect). */
+function thirdParty() { try { return require('../eco/devhub').definitions(); } catch (e) { console.error('[Astra] Developer Hub:', e.message); return []; } }
+const registry = () => (reg = reg || createRegistry({ defs: [...INTEGRATIONS, ...thirdParty()], store: { read: () => readJSON(file(), {}), write: (d) => writeJSON(file(), d) }, secrets,
+  // a new problem goes to the Astra inbox (Notifications → Integration problems)
+  onError: (id, name, message) => require('../eco/notify').add({ category: 'integration', title: `${name}: problem`, body: message, key: `integration:${id}:${message}`, action: { kind: 'route', page: 'connect' } }),
+}));
 
 module.exports = {
+  /** Builds the registry again (after a Developer Hub install / uninstall). */
+  reload: () => { reg = null; return true; },
   list: () => registry().list(),
   get: (id) => registry().get(String(id)),
   status: (id) => registry().status(String(id)),

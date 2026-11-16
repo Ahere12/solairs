@@ -23,13 +23,19 @@ function save(server) {
   const d = load();
   if (!server.address) throw new Error('Server address is required');
   const id = server.id || 'srv-' + Date.now().toString(36);
-  const next = { name: server.address, favorite: false, ...server, id };
+  const next = { name: server.address, favorite: false, ...server, id, updatedAt: Date.now() }; // updatedAt: the newer edit wins when syncing
   const i = d.servers.findIndex((s) => s.id === id);
   if (i >= 0) d.servers[i] = { ...d.servers[i], ...next }; else d.servers.push(next);
   store(d);
   return list();
 }
-function remove(id) { const d = load(); d.servers = d.servers.filter((s) => s.id !== id); store(d); return list(); }
+function remove(id) {
+  const d = load();
+  const gone = d.servers.find((s) => s.id === id);
+  d.servers = d.servers.filter((s) => s.id !== id); store(d);
+  if (gone) { try { require('./eco/backup').noteDeletedServer(gone.address); } catch {} } // a sync won't bring it back
+  return list();
+}
 function history(address) { return load().history[address.toLowerCase()] || []; }
 
 function varint(n) { const b = []; n >>>= 0; do { let t = n & 0x7f; n >>>= 7; if (n) t |= 0x80; b.push(t); } while (n); return Buffer.from(b); }
@@ -78,7 +84,11 @@ async function ping(address, timeout = 5000) {
         finish(result(status, Date.now() - started));
       }
     });
-  }).then((r) => { if (r.online) { record(address, r.players.online); try { require('./friends').notePlayers(address, r.players.sample); } catch {} } return r; });
+  }).then((r) => {
+    if (r.online) { record(address, r.players.online); try { require('./friends').notePlayers(address, r.players.sample); } catch {} }
+    try { require('./eco/serverinfo').record(address, r); } catch {} // uptime statistics (online and offline)
+    return r;
+  });
 }
 function result(s, latency) {
   return {
@@ -86,6 +96,8 @@ function result(s, latency) {
     players: { online: s.players?.online ?? 0, max: s.players?.max ?? 0, sample: (s.players?.sample || []).map((p) => p.name) },
     version: s.version?.name || '', protocol: s.version?.protocol,
     motd: s.description, favicon: s.favicon || null,
+    // what the server says about mods (Forge: forgeData / modinfo, NeoForge: isModded) — for software detection
+    forge: s.forgeData || s.modinfo || s.isModded ? { forgeData: !!s.forgeData, fml: !!s.modinfo, neoforge: !!s.isModded, isModded: !!s.isModded, mods: Array.isArray(s.forgeData?.mods) ? s.forgeData.mods.length : Array.isArray(s.modinfo?.modList) ? s.modinfo.modList.length : null } : null,
   };
 }
 function record(address, online) {

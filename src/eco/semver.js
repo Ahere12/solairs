@@ -10,9 +10,14 @@
 /** "1.20.1" → { nums: [1,20,1], pre: null }, "0.15.11+build.3" → [0,15,11], "1.21-pre1" → pre "pre1". Null if no number. */
 function parse(v) {
   const s = String(v ?? '').trim().replace(/^v(?=\d)/i, '').split('+')[0];
-  const m = s.match(/^(\d+(?:\.\d+)*)(?:[-.]?([0-9A-Za-z][0-9A-Za-z.-]*))?$/);
+  if (/^\d{2}w\d{2}[a-z~]$/i.test(s)) return null; // a snapshot name (24w14a) has no order we can compare
+  // The numbers are read greedily (1.20.2 is never "1.20" + pre-release "2"). A pre-release follows a dash ("1.21-pre1")
+  // or starts with a letter ("1.21pre1", "1.0.0.beta"). A bare trailing dash ("<1.20.2-", Fabric's way of saying
+  // "below 1.20.2 and its pre-releases") is the lowest pre-release: pre "".
+  const m = s.match(/^(\d+(?:\.\d+)*)(?:-([0-9A-Za-z][0-9A-Za-z.-]*)?|\.?([A-Za-z][0-9A-Za-z.-]*))?$/);
   if (!m) return null;
-  return { nums: m[1].split('.').map(Number), pre: m[2] || null };
+  const pre = m[2] ?? m[3] ?? (/-$/.test(s) ? '' : null);
+  return { nums: m[1].split('.').map(Number), pre };
 }
 
 /** -1, 0, 1, or null when either isn't a version number. "1.20" equals "1.20.0"; "1.21-pre1" is before "1.21". */
@@ -23,9 +28,12 @@ function compare(a, b) {
     const d = (x.nums[i] || 0) - (y.nums[i] || 0);
     if (d) return d < 0 ? -1 : 1;
   }
-  if (x.pre && !y.pre) return -1;
-  if (!x.pre && y.pre) return 1;
-  if (x.pre && y.pre && x.pre !== y.pre) {
+  const xp = x.pre != null, yp = y.pre != null; // '' (a bare trailing dash) is a pre-release too, the lowest one
+  if (xp && !yp) return -1;
+  if (!xp && yp) return 1;
+  if (xp && yp && x.pre !== y.pre) {
+    if (x.pre === '') return -1;
+    if (y.pre === '') return 1;
     const [pa, pb] = [x.pre, y.pre].map((p) => p.split(/[.-]/));
     for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
       if (pa[i] == null) return -1;

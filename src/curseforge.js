@@ -10,7 +10,7 @@ const instances = require('./instances');
 
 const API = 'https://api.curseforge.com/v1';
 const GAME = 432; // Minecraft
-const CLASS = { mod: 6, modpack: 4471, resourcepack: 12, shader: 6552, datapack: 6945 };
+const CLASS = { mod: 6, modpack: 4471, resourcepack: 12, shader: 6552, datapack: 6945, world: 17, customization: 4546 }; // world = maps (Astra Discover)
 const CLASS_DIR = { 6: 'mods', 12: 'resourcepacks', 6552: 'shaderpacks' };
 const LOADER = { forge: 1, fabric: 4, quilt: 5, neoforge: 6 };
 const SORT = { relevance: 1, downloads: 6, follows: 2, newest: 11, updated: 3 };
@@ -84,6 +84,8 @@ async function install(instanceId, { projectId, fileId, world } = {}, seen = new
   const f = fileId ? (await cf(`/mods/${projectId}/files/${fileId}`)).data : await bestFile(projectId, inst);
   if (!f) throw new Error(`${mod.name} has no file for Minecraft ${inst.versionId}${inst.loader.type !== 'vanilla' ? ' / ' + inst.loader.type : ''}`);
   if (mod.classId === CLASS.modpack) throw new Error('This is a modpack — install it from Browse → Modpacks.');
+  if (mod.classId === CLASS.world) return installMap(instanceId, { projectId, fileId: f.id });
+  if (mod.classId === CLASS.customization) throw new Error('This is a customization download — open its page to see how to install it.');
   let dir = path.join(inst.gameDir, CLASS_DIR[mod.classId] || 'mods');
   if (mod.classId === CLASS.datapack) {
     if (!world) throw new Error('Choose a world to install the datapack into');
@@ -222,4 +224,37 @@ async function updateModpack(instanceId, fileId) {
 }
 const isCurseForgePack = (file) => { try { return !!new AdmZip(file).getEntry('manifest.json'); } catch { return false; } };
 
-module.exports = { available, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord };
+/**
+ * A map (CurseForge "Worlds"): the zip is downloaded to the cache, checked to really hold a world (level.dat),
+ * and unpacked into the instance's saves folder under a new name — an existing world is never overwritten.
+ */
+async function installMap(instanceId, { projectId, fileId }) {
+  const AdmZip = require('adm-zip');
+  const inst = instances.get(instanceId);
+  const mod = (await cf(`/mods/${projectId}`)).data;
+  if (mod.classId !== CLASS.world) throw new Error(`${mod.name} isn’t a map.`);
+  const f = fileId ? (await cf(`/mods/${projectId}/files/${fileId}`)).data : (await cf(`/mods/${projectId}/files?pageSize=20`)).data[0];
+  if (!f) throw new Error(`${mod.name} has no files.`);
+  const tmp = path.join(paths.cache(), 'maps', `${projectId}-${f.id}.zip`);
+  await download(urlOf(f), tmp, { sha1: sha1Of(f) });
+  const zip = new AdmZip(tmp);
+  const levels = zip.getEntries().filter((e) => /(^|\/)level\.dat$/.test(e.entryName) && !e.isDirectory);
+  if (!levels.length) throw new Error(`${mod.name}: the download doesn’t contain a Minecraft world (no level.dat).`);
+  const top = levels.map((e) => e.entryName.slice(0, -'level.dat'.length)).sort((a, b) => a.length - b.length)[0]; // '' or 'Folder/'
+  const saves = path.join(inst.gameDir, 'saves');
+  const base = String(mod.name).replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().slice(0, 60) || 'Map';
+  let name = base, n = 2;
+  while (fs.existsSync(path.join(saves, name))) name = `${base} (${n++})`;
+  const dest = path.join(saves, name);
+  for (const e of zip.getEntries()) {
+    if (e.isDirectory || !e.entryName.startsWith(top)) continue;
+    const out = path.join(dest, e.entryName.slice(top.length));
+    if (!path.resolve(out).startsWith(path.resolve(dest) + path.sep)) continue; // unsafe path in the zip
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, e.getData());
+  }
+  try { fs.rmSync(tmp, { force: true }); } catch {}
+  return [{ projectId: String(projectId), file: name, version: f.displayName, world: name }];
+}
+
+module.exports = { installMap, available, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord };

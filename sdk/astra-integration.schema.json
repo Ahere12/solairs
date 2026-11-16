@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Ahere12/solairs/sdk/astra-integration.schema.json",
+  "title": "Astra integration manifest (astra-integration.json)",
+  "description": "A declarative third-party integration for Astra Connect. Astra validates it with src/eco/devhub.js validate(); this schema is for editors. See docs/developer-hub.md.",
+  "type": "object",
+  "required": ["manifestVersion", "id", "name", "description", "version", "author", "category", "astra", "permissions", "status"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "manifestVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,40}$", "description": "Unique; use a prefix with a dash (acme-status)." },
+    "name": { "type": "string", "maxLength": 60 },
+    "description": { "type": "string" },
+    "version": { "type": "string", "description": "Your integration's version, e.g. 1.0.0" },
+    "author": { "type": "string" },
+    "homepage": { "type": "string", "pattern": "^https://" },
+    "category": { "enum": ["maps", "social", "servers", "player"] },
+    "icon": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,30}$" },
+    "astra": { "type": "string", "description": "Astra versions it works with, e.g. \">=1.12.0\"" },
+    "minecraft": { "type": ["string", "array"] },
+    "permissions": {
+      "type": "array", "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^(network:(\\*\\.)?[a-z0-9.-]+\\.[a-z]{2,}|ping|notifications)$" }
+    },
+    "config": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["key", "type"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-zA-Z][\\w-]{0,40}$" },
+          "label": { "type": "string" }, "help": { "type": "string" },
+          "type": { "enum": ["text", "url", "number", "bool", "select", "secret"] },
+          "options": { "type": "array" }, "default": {}, "required": { "type": "boolean" },
+          "min": { "type": "number" }, "max": { "type": "number" }
+        }
+      }
+    },
+    "status": {
+      "oneOf": [
+        {
+          "type": "object", "required": ["type", "url"],
+          "properties": {
+            "type": { "const": "http-json" },
+            "url": { "type": "string", "pattern": "^https://" },
+            "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+            "path": { "type": "string" },
+            "connectedWhen": {},
+            "otherwise": { "enum": ["ready", "error"] },
+            "text": { "type": "string" }, "textOtherwise": { "type": "string" }
+          }
+        },
+        {
+          "type": "object", "required": ["type", "address"],
+          "properties": { "type": { "const": "server-ping" }, "address": { "type": "string" }, "text": { "type": "string" } }
+        }
+      ]
+    },
+    "details": {
+      "type": "object", "required": ["type", "url", "rows", "columns"],
+      "properties": {
+        "type": { "const": "http-json" }, "url": { "type": "string", "pattern": "^https://" }, "rows": { "type": "string" }, "note": { "type": "string" },
+        "columns": { "type": "array", "items": { "type": "object", "required": ["label", "path"], "properties": { "label": { "type": "string" }, "path": { "type": "string" } } } }
+      }
+    },
+    "notify": { "type": "object", "required": ["title"], "properties": { "title": { "type": "string" }, "body": { "type": "string" } } }
+  }
+}

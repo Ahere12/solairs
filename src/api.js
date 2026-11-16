@@ -49,6 +49,9 @@ const modsPath = (id, list) => list.filter((x) => /\.jar$/i.test(x.file || '')).
 const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Close all running games before ${what}.`); };
 
 module.exports = (getWin) => ({
+  // ---------- Astra ecosystem: modpack checks, servers 2.0, inbox, backups & sync, Developer Hub, Discover, analytics, assistant ----------
+  ...require('./eco').api(getWin),
+
   // ---------- app / window ----------
   'app:info': () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
   'news:minecraft': (opts) => require('./news').minecraft(opts || {}),
@@ -140,7 +143,7 @@ module.exports = (getWin) => ({
 
   // ---------- launch ----------
   'launch:start': async (id, opts) => {
-    try { return await launch.launch(id, opts || {}); }
+    try { const r = await launch.launch(id, opts || {}); if (opts?.server) { try { require('./eco/serverinfo').joined(opts.server, id); } catch {} } return r; } // join history (Server details)
     catch (e) { push('launch:status', { instanceId: id, stage: null, error: e.message }); throw e; }
   },
   'launch:stop': (runId) => launch.stop(runId),
