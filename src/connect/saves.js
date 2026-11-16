@@ -1,9 +1,9 @@
-// Solaris Connect — player statistics, advancements and play time, read from Java worlds' own save files:
+// Astra Connect — player statistics, advancements and play time, read from Java worlds' own save files:
 //   <world>/stats/<uuid>.json         {"stats": {"minecraft:custom": {"minecraft:play_time": ticks, …}, "minecraft:mined": {…}, …}}
 //   <world>/advancements/<uuid>.json  {"minecraft:story/mine_stone": {"criteria": {"…": "2026-11-15 02:23:10 -0600"}, "done": true}, …}
 //   <world>/level.dat                 (NBT) world name, version, last played
 // Which advancements exist (and their English titles) comes from the game's own jar for that version
-// (data/minecraft/advancement[s]/…, assets/minecraft/lang/en_us.json) when Solaris has it; otherwise the names are
+// (data/minecraft/advancement[s]/…, assets/minecraft/lang/en_us.json) when Astra has it; otherwise the names are
 // made from the ids and the total is unknown. Nothing here is sent anywhere; Bedrock worlds use another format and
 // aren't read.
 const fs = require('fs');
@@ -15,7 +15,7 @@ const insts = () => require('../instances');
 const UUID = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
 
 // ---------- where worlds are ----------
-/** Every Java world Solaris knows: singleplayer worlds of instances, and hosted servers' worlds. */
+/** Every Java world Astra knows: singleplayer worlds of instances, and hosted servers' worlds. */
 function worlds() {
   const out = [];
   for (const i of insts().list()) {
@@ -57,7 +57,7 @@ function namesFor(w) {
   for (const [u, n] of nameCache) if (!names.has(u)) names.set(u, n);
   return names;
 }
-/** Mojang names for player IDs Solaris doesn't know (real accounts only — offline IDs have no Mojang profile). */
+/** Mojang names for player IDs Astra doesn't know (real accounts only — offline IDs have no Mojang profile). */
 async function lookupNames(uuids) {
   await Promise.all(uuids.filter((u) => u[14] === '4' && !nameCache.has(u)).slice(0, 10).map(async (u) => {
     try {
@@ -99,7 +99,7 @@ function summarize(json) {
 
 // ---------- advancements ----------
 const defsCache = new Map();
-/** The advancements that exist in this Minecraft version (from the game jar Solaris downloaded), or null. */
+/** The advancements that exist in this Minecraft version (from the game jar Astra downloaded), or null. */
 function advancementDefs(mc) {
   if (defsCache.has(mc)) return defsCache.get(mc);
   let out = null;
@@ -132,7 +132,7 @@ function advancements(json, mc) {
   for (const [id, a] of Object.entries(json || {})) {
     if (id === 'DataVersion' || id.includes(':recipes/') || !a || typeof a !== 'object') continue;
     const d = defs?.get(id);
-    if (defs && !d) continue; // not shown in the game (e.g. hidden roots) or from a datapack Solaris can't name
+    if (defs && !d) continue; // not shown in the game (e.g. hidden roots) or from a datapack Astra can't name
     seen.add(id);
     const times = Object.values(a.criteria || {}).map(parseWhen).filter(Boolean);
     list.push({ id, tab: d?.tab || id.split(':')[1]?.split('/')[0] || '', title: d?.title || nice(id.split('/').pop()), description: d?.description || '', frame: d?.frame || 'task', done: !!a.done, when: a.done && times.length ? Math.max(...times) : null, progress: Object.keys(a.criteria || {}).length });

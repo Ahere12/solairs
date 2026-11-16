@@ -7,7 +7,7 @@ const NAV = [
   { id: 'friends', label: 'Friends', icon: 'users', key: 'nav.friends' },
   { id: 'host', label: 'Hosting', icon: 'host', key: 'nav.host' },
   { id: 'connect', label: 'Connect', icon: 'link', key: 'nav.connect' },
-  { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
+  { id: 'solaris', label: 'Astra Client', icon: 'sun', key: 'nav.solaris' },
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];
 const SIDE_TOOLS = [
@@ -142,7 +142,7 @@ on('toast', (t) => toast(t.text, t.type || 'info'));
 on('safety:flagged', ({ instanceId, file, findings }) => {
   const inst = State.instances.find((i) => i.id === instanceId);
   const m = modal({ title: 'Suspicious mod found', body: `<div class="crash-cause"><b>${esc(file)}</b>${inst ? `<div class="faint small">in ${esc(inst.name)}</div>` : ''}${findings.map((f) => `<div class="small muted">• ${esc(f)}</div>`).join('')}</div>
-    <p class="muted small">Solaris’s malware scan found signs that this mod may steal accounts or run hidden programs. It’s a heuristic check, so it can be wrong — but if you don’t fully trust where this file came from, turn it off or delete it.</p>`,
+    <p class="muted small">Astra’s malware scan found signs that this mod may steal accounts or run hidden programs. It’s a heuristic check, so it can be wrong — but if you don’t fully trust where this file came from, turn it off or delete it.</p>`,
     footer: `<button class="btn ghost" data-keep>Keep it</button><button class="btn" data-off>${icon('eye')}Turn it off</button><button class="btn danger" data-del>${icon('trash')}Delete</button>` });
   m.$('[data-keep]').onclick = () => m.close();
   m.$('[data-off]').onclick = async () => { try { await api('safety:disable', instanceId, file); toast(`${file} turned off`); } catch (e) { toastErr(e); } m.close(); };
@@ -155,7 +155,7 @@ Bus.on('tasks', renderTasks);
 Bus.on('runs', renderNav);
 Bus.on('runs', renderSidePlay);
 Bus.on('route', renderNav);
-Bus.on('route', (r) => { if (r?.name) api('discord:page', r.name).catch(() => {}); }); // Discord shows what you're doing in Solaris
+Bus.on('route', (r) => { if (r?.name) api('discord:page', r.name).catch(() => {}); }); // Discord shows what you're doing in Astra
 Bus.on('instances', renderSideInstances);
 Bus.on('instances', renderSidePlay);
 Bus.on('settings', renderSidePlay);
@@ -193,8 +193,8 @@ document.addEventListener('drop', async (e) => {
 const POPOUT = new URLSearchParams(location.search).get('popout');
 if (POPOUT === 'host') {
   document.body.classList.add('popout');
-  document.title = 'Solaris Hosting';
-  const brand = document.querySelector('.titlebar .brand span'); if (brand) brand.textContent = 'Solaris Hosting';
+  document.title = 'Astra Hosting';
+  const brand = document.querySelector('.titlebar .brand span'); if (brand) brand.textContent = 'Astra Hosting';
   window.solaris.on('popout:go', (p) => Router.go('host', p && p.id ? { id: p.id } : {}));
 }
 (async function boot() {
@@ -236,5 +236,5 @@ if (POPOUT === 'host') {
   AuthGate.sync(); // sign-in screen first: the launcher can't be used without an account
   if (State.accounts.active) Updater.whatsNew(); // otherwise shown right after signing in
   Splash.done();
-  DeepLinks.takePending(); // opened through a solaris:// link
+  DeepLinks.takePending(); // opened through a astra:// link
 })();

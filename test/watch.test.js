@@ -1,4 +1,4 @@
-// Solaris Connect step 2: server monitoring and desktop alerts.  Run: npm test
+// Astra Connect step 2: server monitoring and desktop alerts.  Run: npm test
 const { test, after } = require('node:test');
 const assert = require('node:assert');
 const net = require('net');
@@ -112,7 +112,7 @@ test('Connect: monitoring status and table, and desktop alerts for hosted server
   await connect.setEnabled('server-watch', false);
   assert.equal(await connect.details('server-watch'), null, 'no table while off');
 
-  // desktop alerts: a crash from Hosting becomes a notification (Solaris in the background)
+  // desktop alerts: a crash from Hosting becomes a notification (Astra in the background)
   const shown = [];
   electron.Notification = Object.assign(function (o) { return { on() {}, show() { shown.push(o); } }; }, { isSupported: () => true });
   connect.init();

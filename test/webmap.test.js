@@ -1,4 +1,4 @@
-// Solaris Connect steps 3–4: web maps (BlueMap, Pl3xMap, Dynmap).  Run: npm test
+// Astra Connect steps 3–4: web maps (BlueMap, Pl3xMap, Dynmap).  Run: npm test
 // Each web map is faked with a small HTTP server that answers like the real one (same paths and JSON shapes as
 // in their source code — see the comments at the top of src/connect/maps/*.js).
 const { test, after } = require('node:test');
@@ -109,7 +109,7 @@ test('hosted servers: right map for the server, the download question, files set
   // pretend Pl3xMap is installed and on (installing needs the internet; the real test does that)
   const plug = path.join(servers[0].dir, 'plugins'); fs.mkdirSync(plug, { recursive: true }); fs.writeFileSync(path.join(plug, 'Pl3xMap-1.21.10-538.jar'), 'x');
   hs.patchMeta('paper-srv', { webmap: { provider: 'pl3xmap', on: true, port: 8090 } });
-  // Pl3xMap's first start writes config.yml; when the server has started, Solaris sets the port and reloads it
+  // Pl3xMap's first start writes config.yml; when the server has started, Astra sets the port and reloads it
   const conf = path.join(plug, 'Pl3xMap'); fs.mkdirSync(conf, { recursive: true });
   fs.writeFileSync(path.join(conf, 'config.yml'), 'settings:\n  debug-mode: false\n  web-address: http://localhost:8080\n  internal-webserver:\n    enabled: true\n    bind: 0.0.0.0\n    port: 8080\n');
   for (const h of hs.hooks.line) h('paper-srv', '[12:00:00 INFO]: Done (3.2s)! For help, type "help"');

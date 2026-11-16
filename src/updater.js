@@ -1,5 +1,5 @@
 // Launcher self-update from GitHub Releases (electron-updater). Progress is pushed to the renderer as 'update:state'.
-// Releases: upload the files from dist/ (Solaris Setup x.y.z.exe, .blockmap, latest.yml) to a GitHub release on
+// Releases: upload the files from dist/ (Astra Setup x.y.z.exe, .blockmap, latest.yml) to a GitHub release on
 // Ahere12/solairs — see README → "Releasing an update".
 // SOLARIS_FAKE_UPDATE=1 simulates an update (for testing the in-launcher animation without a release).
 const { app } = require('electron');
@@ -17,7 +17,7 @@ function set(patch) {
 function init() {
   if (process.env.SOLARIS_FAKE_UPDATE) { setTimeout(fakeUpdate, 2500); return; }
   if (!app.isPackaged) return; // `npm start`: nothing to update
-  try { updater = require('electron-updater').autoUpdater; } catch (e) { console.error('[Solaris] updater unavailable', e); return; }
+  try { updater = require('electron-updater').autoUpdater; } catch (e) { console.error('[Astra] updater unavailable', e); return; }
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = true;
   updater.logger = null;
@@ -28,11 +28,11 @@ function init() {
   updater.on('update-downloaded', (i) => set({ status: 'ready', version: i.version, percent: 100 }));
   updater.on('error', (e) => {
     const msg = String(e?.message || e);
-    console.error('[Solaris] update error:', msg);
+    console.error('[Astra] update error:', msg);
     // No release published yet, offline, or GitHub rate limit: not the player's problem — stay quiet and retry later.
     // Only a download that had actually started is reported.
     if (state.status !== 'downloading') { set({ status: 'none' }); return; }
-    set({ status: 'error', error: /ENOTFOUND|ECONNRESET|ETIMEDOUT|net::/i.test(msg) ? 'The update download was interrupted. Solaris will try again later.' : 'Couldn’t download the update. Solaris will try again later.' });
+    set({ status: 'error', error: /ENOTFOUND|ECONNRESET|ETIMEDOUT|net::/i.test(msg) ? 'The update download was interrupted. Astra will try again later.' : 'Couldn’t download the update. Astra will try again later.' });
   });
   check();
   setInterval(check, 4 * 60 * 60 * 1000); // and every 4 hours while open
@@ -61,7 +61,7 @@ function install() {
   setTimeout(() => {
     app.isQuitting = true;
     if (process.env.SOLARIS_FAKE_UPDATE) { app.exit(0); return; } // test mode: nothing to install
-    updater.quitAndInstall(true, true); // silent install, then reopen Solaris
+    updater.quitAndInstall(true, true); // silent install, then reopen Astra
   }, 1800);
   return true;
 }

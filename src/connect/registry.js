@@ -1,9 +1,9 @@
-// Solaris Connect — the integration registry.
+// Astra Connect — the integration registry.
 //
 // Every integration is a plain definition object (see docs/connect.md). The registry checks the definitions,
 // keeps each integration's on/off state, settings and recent errors, and asks each one for its *real* status.
 // It never makes up a status: an integration that isn't built says so ("planned"), one that needs a service
-// Solaris doesn't have says so ("unavailable"), and a status check that throws or hangs becomes an error.
+// Astra doesn't have says so ("unavailable"), and a status check that throws or hangs becomes an error.
 //
 // Kept free of Electron and file paths so it can be tested on its own: storage and secret sealing are passed in.
 
@@ -161,7 +161,7 @@ function createRegistry({ defs = [], store, secrets = { seal: (s) => s, unseal: 
     async setEnabled(id, on) {
       const d = need(id);
       if (d.planned || d.unavailable) throw new Error(`${d.name} can’t be turned on: ${d.planned ? 'it isn’t built yet' : d.unavailable}`);
-      if (d.core) throw new Error(`${d.name} is part of Solaris and is always on.`);
+      if (d.core) throw new Error(`${d.name} is part of Astra and is always on.`);
       if (d.toggle) await d.toggle.set(!!on);
       else { const st = store.read() || {}; st.enabled = { ...(st.enabled || {}), [id]: !!on }; store.write(st); }
       if (d.onToggle) await d.onToggle(!!on);

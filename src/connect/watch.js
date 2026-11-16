@@ -1,6 +1,6 @@
-// Solaris Connect — server monitoring. Pings the servers you saved (favourites, or all of them) every few minutes
+// Astra Connect — server monitoring. Pings the servers you saved (favourites, or all of them) every few minutes
 // with Minecraft's own Server List Ping (src/servers.js) and reports changes: a server came online or went offline,
-// or a friend showed up in its player list. A server that doesn't answer is "offline", never an error of Solaris's.
+// or a friend showed up in its player list. A server that doesn't answer is "offline", never an error of Astra's.
 //
 // Built from parts that are passed in (ping, the server list, friends, how to notify) so it can be tested without
 // a network or Electron.

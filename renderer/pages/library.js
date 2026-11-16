@@ -8,7 +8,7 @@ Pages.library = {
         <span class="when">${i.pinned ? `<span class="pin" title="Pinned">${icon('starFill')}</span>` : ''}${icon('calendar')}${i.lastPlayed ? esc(timeAgo(i.lastPlayed)) : 'Never'}</span>
       </div>
       <div class="name">${esc(i.name)}</div>
-      <div class="ptime">${running ? '<span class="dot pulse"></span><span style="color:var(--ok)">Running</span>' : `${icon('clock')}${fmtDuration(i.playTime)}`}${i.solarisModules ? ' <span class="chip warn">Solaris</span>' : ''}</div>
+      <div class="ptime">${running ? '<span class="dot pulse"></span><span style="color:var(--ok)">Running</span>' : `${icon('clock')}${fmtDuration(i.playTime)}`}${i.solarisModules ? ' <span class="chip warn">Astra</span>' : ''}</div>
       <div class="bottom">
         <span class="chip ${loader !== 'vanilla' ? 'accent' : 'ok'}">${icon(loader === 'vanilla' ? 'box' : 'layers')}${loaderLabel(i)}</span>
         <span class="chip vchip">${esc(i.versionId)}</span>

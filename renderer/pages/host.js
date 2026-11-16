@@ -28,24 +28,24 @@ Pages.host = {
       if (!el.isConnected) return;
       el.innerHTML = `
         <div class="page-head"><div><h1>Hosting</h1><div class="sub">Run Minecraft servers on this PC — friends join from anywhere, no paid hosting.</div></div>
-          <div class="actions">${this.popBtn()}<button class="btn" id="hs-joincode">${icon('users')}Join with code</button><button class="btn" id="hs-paste">${icon('download')}Use setup code</button><button class="btn" id="hs-import" title="A server exported from Solaris (Settings → Move to another PC)">${icon('upload')}Import server</button><button class="btn primary" id="hs-new">${icon('plus')}New server</button></div></div>
+          <div class="actions">${this.popBtn()}<button class="btn" id="hs-joincode">${icon('users')}Join with code</button><button class="btn" id="hs-paste">${icon('download')}Use setup code</button><button class="btn" id="hs-import" title="A server exported from Astra (Settings → Move to another PC)">${icon('upload')}Import server</button><button class="btn primary" id="hs-new">${icon('plus')}New server</button></div></div>
         ${this.playitPanel(pl)}
         ${list.length ? `<div class="hs-grid">${list.map((s) => this.card(s)).join('')}</div>` : `
           <div class="hs-empty">
             <div class="hs-steps">
-              <div><b>1</b><span>Create a server</span><small>Paper, Purpur, Vanilla, a modpack, Fabric, Quilt, Forge, NeoForge or Bedrock — Solaris downloads everything.</small></div>
+              <div><b>1</b><span>Create a server</span><small>Paper, Purpur, Vanilla, a modpack, Fabric, Quilt, Forge, NeoForge or Bedrock — Astra downloads everything.</small></div>
               <div><b>2</b><span>Press Start</span><small>Java and the server files are set up automatically.</small></div>
               <div><b>3</b><span>Share the address</span><small>A public address appears here. Friends paste it into Multiplayer.</small></div>
             </div>
             <button class="btn primary lg" id="hs-new2">${icon('host')}Create your first server</button>
           </div>`}
-        <p class="faint small" style="margin-top:18px">Your PC runs the servers, so they’re online while Solaris and your PC are on. Public addresses: <b>e4mc</b> (Fabric/Forge/NeoForge, no account) or <b>playit.gg</b> (any server, free account).</p>`;
+        <p class="faint small" style="margin-top:18px">Your PC runs the servers, so they’re online while Astra and your PC are on. Public addresses: <b>e4mc</b> (Fabric/Forge/NeoForge, no account) or <b>playit.gg</b> (any server, free account).</p>`;
       $('#hs-new', el).onclick = () => this.create();
       if ($('#hs-new2', el)) $('#hs-new2', el).onclick = () => this.create();
       this.bindPop(el);
       $('#hs-paste', el).onclick = () => this.pasteSetupCode();
       $('#hs-import', el).onclick = async (e) => {
-        const [f] = await api('dialog:open', { title: 'Pick a server exported from Solaris', properties: ['openFile'], filters: [{ name: 'Solaris server', extensions: ['zip'] }] }).catch(() => []);
+        const [f] = await api('dialog:open', { title: 'Pick a server exported from Astra', properties: ['openFile'], filters: [{ name: 'Astra server', extensions: ['zip'] }] }).catch(() => []);
         if (!f) return;
         const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Importing…`;
         try { const s = await api('hosted:import', f); toast(`Imported “${s.name}” — press Start`); Router.go('host', { id: s.id }); } catch (er) { toastErr(er); b.disabled = false; b.innerHTML = `${icon('upload')}Import server`; }
@@ -62,7 +62,7 @@ Pages.host = {
 
   playitPanel(pl) {
     if (!pl) return '';
-    if (pl.claim && pl.claim.state === 'waiting') return `<div class="card hs-playit wait">${icon('globe')}<div class="grow"><b>Approve Solaris on playit.gg</b><div class="faint small">A browser tab opened. Sign in (or make a free account) and press <b>Add agent</b>. This page updates by itself.</div></div><button class="btn sm" data-pl="open">${icon('external')}Open again</button><button class="btn sm ghost" data-pl="cancel">${T('Cancel')}</button></div>`;
+    if (pl.claim && pl.claim.state === 'waiting') return `<div class="card hs-playit wait">${icon('globe')}<div class="grow"><b>Approve Astra on playit.gg</b><div class="faint small">A browser tab opened. Sign in (or make a free account) and press <b>Add agent</b>. This page updates by itself.</div></div><button class="btn sm" data-pl="open">${icon('external')}Open again</button><button class="btn sm ghost" data-pl="cancel">${T('Cancel')}</button></div>`;
     if (pl.linked) {
       const a = pl.agent?.state;
       const agentText = { connected: 'connected', starting: 'connecting…', reconnecting: 'reconnecting…' }[a] || 'starts with a server that uses playit.gg';
@@ -71,7 +71,7 @@ Pages.host = {
     }
     if (pl.problem) return `<div class="card hs-playit wait">${icon('alert')}<div class="grow"><b>Connect playit.gg again</b><div class="faint small">${esc(pl.problem)}</div></div><button class="btn sm ghost" data-pl="key">${icon('key')}Setup code</button><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
     const msg = pl.claim?.state === 'rejected' ? 'You declined on playit.gg.' : pl.claim?.state === 'expired' ? 'The approval timed out.' : pl.claim?.state === 'error' ? esc(pl.claim.error || 'Something went wrong.') : '';
-    return `<div class="card hs-playit">${icon('globe')}<div class="grow"><b>playit.gg — public address for any server</b><div class="faint small">Free. Approve this PC once on playit.gg (or paste a setup code), then Solaris makes the tunnels for you — including voice chat. ${msg}</div></div><button class="btn sm ghost" data-pl="key">${icon('key')}Setup code</button><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
+    return `<div class="card hs-playit">${icon('globe')}<div class="grow"><b>playit.gg — public address for any server</b><div class="faint small">Free. Approve this PC once on playit.gg (or paste a setup code), then Astra makes the tunnels for you — including voice chat. ${msg}</div></div><button class="btn sm ghost" data-pl="key">${icon('key')}Setup code</button><button class="btn sm primary" data-pl="connect">${icon('link')}Connect playit.gg</button></div>`;
   },
   bindPlayit(root, redraw) {
     $$('[data-pl-notice]', root).forEach((l) => (l.onclick = (e) => { e.preventDefault(); api('shell:open', l.dataset.plNotice); }));
@@ -83,16 +83,16 @@ Pages.host = {
         if (a === 'open') api('shell:open', this.playit?.claim?.url);
         if (a === 'cancel') await api('playit:cancel');
         if (a === 'dash') api('shell:open', 'https://playit.gg/account/tunnels');
-        if (a === 'unlink' && (await confirmDialog('Disconnect playit.gg from Solaris? Servers using playit.gg won’t be public until you connect again.', { ok: 'Disconnect' }))) await api('playit:unlink');
+        if (a === 'unlink' && (await confirmDialog('Disconnect playit.gg from Astra? Servers using playit.gg won’t be public until you connect again.', { ok: 'Disconnect' }))) await api('playit:unlink');
       } catch (e) { toastErr(e); }
       redraw && redraw();
     }));
   },
 
-  /** "Pop out": Hosting in its own window. Inside that window the same spot brings the main Solaris window back. */
+  /** "Pop out": Hosting in its own window. Inside that window the same spot brings the main Astra window back. */
   popBtn(id = '') {
     return typeof POPOUT !== 'undefined' && POPOUT === 'host'
-      ? `<button class="btn" data-pop="main" title="Show the main Solaris window">${icon('home')}Solaris</button>`
+      ? `<button class="btn" data-pop="main" title="Show the main Astra window">${icon('home')}Astra</button>`
       : `<button class="btn" data-pop="host" data-pop-id="${esc(id)}" title="Open Hosting in its own window">${icon('external')}Pop out</button>`;
   },
   bindPop(root) {
@@ -120,7 +120,7 @@ Pages.host = {
     };
     setTimeout(() => m.$('#pk-key')?.focus(), 50);
   },
-  /** Paste a Solaris setup code (SOLARIS-…) and open New server with everything filled in. */
+  /** Paste a Astra setup code (SOLARIS-…) and open New server with everything filled in. */
   pasteSetupCode() {
     const m = modal({
       title: 'Use a setup code',
@@ -159,10 +159,10 @@ Pages.host = {
     if (!d) { try { d = await api('hosted:diagnose', id); } catch (e) { return toastErr(e); } }
     const m = modal({
       title: `Why ${d.name} stopped`,
-      body: !d.hasLog ? '<p class="muted">Solaris has no log from this server yet — start it once first.</p>'
+      body: !d.hasLog ? '<p class="muted">Astra has no log from this server yet — start it once first.</p>'
         : d.normal ? `<p>${icon('check')} The last run ended normally — it was stopped, it didn’t crash. Nothing to fix.</p>`
         : `${d.findings.length ? `<div class="stack" style="gap:8px">${d.findings.map((f, i) => `<div class="card row" style="gap:10px;padding:10px 12px">${icon('alert')}<span class="grow">${esc(f.text)}</span>${f.fix ? `<button class="btn sm primary" data-fix="${i}">${esc(f.fix.label)}</button>` : ''}</div>`).join('')}</div>`
-          : '<p class="muted">Solaris didn’t find a known cause. The last errors from the log are below — the Console tab and Log files show everything.</p>'}
+          : '<p class="muted">Astra didn’t find a known cause. The last errors from the log are below — the Console tab and Log files show everything.</p>'}
           ${d.errors.length ? `<details style="margin-top:12px" ${d.findings.length ? '' : 'open'}><summary class="small">Last errors in the log</summary><pre class="console" style="max-height:220px;overflow:auto;white-space:pre-wrap">${esc(d.errors.join('\n'))}</pre></details>` : ''}
           <p class="faint small" style="margin-top:10px">After a fix, press Start to try again.</p>`,
       footer: `<button class="btn" data-x>${T('Close')}</button><button class="btn primary" data-start>${icon('play')}Start</button>`,
@@ -273,7 +273,7 @@ Pages.host = {
           <li>Paste this address into <b>Server Address</b>: <span class="mono">${esc(addr)}</span></li>
           <li>Click <b>Done</b>, then double-click the server to join.</li>
         </ol>
-        <p class="faint small">The address works while ${esc(s.name)} is running in Solaris and its tunnel is online (green light). ${s.tunnel === 'playit' ? 'It stays the same every time, so friends only add it once.' : ''} If the whitelist is on, add your friends in the Players tab first.</p></div>`,
+        <p class="faint small">The address works while ${esc(s.name)} is running in Astra and its tunnel is online (green light). ${s.tunnel === 'playit' ? 'It stays the same every time, so friends only add it once.' : ''} If the whitelist is on, add your friends in the Players tab first.</p></div>`,
       footer: `<button class="btn" data-x>${T('Close')}</button><button class="btn primary" data-copy>${icon('copy')}Copy address</button><button class="btn" data-copyall>${icon('copy')}Copy instructions</button>`,
     });
     m.$('[data-x]').onclick = () => m.close();
@@ -320,7 +320,7 @@ Pages.host = {
             <label class="field grow">Difficulty${sel('hc-df', [['peaceful', 'Peaceful'], ['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], 'normal')}</label>
             <label class="field grow">World type${sel('hc-lt', [['minecraft:normal', 'Normal'], ['minecraft:flat', 'Superflat'], ['minecraft:large_biomes', 'Large biomes'], ['minecraft:amplified', 'Amplified']], 'minecraft:normal')}</label></div>
           <label class="field">World seed <span class="faint small">(blank = random)</span><input type="text" id="hc-seed" maxlength="60"></label>
-          <label class="field">Message of the day <span class="faint small">(shown in the server list)</span><input type="text" id="hc-motd" maxlength="120" placeholder="${esc('<name> — hosted with Solaris')}"></label>
+          <label class="field">Message of the day <span class="faint small">(shown in the server list)</span><input type="text" id="hc-motd" maxlength="120" placeholder="${esc('<name> — hosted with Astra')}"></label>
           <div class="hc-checks" id="hc-java-checks">
             <label><input type="checkbox" id="hc-pvp" checked>PvP</label>
             <label><input type="checkbox" id="hc-hc">Hardcore</label>
@@ -346,14 +346,14 @@ Pages.host = {
             <label id="hc-off-wrap" title="Lets offline/cracked accounts join. Anyone could use any name — turn the whitelist on too."><input type="checkbox" id="hc-off">Allow offline (cracked) accounts</label>
           </div>
           <details class="hc-more" id="hc-extras-wrap" open><summary><b>Extras</b> <span class="faint small">installed for you</span></summary>
-            <label class="hc-voice"><input type="checkbox" id="hc-voice" checked><span><b>Simple Voice Chat</b> — proximity voice chat. Solaris installs it, makes the UDP tunnel on playit.gg and sets <span class="mono">voice_host</span> automatically.</span></label>
-            <label class="hc-voice" id="hc-bedrock-wrap"><input type="checkbox" id="hc-bedrock"><span><b>Bedrock players</b> — friends on phone, Xbox, PlayStation, Switch and Windows can join too (Geyser + Floodgate). Solaris makes the playit.gg tunnel for them.</span></label>
+            <label class="hc-voice"><input type="checkbox" id="hc-voice" checked><span><b>Simple Voice Chat</b> — proximity voice chat. Astra installs it, makes the UDP tunnel on playit.gg and sets <span class="mono">voice_host</span> automatically.</span></label>
+            <label class="hc-voice" id="hc-bedrock-wrap"><input type="checkbox" id="hc-bedrock"><span><b>Bedrock players</b> — friends on phone, Xbox, PlayStation, Switch and Windows can join too (Geyser + Floodgate). Astra makes the playit.gg tunnel for them.</span></label>
             <div class="hc-checks" id="hc-extras"></div></details>
           <details class="hc-more"><summary><b>Automation &amp; folder</b></summary>
             <div class="hc-checks"><label><input type="checkbox" id="hc-auto">Start this server automatically (also when Windows starts)</label><label><input type="checkbox" id="hc-crash">Restart it if it crashes</label></div>
             <div class="row"><label class="field grow">Auto backup every${sel('hc-bk', [['0', 'Off'], ['1', '1 hour'], ['3', '3 hours'], ['6', '6 hours'], ['12', '12 hours'], ['24', 'Day']], '0')}</label>
               <label class="field grow">Auto restart every${sel('hc-rs', [['0', 'Off'], ['6', '6 hours'], ['12', '12 hours'], ['24', 'Day']], '0')}</label></div>
-            <div class="field">Folder<div class="row"><span class="mono small grow ellipsis" id="hc-dir">Default (inside Solaris data)</span><button class="btn sm" id="hc-pick">${icon('folder')}Choose…</button></div></div></details>
+            <div class="field">Folder<div class="row"><span class="mono small grow ellipsis" id="hc-dir">Default (inside Astra data)</span><button class="btn sm" id="hc-pick">${icon('folder')}Choose…</button></div></div></details>
         </section>
         <section class="hc-step hidden" data-step="4">
           <h3 style="margin:0">Review</h3><div class="hc-review" id="hc-review"></div>
@@ -378,11 +378,11 @@ Pages.host = {
       $$('[data-t]', m.el).forEach((b) => { b.classList.toggle('on', b.dataset.t === t); b.disabled = b.dataset.t === 'e4mc' && !HOST_E4MC.includes(sw); });
       m.$('#hc-tname-wrap').classList.toggle('hidden', t !== 'playit');
       m.$('#hc-tun-note').innerHTML = t === 'playit'
-        ? `<b>Playit.gg</b> — Automatically generate a public ${bds() ? 'Bedrock' : 'Minecraft'} server address using Playit.gg. No manual tunnel configuration required.${this.playit?.linked ? '' : '<br>The first time, playit.gg asks you to approve Solaris once in your browser (sign in or continue as a guest).'}`
+        ? `<b>Playit.gg</b> — Automatically generate a public ${bds() ? 'Bedrock' : 'Minecraft'} server address using Playit.gg. No manual tunnel configuration required.${this.playit?.linked ? '' : '<br>The first time, playit.gg asks you to approve Astra once in your browser (sign in or continue as a guest).'}`
         : t === 'e4mc' ? 'Instant public address through the free e4mc relay, nothing to sign up for (Fabric, Quilt, Forge and NeoForge).'
         : `Only people on your Wi-Fi/LAN can join (port ${m.$('#hc-port').value || 'auto'}).`;
     };
-    // Live progress while the server is created: every step Solaris reports, the current one highlighted.
+    // Live progress while the server is created: every step Astra reports, the current one highlighted.
     const steps = [];
     const prog = m.$('#hc-progress');
     const drawProg = (err) => {
@@ -426,7 +426,7 @@ Pages.host = {
     const setSw = (k) => {
       sw = k;
       $$('[data-pl]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.pl === k));
-      m.$('#hc-sw-note').textContent = mode === 'modpack' ? 'Pick the mod loader, then the modpack — Solaris installs the pack’s server files.' : NOTES[k];
+      m.$('#hc-sw-note').textContent = mode === 'modpack' ? 'Pick the mod loader, then the modpack — Astra installs the pack’s server files.' : NOTES[k];
       const b = bds();
       m.$('#hc-mem-wrap').classList.toggle('hidden', b); m.$('#hc-sd-wrap').classList.toggle('hidden', b);
       m.$('#hc-java-checks').classList.toggle('hidden', b); m.$('#hc-off-wrap').classList.toggle('hidden', b);
@@ -545,7 +545,7 @@ Pages.host = {
         <div class="card"><h3>${icon('users')} Players need <span class="faint small">${d.needed.length}</span></h3><div class="faint small" style="margin-bottom:8px">Mods from this server that also run in the game — friends need them to join. <b>Make game instance</b> puts them all in one game instance, ready to play.</div>
           ${d.needed.map((x) => row(x)).join('') || '<div class="faint small">None — players can join with plain Minecraft.</div>'}
           ${d.serverOnly.length ? `<details style="margin-top:8px"><summary class="small faint">${d.serverOnly.length} server-only mod${d.serverOnly.length === 1 ? '' : 's'} (players don’t need)</summary><div class="small faint">${esc(d.serverOnly.join(', '))}</div></details>` : ''}
-          ${d.unknown.length ? `<details style="margin-top:4px"><summary class="small warn-text">${d.unknown.length} not on Modrinth</summary><div class="small faint">${esc(d.unknown.join(', '))} — Solaris can’t tell if players need these; copy them into the instance yourself if they do.</div></details>` : ''}
+          ${d.unknown.length ? `<details style="margin-top:4px"><summary class="small warn-text">${d.unknown.length} not on Modrinth</summary><div class="small faint">${esc(d.unknown.join(', '))} — Astra can’t tell if players need these; copy them into the instance yourself if they do.</div></details>` : ''}
           <div class="row" style="margin-top:10px"><div class="grow"></div><button class="btn sm primary" id="cm-inst">${icon('library')}Make game instance</button></div></div>
         <div class="card"><h3>${icon('plus')} Extra client mods <span class="faint small">${d.extra.length}</span></h3><div class="faint small" style="margin-bottom:8px">Game-only mods you want in the play instance too (minimap, zoom, shaders support…). The server doesn’t run them.</div>
           ${d.extra.map((x) => row(x, true)).join('') || '<div class="faint small">None yet — search on the right.</div>'}</div>
@@ -658,7 +658,7 @@ Pages.host = {
           ${!ts.needsLink ? `<button class="btn sm" id="hs-trestart" ${s.tunnelBusy ? 'disabled' : ''} title="Restart the playit.gg agent and check the tunnel">${icon('refresh', s.tunnelBusy ? 'spin' : '')}${s.tunnelBusy ? 'Working…' : 'Restart tunnel'}</button>` : ''}
           ${!ts.needsLink ? (s.playitStopped ? `<button class="btn sm" id="hs-tstart">${icon('play')}Start tunnel</button>` : `<button class="btn sm" id="hs-tstop" ${s.state === 'offline' ? 'disabled title="The tunnel only runs while the server runs"' : ''}>${icon('power')}Stop tunnel</button>`) : ''}
         </div>` : '';
-      const joinBtns = addr ? `<button class="btn" data-c="addr">${icon('copy')}Copy</button>${s.bedrockServer ? '' : `<button class="btn" data-c="code" title="A short code friends paste into Solaris → Hosting → Join with code">${icon('key')}Join code</button>`}<button class="btn" data-c="how">${icon('info')}How to join</button>${s.address ? `<button class="btn primary" data-c="inv">${icon('users')}Invite link</button>` : ''}` : '';
+      const joinBtns = addr ? `<button class="btn" data-c="addr">${icon('copy')}Copy</button>${s.bedrockServer ? '' : `<button class="btn" data-c="code" title="A short code friends paste into Astra → Hosting → Join with code">${icon('key')}Join code</button>`}<button class="btn" data-c="how">${icon('info')}How to join</button>${s.address ? `<button class="btn primary" data-c="inv">${icon('users')}Invite link</button>` : ''}` : '';
       const vc = s.voice?.on ? `<div class="small hs-voice-line">${icon('mic')} Voice chat: ${s.tunnel !== 'playit' ? '<span class="faint">on your network only — use playit.gg for friends outside</span>' : (s.voice.manualAddress || s.voice.address) ? `<span class="mono">${esc(s.voice.manualAddress || s.voice.address)}</span> <span class="faint">(UDP → port ${s.voice.port}, set as voice_host)</span>` : s.voice.error ? `<span class="danger-text">Not connected yet — playit.gg didn’t make the tunnel.</span> <a href="#" data-c="vfix">How to fix</a>` : '<span class="faint">the UDP tunnel is made when the server starts</span>'}</div>` : '';
       const br = s.bedrock?.on ? (() => {
         const [bh, bp] = String(s.bedrock.address || '').split(/:(?=\d+$)/);
@@ -671,11 +671,11 @@ Pages.host = {
         if (b.dataset.c === 'how') return this.howToJoin(s, addr);
         if (b.dataset.c === 'vfix') return Router.go('host', { id, tab: 'settings' });
         if (b.dataset.c === 'bedrock') { api('clipboard:write', s.bedrock.address); return toast('Bedrock address copied — in Minecraft Bedrock: Play → Servers → Add Server, then put the part before the colon in Server Address and the number in Port', 'info', 10000); }
-        if (b.dataset.c === 'code') return api('hosted:joinCode', id).then((c) => { api('clipboard:write', c); toast(`Join code copied: ${c} — friends paste it in Solaris → Hosting → Join with code`, 'info', 9000); }).catch(toastErr);
-        const t = b.dataset.c === 'addr' ? addr : `solaris://server/${addr}`;
-        api('clipboard:write', t); toast(b.dataset.c === 'addr' ? 'Address copied' : 'Invite link copied — friends with Solaris click it to join');
+        if (b.dataset.c === 'code') return api('hosted:joinCode', id).then((c) => { api('clipboard:write', c); toast(`Join code copied: ${c} — friends paste it in Astra → Hosting → Join with code`, 'info', 9000); }).catch(toastErr);
+        const t = b.dataset.c === 'addr' ? addr : `astra://server/${addr}`;
+        api('clipboard:write', t); toast(b.dataset.c === 'addr' ? 'Address copied' : 'Invite link copied — friends with Astra click it to join');
       }));
-      if ($('#hs-link', share)) $('#hs-link', share).onclick = async () => { try { await api('playit:connect'); toast('Approve Solaris in the browser tab that opened'); } catch (e) { toastErr(e); } };
+      if ($('#hs-link', share)) $('#hs-link', share).onclick = async () => { try { await api('playit:connect'); toast('Approve Astra in the browser tab that opened'); } catch (e) { toastErr(e); } };
       const tbtn = (sel, call, done) => { const b = $(sel, share); if (b) b.onclick = async () => { b.disabled = true; try { s = await api(call, id); if (done) toast(done); } catch (e) { toastErr(e); } drawHead(); }; };
       tbtn('#hs-trestart', 'hosted:tunnelRestart', 'playit.gg tunnel checked');
       tbtn('#hs-tstop', 'hosted:tunnelStop', 'Tunnel stopped — the server is only on your network now');
@@ -710,7 +710,7 @@ Pages.host = {
         <div class="console hs-console" id="hs-console"></div>
         <div class="row" style="margin-top:8px"><input type="text" id="hs-cmd" class="grow mono" placeholder="${s.state === 'offline' ? 'Start the server to send commands' : 'Command, e.g. say Hello · op Name · gamemode creative Name'}" spellcheck="false"><button class="btn" id="hs-send">${icon('send')}Send</button></div>`;
       const con = $('#hs-console', box);
-      const cls = (l) => (/ERROR|Exception|FATAL/.test(l) ? 'e' : /WARN/.test(l) ? 'w' : /^\[Solaris\]|Domain assigned|Done \(/.test(l) ? 's' : /^> /.test(l) ? 'c' : '');
+      const cls = (l) => (/ERROR|Exception|FATAL/.test(l) ? 'e' : /WARN/.test(l) ? 'w' : /^\[Astra\]|Domain assigned|Done \(/.test(l) ? 's' : /^> /.test(l) ? 'c' : '');
       const add = (lines) => {
         const frag = document.createDocumentFragment();
         for (const l of lines) { const c = cls(l); if (onlyErr && c !== 'e' && c !== 'w') continue; const d = document.createElement('div'); d.textContent = l; if (c) d.className = c; frag.appendChild(d); }
@@ -964,7 +964,7 @@ Pages.host = {
           <td><label class="switch"><input type="checkbox" data-tk-on="${esc(t.id)}" ${t.enabled ? 'checked' : ''}><span></span></label></td>
           <td style="white-space:nowrap"><button class="icon-btn" data-tk-run="${esc(t.id)}" title="Run now">${icon('play')}</button><button class="icon-btn" data-tk-edit="${esc(t.id)}" title="Edit">${icon('edit')}</button><button class="icon-btn" data-tk-del="${esc(t.id)}" title="Delete">${icon('trash')}</button></td></tr>`).join('')}</table>`
           : `<div class="empty small">${icon('clock')}<div><b>No scheduled tasks</b><br>Create a task to automate server commands and startup</div></div>`}
-        <p class="faint small">Tasks run while Solaris is open. “Start server” tasks run while the server is off; everything else while it’s online. Restart and stop warn players a minute before.</p></div>`;
+        <p class="faint small">Tasks run while Astra is open. “Start server” tasks run while the server is off; everything else while it’s online. Restart and stop warn players a minute before.</p></div>`;
       const redo = () => this.tabs.scheduler.call(this, box, id, s);
       $('#tk-rs', box).onchange = async (e) => { try { await api('hosted:setSchedule', id, { ...sc, restartHours: +e.target.value }); toast(+e.target.value ? 'Automatic restart on' : 'Automatic restart off'); } catch (er) { toastErr(er); } };
       const edit = (t = null) => {
@@ -1007,8 +1007,8 @@ Pages.host = {
     async tunnels(box, id, s) {
       let d; try { d = await api('playit:tunnels'); } catch (e) { d = { linked: true, tunnels: [], error: e.message }; }
       if (!d.linked) {
-        box.innerHTML = `<div class="card"><h3 style="margin:0">${icon('globe')} Tunnel Management</h3><p class="faint">Connect playit.gg on the Hosting page first — then Solaris makes and shows the tunnels here.</p><button class="btn primary" id="tn-go">${icon('link')}Connect playit.gg</button></div>`;
-        $('#tn-go', box).onclick = async () => { try { await api('playit:connect'); toast('Approve Solaris in the browser tab that opened'); } catch (e) { toastErr(e); } };
+        box.innerHTML = `<div class="card"><h3 style="margin:0">${icon('globe')} Tunnel Management</h3><p class="faint">Connect playit.gg on the Hosting page first — then Astra makes and shows the tunnels here.</p><button class="btn primary" id="tn-go">${icon('link')}Connect playit.gg</button></div>`;
+        $('#tn-go', box).onclick = async () => { try { await api('playit:connect'); toast('Approve Astra in the browser tab that opened'); } catch (e) { toastErr(e); } };
         return;
       }
       const servers = await api('hosted:list').catch(() => []);
@@ -1026,10 +1026,10 @@ Pages.host = {
       box.innerHTML = `<div class="card"><div class="row" style="margin-bottom:6px"><div class="grow"><h3 style="margin:0">${icon('globe')} Tunnel Management</h3><div class="faint small">Create and manage tunnels for server access</div></div>
           <span class="chip">Java: ${tcp}</span><span class="chip">UDP: ${udp}</span><button class="btn sm" id="tn-add">${icon('plus')}Add on playit.gg</button><button class="btn sm" id="tn-refresh">${icon('refresh')}</button></div>
         ${d.error ? `<p class="danger-text small">${esc(d.error)}</p>` : ''}
-        ${d.tunnels.length ? `<table class="hs-ptable"><tr><th>Type</th><th>Public address</th><th>Local port</th><th>Used by</th><th>Enable</th><th></th></tr>${d.tunnels.map((t) => { const u = usedBy(t); return `<tr><td>${esc(t.typeName)}${t.name ? `<div class="faint small">${esc(t.name)}</div>` : ''}</td><td class="mono small">${t.address ? `${esc(t.address)} <button class="icon-btn" data-tn-copy="${esc(t.address)}" title="Copy">${icon('copy')}</button>` : '<span class="faint">waiting…</span>'}${t.disabledReason ? `<div class="danger-text small">${esc(t.disabledReason)}</div>` : ''}</td><td class="mono">${t.localPort ?? '—'}</td><td class="small">${u ? esc(u) : '<span class="faint">not used by a Solaris server</span>'}</td>
+        ${d.tunnels.length ? `<table class="hs-ptable"><tr><th>Type</th><th>Public address</th><th>Local port</th><th>Used by</th><th>Enable</th><th></th></tr>${d.tunnels.map((t) => { const u = usedBy(t); return `<tr><td>${esc(t.typeName)}${t.name ? `<div class="faint small">${esc(t.name)}</div>` : ''}</td><td class="mono small">${t.address ? `${esc(t.address)} <button class="icon-btn" data-tn-copy="${esc(t.address)}" title="Copy">${icon('copy')}</button>` : '<span class="faint">waiting…</span>'}${t.disabledReason ? `<div class="danger-text small">${esc(t.disabledReason)}</div>` : ''}</td><td class="mono">${t.localPort ?? '—'}</td><td class="small">${u ? esc(u) : '<span class="faint">not used by a Astra server</span>'}</td>
           <td><label class="switch"><input type="checkbox" data-tn-on="${esc(t.id)}" ${t.enabled ? 'checked' : ''}><span></span></label></td><td><button class="icon-btn" data-tn-del="${esc(t.id)}" data-used="${esc(u || '')}" title="Delete tunnel">${icon('trash')}</button></td></tr>`; }).join('')}</table>`
-          : '<div class="faint small">No tunnels yet — Solaris makes them when a server that uses playit.gg starts.</div>'}
-        <p class="faint small">Free playit.gg accounts can only have a few tunnels. Deleting a server in Solaris deletes its tunnels too. A tunnel that’s off isn’t reachable until you turn it on again.</p></div>`;
+          : '<div class="faint small">No tunnels yet — Astra makes them when a server that uses playit.gg starts.</div>'}
+        <p class="faint small">Free playit.gg accounts can only have a few tunnels. Deleting a server in Astra deletes its tunnels too. A tunnel that’s off isn’t reachable until you turn it on again.</p></div>`;
       const redo = () => this.tabs.tunnels.call(this, box, id, s);
       $('#tn-refresh', box).onclick = redo;
       $('#tn-add', box).onclick = () => api('shell:open', 'https://playit.gg/account/tunnels');
@@ -1037,7 +1037,7 @@ Pages.host = {
       $$('[data-tn-on]', box).forEach((c) => (c.onchange = async () => { c.disabled = true; try { await api('playit:enableTunnel', c.dataset.tnOn, c.checked); toast(c.checked ? 'Tunnel on' : 'Tunnel off'); } catch (e) { toastErr(e); c.checked = !c.checked; } c.disabled = false; }));
       $$('[data-tn-del]', box).forEach((b) => (b.onclick = async () => {
         const used = b.dataset.used;
-        if (!(await confirmDialog(used ? `Delete this tunnel? ${used} uses it — Solaris makes a new one (with a NEW address) the next time that server starts.` : 'Delete this tunnel from your playit.gg account?', { danger: true, ok: 'Delete tunnel' }))) return;
+        if (!(await confirmDialog(used ? `Delete this tunnel? ${used} uses it — Astra makes a new one (with a NEW address) the next time that server starts.` : 'Delete this tunnel from your playit.gg account?', { danger: true, ok: 'Delete tunnel' }))) return;
         try { await api('playit:removeTunnel', b.dataset.tnDel); toast('Tunnel deleted'); redo(); } catch (e) { toastErr(e); }
       }));
     },
@@ -1054,7 +1054,7 @@ Pages.host = {
           ['allow-flight', 'Allow flight', 'bool', 'Some mods need it; otherwise players are kicked for flying'], ['allow-nether', 'Nether', 'bool', 'Players can go to the Nether'], ['spawn-monsters', 'Monsters', 'bool', 'Hostile mobs spawn'], ['spawn-animals', 'Animals', 'bool', 'Animals spawn'],
           ['generate-structures', 'Structures', 'bool', 'Villages, temples… in new land'], ['enable-command-block', 'Command blocks', 'bool', ''], ['force-gamemode', 'Force game mode', 'bool', 'Players always join in the server’s game mode'], ['spawn-protection', 'Spawn protection', 'number', 'Blocks around spawn only operators can change (0 = off)']],
         performance: [['max-players', 'Max players', 'number', ''], ['view-distance', 'View distance', 'number', 'Chunks players see (lower = less lag)'], ['simulation-distance', 'Simulation distance', 'number', 'Chunks where mobs and crops move (lower = less lag)'], ['entity-broadcast-range-percentage', 'Entity range %', 'number', 'How far away players see mobs (lower = less lag)'], ['sync-chunk-writes', 'Safe chunk saving', 'bool', 'Safer saves, a little slower']],
-        security: [['white-list', 'Whitelist', 'bool', 'Only added players can join'], ['online-mode', 'Require Microsoft accounts', 'bool', 'Off lets offline (cracked) accounts join — anyone could use any name, so turn the whitelist on too. Everyone keeps their progress; Solaris moves it over.'], ['enforce-secure-profile', 'Secure chat profiles', 'bool', 'Off lets players with chat reporting turned off join'],
+        security: [['white-list', 'Whitelist', 'bool', 'Only added players can join'], ['online-mode', 'Require Microsoft accounts', 'bool', 'Off lets offline (cracked) accounts join — anyone could use any name, so turn the whitelist on too. Everyone keeps their progress; Astra moves it over.'], ['enforce-secure-profile', 'Secure chat profiles', 'bool', 'Off lets players with chat reporting turned off join'],
           ['hide-online-players', 'Hide who is online', 'bool', 'The server list doesn’t show player names'], ['prevent-proxy-connections', 'Block VPN/proxy logins', 'bool', ''], ['player-idle-timeout', 'Kick idle players after (min)', 'number', '0 = never']],
       };
       const field = ([k, label, kind, info]) => {
@@ -1070,17 +1070,17 @@ Pages.host = {
       const maxMem = Math.max(2048, Math.floor((set.totalMemMb * 0.75) / 512) * 512);
       const memCard = bds ? '' : `<div class="field" style="margin-top:6px">Memory (RAM) <b id="st-memv"></b><input type="range" id="st-mem" min="1024" max="${maxMem}" step="512" value="${Math.min(maxMem, set.memory)}"><div class="row small faint"><span>1 GB</span><span class="grow"></span><span>Available: ${(set.totalMemMb / 1024).toFixed(0)} GB</span></div><div class="small" id="st-memhint"></div></div>`;
       const java = bds ? '' : `<div class="card stack"><h3 style="margin:0">${icon('console')} Startup &amp; JVM</h3><div class="faint small">Control startup behavior and advanced JVM options</div>
-          <div class="field">Java<div class="row" style="gap:8px"><span class="mono small grow ellipsis" id="st-java">${set.javaPath ? esc(set.javaPath) : 'Automatic — Solaris picks and installs the right Java for this version'}</span><button class="btn sm" id="st-java-pick">${icon('folder')}Choose…</button>${set.javaPath ? `<button class="btn sm ghost" id="st-java-auto">Automatic</button>` : ''}</div></div>
+          <div class="field">Java<div class="row" style="gap:8px"><span class="mono small grow ellipsis" id="st-java">${set.javaPath ? esc(set.javaPath) : 'Automatic — Astra picks and installs the right Java for this version'}</span><button class="btn sm" id="st-java-pick">${icon('folder')}Choose…</button>${set.javaPath ? `<button class="btn sm ghost" id="st-java-auto">Automatic</button>` : ''}</div></div>
           <div class="hs-set"><span class="grow">Optimized flags (Aikar’s) <span class="info" title="The garbage-collector settings most Minecraft hosts use: fewer lag spikes on busy servers">${icon('info')}</span></span><label class="switch"><input type="checkbox" id="st-aikar" ${set.aikar ? 'checked' : ''}><span></span></label></div>
           <div class="hs-set"><span class="grow">Restart after a crash <span class="info" title="Starts the server again 10 seconds after it crashes (at most 3 times in 10 minutes)">${icon('info')}</span></span><label class="switch"><input type="checkbox" id="st-crash" ${set.restartOnCrash ? 'checked' : ''}><span></span></label></div>
-          <div class="hs-set"><span class="grow">Start automatically <span class="info" title="Starts when Solaris opens — and Solaris opens in the tray when Windows starts">${icon('info')}</span></span><label class="switch"><input type="checkbox" id="st-auto" ${set.autoStart ? 'checked' : ''}><span></span></label></div>
+          <div class="hs-set"><span class="grow">Start automatically <span class="info" title="Starts when Astra opens — and Astra opens in the tray when Windows starts">${icon('info')}</span></span><label class="switch"><input type="checkbox" id="st-auto" ${set.autoStart ? 'checked' : ''}><span></span></label></div>
           <label class="field">Extra JVM arguments<input type="text" id="st-jvm" class="mono" value="${esc(set.jvmArgs)}" placeholder="e.g. -XX:+UseG1GC -Xss1M" spellcheck="false"><span class="faint small">Memory is set with the slider above, so -Xmx/-Xms are left out.</span></label>
           <div class="row"><div class="grow faint small">Applies on next start.</div><button class="btn sm primary" id="st-jvm-save">${icon('check')}Save</button></div></div>`;
       const pack = bds ? '' : `<div class="card stack"><h3 style="margin:0">${icon('package')} Resource pack</h3>
           ${set.pack ? `<div class="row" style="gap:8px">${icon('file')}<b class="grow ellipsis">${esc(set.pack.name)}</b><span class="faint small">${fmtBytes(set.pack.size || 0)}</span><button class="btn sm ghost danger" id="rp-rm">${icon('trash')}Remove</button></div>
             <div class="small">${set.pack.url ? `Players download it from <span class="mono">${esc(set.pack.url)}</span>` : '<span class="faint">The download link is made when the server starts (playit.gg tunnel).</span>'}</div>
             ${set.pack.type === 'file' && set.tunnel === 'e4mc' ? '<div class="small warn-text">e4mc can’t share files — friends outside your network won’t get the pack. Use playit.gg, or paste a download link instead.</div>' : ''}`
-            : '<div class="faint small">No pack configured. Upload a .zip (max 250 MB) — Solaris shares it with players — or paste a direct download link.</div>'}
+            : '<div class="faint small">No pack configured. Upload a .zip (max 250 MB) — Astra shares it with players — or paste a direct download link.</div>'}
           <div class="row" style="gap:8px"><button class="btn sm" id="rp-file">${icon('upload')}Upload Resource Pack</button><input type="text" id="rp-url" class="grow mono" placeholder="…or a direct link (https://…/pack.zip)" spellcheck="false"><button class="btn sm" id="rp-url-go">Use link</button></div>
           <div class="hs-set"><span class="grow">Players must accept it</span><label class="switch"><input type="checkbox" id="rp-req" ${set.pack?.required ? 'checked' : ''}><span></span></label></div>
           <label class="field">Message when it asks <span class="faint small">(optional)</span><input type="text" id="rp-prompt" maxlength="200" value="${esc(set.pack?.prompt || '')}"></label>
@@ -1106,7 +1106,7 @@ Pages.host = {
             <label class="row small" style="gap:8px;align-items:flex-start"><label class="switch"><input type="checkbox" id="st-voice" ${set.voice?.on ? 'checked' : ''}><span></span></label><span><b>Simple Voice Chat</b><br><span class="faint">Installs the ${s.contentKind === 'plugins' ? 'plugin' : 'mod'}, makes a UDP tunnel on playit.gg and sets voice_host for you. Friends need the Simple Voice Chat mod in their game too.</span></span></label>
             ${set.voice?.on ? `<div class="small">UDP port <span class="mono">${set.voice.port}</span>${set.tunnel === 'playit' ? ` · voice_host <span class="mono">${esc(set.voice.manualAddress || set.voice.address || 'not set yet')}</span>` : ' · <span class="faint">only on your network (playit.gg needed for friends outside)</span>'}</div>${set.voice.error && !set.voice.manualAddress ? `<div class="small danger-text">${esc(set.voice.error)}</div><div class="row" style="gap:8px"><button class="btn sm primary" id="st-v-playit">${icon('external')}Open playit.gg tunnels</button><button class="btn sm" id="st-v-retry">${icon('refresh')}I made it — check again</button></div>` : ''}${set.tunnel === 'playit' ? `<div class="faint small">Made the voice tunnel yourself? Paste its address (with the port, as playit.gg shows it):</div><div class="row" style="gap:8px"><input type="text" id="st-v-addr" class="mono grow" placeholder="e.g. scooter-unanimous.tun.ply.gg:50761 — empty = automatic" value="${esc(set.voice.manualAddress || '')}" spellcheck="false"><button class="btn sm" id="st-v-save">${icon('check')}Save</button></div>` : ''}` : ''}</div>` : ''}
           ${HOST_BEDROCK.includes(set.software) ? `<div class="card stack"><h3>${icon('globe')} Bedrock players</h3>
-            <label class="row small" style="gap:8px;align-items:flex-start"><label class="switch"><input type="checkbox" id="st-bedrock" ${set.bedrock?.on ? 'checked' : ''}><span></span></label><span><b>Let Bedrock Edition join</b><br><span class="faint">Phone, Xbox, PlayStation, Switch and Windows players join with Geyser + Floodgate (no Java account needed). Solaris makes the playit.gg tunnel and sets Geyser up.</span></span></label>
+            <label class="row small" style="gap:8px;align-items:flex-start"><label class="switch"><input type="checkbox" id="st-bedrock" ${set.bedrock?.on ? 'checked' : ''}><span></span></label><span><b>Let Bedrock Edition join</b><br><span class="faint">Phone, Xbox, PlayStation, Switch and Windows players join with Geyser + Floodgate (no Java account needed). Astra makes the playit.gg tunnel and sets Geyser up.</span></span></label>
             ${set.bedrock?.on ? `<div class="small">Port <span class="mono">${set.bedrock.port}</span>${set.tunnel === 'playit' ? ` · public <span class="mono">${esc(set.bedrock.address || 'set on next start')}</span>` : ' · <span class="faint">only on your network (playit.gg needed for friends outside)</span>'}</div>${set.bedrock.error ? `<div class="small danger-text">${esc(set.bedrock.error)}</div>` : ''}<div class="faint small">With the whitelist on, add Bedrock friends in the console with <span class="mono">fwhitelist add Name</span>.</div>` : ''}</div>` : ''}
           <div class="card stack"><h3>${icon('discord')} Discord alerts</h3>
             <div class="faint small">Post to a Discord channel when the server goes online or stops, crashes, or someone joins. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.</div>
@@ -1187,7 +1187,7 @@ Pages.host = {
       $('#st-folder', box).onclick = () => api('hosted:openFolder', id);
       $('#st-copy', box).onclick = async (e) => { const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Copying…`; try { const c = await api('hosted:copy', id); toast(`Made “${c.name}” (port ${c.port})`); Router.go('host', { id: c.id }); } catch (er) { toastErr(er); b.disabled = false; b.innerHTML = `${icon('copy')}Copy server`; } };
       $('#st-export', box).onclick = async (e) => {
-        const dest = await api('dialog:save', { title: 'Save the server as', defaultPath: `${set.name.replace(/[^\w .-]/g, '')}.solaris-server.zip`, filters: [{ name: 'Solaris server', extensions: ['zip'] }] }).catch(() => null);
+        const dest = await api('dialog:save', { title: 'Save the server as', defaultPath: `${set.name.replace(/[^\w .-]/g, '')}.solaris-server.zip`, filters: [{ name: 'Astra server', extensions: ['zip'] }] }).catch(() => null);
         if (!dest) return;
         const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Saving…`;
         try { const r = await api('hosted:export', id, dest); toast(`Saved ${fmtBytes(r.size)} — import it on the other PC with Hosting → Import server`, 'ok', 9000); } catch (er) { toastErr(er); }
@@ -1224,7 +1224,7 @@ window.solaris.on('hosted:offlineKick', ({ id, name }) => {
         title: 'Allow offline accounts?',
         body: `<p>Players with offline (cracked) accounts can join. Minecraft can’t check who they really are, so anyone could use any name.</p>
           <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="ao-wl" checked><span><b>Turn the whitelist on and add ${esc(name)}</b> (recommended)<br><span class="faint">Only you and the players you add can join. You can add more in the Players tab.</span></span></label>
-          <p class="faint small">Everyone keeps their inventory and progress — Solaris moves it over. The server restarts.</p>`,
+          <p class="faint small">Everyone keeps their inventory and progress — Astra moves it over. The server restarts.</p>`,
         footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>Allow offline accounts</button>`,
       });
       m.$('[data-x]').onclick = () => m.close();
@@ -1238,7 +1238,7 @@ window.solaris.on('hosted:offlineKick', ({ id, name }) => {
   });
 });
 window.solaris.on('hosted:playit-manual', ({ port, reason }) => {
-  const m = modal({ title: 'Add a playit.gg tunnel', body: `<p class="muted">Solaris couldn’t create the tunnel automatically (${esc(reason)}).</p><p>On playit.gg, add a tunnel: type <b>Minecraft Java</b>, local address <b class="mono">127.0.0.1</b>, local port <b class="mono">${port}</b>. Solaris picks it up within a few seconds.</p>`, footer: `<button class="btn ghost" data-x>Later</button><button class="btn primary" data-go>${icon('external')}Open playit.gg</button>` });
+  const m = modal({ title: 'Add a playit.gg tunnel', body: `<p class="muted">Astra couldn’t create the tunnel automatically (${esc(reason)}).</p><p>On playit.gg, add a tunnel: type <b>Minecraft Java</b>, local address <b class="mono">127.0.0.1</b>, local port <b class="mono">${port}</b>. Astra picks it up within a few seconds.</p>`, footer: `<button class="btn ghost" data-x>Later</button><button class="btn primary" data-go>${icon('external')}Open playit.gg</button>` });
   m.$('[data-x]').onclick = () => m.close();
   m.$('[data-go]').onclick = () => { api('shell:open', 'https://playit.gg/account/tunnels'); m.close(); };
 });

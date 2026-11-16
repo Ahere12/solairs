@@ -1,4 +1,4 @@
-// Solaris Connect — web maps (BlueMap, Pl3xMap, Dynmap) for hosted servers, and map links to other servers' maps.
+// Astra Connect — web maps (BlueMap, Pl3xMap, Dynmap) for hosted servers, and map links to other servers' maps.
 // One web map per server. Each map type lives in ./maps/<id>.js (what it is, where its settings are, how to read
 // its web map); this file installs it, keeps its port and settings right, and checks the map is really up.
 //
@@ -79,7 +79,7 @@ async function probe(base, provider = null) {
 }
 const unreachable = (e) => e.name === 'TimeoutError' || /ECONNREFUSED|fetch failed/i.test(String(e.cause?.code || e.message));
 
-/** Everything the Map tab and Solaris Connect show for one hosted server. */
+/** Everything the Map tab and Astra Connect show for one hosted server. */
 async function info(id) {
   const s = host().get(id);
   const wm = wmOf(s), p = wm && PROVIDERS[wm.provider], jar = p && jarOf(id, p);
@@ -103,10 +103,10 @@ function fix(id, why) {
   if (!p) return;
   try {
     if (p.writeConf(s, wm)) {
-      host().logLine(id, `[Solaris] ${p.name} set up (web map on port ${wm.port}${p.needsDownload ? ', download accepted' : ''}) — reloading ${p.name}.`);
+      host().logLine(id, `[Astra] ${p.name} set up (web map on port ${wm.port}${p.needsDownload ? ', download accepted' : ''}) — reloading ${p.name}.`);
       host().command(id, p.reload);
     }
-  } catch (e) { host().logLine(id, `[Solaris] Couldn’t set up ${p.name}: ${e.message}`); }
+  } catch (e) { host().logLine(id, `[Astra] Couldn’t set up ${p.name}: ${e.message}`); }
 }
 function register(hooks) {
   hooks.beforeStart.add((m) => { done.delete(m.id); const wm = wmOf(m); if (wm?.on && PROVIDERS[wm.provider]) PROVIDERS[wm.provider].writeConf(m, wm); });

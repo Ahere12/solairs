@@ -1,8 +1,8 @@
-// Build-time configuration for Solaris. DEVELOPER-ONLY — players never see or change this.
+// Build-time configuration for Astra. DEVELOPER-ONLY — players never see or change this.
 //
 // MS_CLIENT_ID
-//   The single Microsoft OAuth application (Azure "Application (client) ID") that every Solaris
-//   player signs in through. You, the Solaris developer, register it ONCE and get it approved by
+//   The single Microsoft OAuth application (Azure "Application (client) ID") that every Astra
+//   player signs in through. You, the Astra developer, register it ONCE and get it approved by
 //   Mojang ONCE. A public client ID is not a secret; shipping it inside the app is standard practice
 //   (it is how every third-party Minecraft launcher works). See README → "Microsoft sign-in (developer setup)".
 //
@@ -15,7 +15,7 @@
 //   would block every personal account.
 //
 // DISCORD_CLIENT_ID
-//   Solaris's own Discord application for Rich Presence (hidden from players).
+//   Astra's own Discord application for Rich Presence (hidden from players).
 //
 // MS_REDIRECT_PORT / MS_REDIRECT_PATH
 //   Must match the redirect URI registered on the app ("Mobile and desktop applications" platform):

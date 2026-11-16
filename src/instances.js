@@ -322,7 +322,7 @@ async function exportPack(id, dest, include = ['mods', 'config', 'resourcepacks'
 async function importPack(file) {
   let zip, meta;
   try { zip = new AdmZip(file); meta = JSON.parse(zip.readAsText('solaris.json')).instance; } catch {}
-  if (!meta || !meta.versionId) throw new Error('This file is not a Solaris pack (.solpack). To import a modpack use a .mrpack file, or add mods/resource packs from an instance’s Content tab.');
+  if (!meta || !meta.versionId) throw new Error('This file is not a Astra pack (.solpack). To import a modpack use a .mrpack file, or add mods/resource packs from an instance’s Content tab.');
   const inst = create({ name: meta.name, versionId: meta.versionId, loader: meta.loader, icon: meta.icon,
     extra: { memory: meta.memory, jvmArgs: meta.jvmArgs, solarisModules: meta.solarisModules } });
   const root = path.join(paths.instances(), inst.id);

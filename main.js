@@ -2,13 +2,19 @@ const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, Notificatio
 const path = require('path');
 const fs = require('fs');
 
+// The launcher is called Astra now, but its own folder keeps the old name: it holds the key that unlocks saved
+// Microsoft sign-ins (Windows encrypts them per app folder), the data-folder pointer (boot.json) and the window
+// state. A new folder name would sign everyone out. Game data stays in %APPDATA%\.solaris as before.
+// (Only the installed app: a development copy keeps its own folder, so it never collides with the installed one.)
+if (app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Solaris'));
+
 let win = null;
 let tray = null;
 let hiddenForGame = false;
 let hostWin = null;   // Hosting popped out into its own window
 let callerWin = null; // the window whose request is being handled right now
 
-/** Sends an event to every open Solaris window. */
+/** Sends an event to every open Astra window. */
 function toAll(...args) {
   for (const w of [win, hostWin]) if (w && !w.isDestroyed()) w.webContents.send(...args);
 }
@@ -26,7 +32,7 @@ function openHostWindow(params = {}) {
   const b = settings.get().hostWindowBounds || {};
   hostWin = new BrowserWindow({
     width: b.width || 1120, height: b.height || 780, x: b.x, y: b.y, minWidth: 820, minHeight: 560,
-    frame: false, backgroundColor: '#0d0b12', show: false, title: 'Solaris Hosting',
+    frame: false, backgroundColor: '#05070e', show: false, title: 'Astra Hosting',
     icon: nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
@@ -41,7 +47,7 @@ function openHostWindow(params = {}) {
   w.on('close', () => { try { if (!w.isMaximized() && !w.isMinimized()) settings.set({ hostWindowBounds: w.getBounds() }); } catch {} });
   w.on('closed', () => {
     if (hostWin === w) hostWin = null;
-    // The main window was closed earlier (only hidden because this one was open): now Solaris closes too — unless
+    // The main window was closed earlier (only hidden because this one was open): now Astra closes too — unless
     // it lives in the tray anyway, a game or server still runs, or the main window was hidden for a game.
     if (app.isQuitting || !win || win.isDestroyed() || win.isVisible() || hiddenForGame || settings.get().minimizeToTray) return;
     if (require('./src/launch').anyRunning() || require('./src/hostserver').anyRunning()) quitWhenGamesClose = true;
@@ -61,7 +67,7 @@ try {
   }
 } catch {}
 
-// A bug in a background task (a download, a server, Discord) must not pop up an error box or stop Solaris:
+// A bug in a background task (a download, a server, Discord) must not pop up an error box or stop Astra:
 // write it to logs/main-errors.log instead.
 function logMainError(kind, e) {
   try {
@@ -69,7 +75,7 @@ function logMainError(kind, e) {
     fs.mkdirSync(paths.logs(), { recursive: true });
     fs.appendFileSync(path.join(paths.logs(), 'main-errors.log'), `[${new Date().toISOString()}] ${kind}: ${e && e.stack ? e.stack : String(e)}\n`);
   } catch {}
-  console.error(`[Solaris] ${kind}:`, e);
+  console.error(`[Astra] ${kind}:`, e);
 }
 process.on('uncaughtException', (e) => logMainError('uncaughtException', e));
 process.on('unhandledRejection', (e) => logMainError('unhandledRejection', e));
@@ -100,13 +106,13 @@ async function recoverDataDir() {
     const missing = paths.missingDataDir();
     if (!missing) return true;
     const { response } = await dialog.showMessageBox({
-      type: 'warning', title: 'Solaris data folder not found', noLink: true, defaultId: 0, cancelId: 3,
-      message: 'Solaris can’t find its data folder',
+      type: 'warning', title: 'Astra data folder not found', noLink: true, defaultId: 0, cancelId: 3,
+      message: 'Astra can’t find its data folder',
       detail: `Your instances, settings and accounts were moved to:\n${missing}\n\nThat folder isn’t there right now — maybe a USB or external drive is unplugged, or the folder was renamed.`,
       buttons: ['Try again', 'Choose the folder…', 'Use the default folder', 'Quit'],
     });
     if (response === 1) {
-      const r = await dialog.showOpenDialog({ title: 'Where is your Solaris data folder?', properties: ['openDirectory'] });
+      const r = await dialog.showOpenDialog({ title: 'Where is your Astra data folder?', properties: ['openDirectory'] });
       if (r.filePaths[0]) paths.setRoot(r.filePaths[0]);
     } else if (response === 2) paths.setRoot(paths.defaultRoot());
     else if (response === 3) { app.quit(); return false; }
@@ -124,19 +130,26 @@ function showWindow() {
 function init() {
   const { events } = require('./src/util');
   const settings = require('./src/settings');
-  const api = require('./src/api')(() => (callerWin && !callerWin.isDestroyed() ? callerWin : win));
-  const discord = require('./src/discord');
+  // All of Astra's main code (src/api.js and what it loads) is loaded on the first request from the window instead of
+  // before the window is made — the window starts painting ~50 ms sooner. It's ready long before the page asks.
+  let api = null;
+  const getApi = () => {
+    if (api) return api;
+    api = require('./src/api')(() => (callerWin && !callerWin.isDestroyed() ? callerWin : win));
+    // Hosting in its own window ("Pop out"): opens it, or brings it forward on the server that was clicked.
+    api['win:popHost'] = (params = {}) => { openHostWindow(params); return true; };
+    api['win:showMain'] = () => { showWindow(); return true; };
+    return api;
+  };
+  const discord = { idle: () => require('./src/discord').idle() };
 
   ipcMain.handle('api', async (_e, name, args) => {
-    const fn = api[name];
+    const fn = getApi()[name];
     if (!fn) throw new Error('Unknown API: ' + name);
     // window buttons and dialogs belong to the window that asked (the main one or the Hosting window)
     callerWin = BrowserWindow.fromWebContents(_e.sender);
     return fn(...(args || []));
   });
-  // Hosting in its own window ("Pop out"): opens it, or brings it forward on the server that was clicked.
-  api['win:popHost'] = (params = {}) => { openHostWindow(params); return true; };
-  api['win:showMain'] = () => { showWindow(); return true; };
 
   // Log lines (games, hosted servers) arrive by the thousand while modded games start: send them in batches
   // every 60 ms instead of one IPC message per line. Other events flush the batch first, so order is kept.
@@ -169,26 +182,26 @@ function init() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png'));
   win = new BrowserWindow({
     width: 1320, height: 840, minWidth: 1040, minHeight: 660,
-    frame: false, backgroundColor: '#0d0b12', show: false, icon,
-    title: 'Solaris',
+    frame: false, backgroundColor: '#05070e', show: false, icon,
+    title: 'Astra',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, v8CacheOptions: 'bypassHeatCheck' },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   const startHidden = s.startMinimized || process.argv.includes('--hidden');
-  // Servers marked "Start with Windows" (or with Solaris): start them a few seconds after launch.
+  // Servers marked "Start with Windows" (or with Astra): start them a few seconds after launch.
   setTimeout(() => { try { require('./src/hostserver').autoStartAll(require('./src/launch').resolveJava); } catch {} }, 5000);
-  setTimeout(() => { try { require('./src/connect').init(); } catch (e) { console.error('Solaris Connect:', e); } }, 6000); // server monitoring + desktop alerts
+  setTimeout(() => { try { require('./src/connect').init(); } catch (e) { console.error('Astra Connect:', e); } }, 6000); // server monitoring + desktop alerts
   win.once('ready-to-show', () => { if (!startHidden) win.show(); else if (!tray) win.minimize(); });
   win.on('close', (e) => {
     if (app.isQuitting) return;
     if (settings.get().minimizeToTray) { e.preventDefault(); win.hide(); return; }
-    // the Hosting window is still open: keep Solaris running behind it (the tray icon brings this window back)
+    // the Hosting window is still open: keep Astra running behind it (the tray icon brings this window back)
     if (hostWin && !hostWin.isDestroyed()) { e.preventDefault(); win.hide(); return; }
-    // A game is running: keep Solaris alive in the tray so play time and logs are still recorded,
+    // A game is running: keep Astra alive in the tray so play time and logs are still recorded,
     // then quit by itself once the last game closes.
     if (require('./src/launch').anyRunning() || require('./src/hostserver').anyRunning()) {
       e.preventDefault(); win.hide(); quitWhenGamesClose = true;
-      if (Notification.isSupported()) new Notification({ title: 'Solaris is still running', body: 'It will close by itself when you quit the game. Click the tray icon to reopen it.' }).show();
+      if (Notification.isSupported()) new Notification({ title: 'Astra is still running', body: 'It will close by itself when you quit the game. Click the tray icon to reopen it.' }).show();
     }
   });
   win.on('maximize', () => win.webContents.send('event', 'window:maximized', true));
@@ -200,11 +213,11 @@ function init() {
   // Linux panels (GNOME AppIndicator, KDE) show tray icons at 22-24 px; Windows uses 16 px.
   const traySize = process.platform === 'linux' ? 24 : 16;
   tray = new Tray(icon.resize({ width: traySize, height: traySize }));
-  tray.setToolTip('Solaris');
+  tray.setToolTip('Astra');
   const rebuildTray = () => {
     const instances = require('./src/instances').list().sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 5);
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Open Solaris', click: showWindow },
+      { label: 'Open Astra', click: showWindow },
       { type: 'separator' },
       ...instances.map((i) => ({ label: `Play ${i.name}`, click: () => require('./src/launch').launch(i.id).catch((e) => { showWindow(); events.emit('send', 'toast', { type: 'error', text: e.message }); }) })),
       { type: 'separator' },
@@ -219,7 +232,7 @@ function init() {
     if ((ch === 'launch:exited' || (ch === 'launch:status' && payload?.error)) && quitWhenGamesClose) setTimeout(() => { if (quitWhenGamesClose && !require('./src/launch').anyRunning() && !require('./src/hostserver').anyRunning()) { app.isQuitting = true; app.quit(); } }, 1500);
   });
 
-  // Background work starts after the window is up, so it doesn't slow down opening Solaris.
+  // Background work starts after the window is up, so it doesn't slow down opening Astra.
   win.webContents.once('did-finish-load', () => {
     setTimeout(() => { if (settings.get().discordRpc) discord.idle(); }, 1500);
     setTimeout(() => require('./src/updater').init(), 3000);
@@ -230,7 +243,7 @@ let serversStopped = false;
 app.on('before-quit', (e) => {
   app.isQuitting = true;
   try { require('./src/launch').savePlaytimeOnQuit(); } catch {}
-  // Hosted servers must save their worlds: stop them properly before Solaris exits (at most 40 s).
+  // Hosted servers must save their worlds: stop them properly before Astra exits (at most 40 s).
   let host; try { host = require('./src/hostserver'); } catch {}
   if (host && host.anyRunning() && !serversStopped) {
     e.preventDefault();
@@ -241,6 +254,6 @@ app.on('before-quit', (e) => {
   }
 });
 app.on('window-all-closed', () => app.quit());
-// The playit.gg agent is Solaris's child: never leave it running in the background (e.g. Solaris closed during
+// The playit.gg agent is Astra's child: never leave it running in the background (e.g. Astra closed during
 // server setup). Its tunnels and the link to playit.gg are kept for next time.
 app.on('will-quit', () => { try { require('./src/playit').stopAgent(); } catch {} });

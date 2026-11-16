@@ -145,7 +145,7 @@ Pages.skins = {
           wardrobe = await api('skins:list');
         }
         const r = await api('skins:apply', staged);
-        if (r.offline) toast(`${r.name} is now your offline skin — it shows in modded instances (Solaris adds CustomSkinLoader when you press Play).`, 'ok', 7000);
+        if (r.offline) toast(`${r.name} is now your offline skin — it shows in modded instances (Astra adds CustomSkinLoader when you press Play).`, 'ok', 7000);
         else toast(r.pending ? `Mojang accepted ${r.name}. It can take a minute to show everywhere — rejoin your world or server to see it.` : `${r.name} is live on your Microsoft account. Rejoin your world or server to see it in-game.`, 'ok', 7000);
         b.classList.remove('busy'); installFeedback.mark(b); b.innerHTML = `${icon('check')}Wearing it`;
         setTimeout(() => { if (b.isConnected) { b.classList.remove('installed'); b.innerHTML = label; stage(); } }, 2500);

@@ -1,4 +1,4 @@
-// Solaris Connect — inventory viewer. Shows a player's inventory, armour, off hand and ender chest from the save files
+// Astra Connect — inventory viewer. Shows a player's inventory, armour, off hand and ender chest from the save files
 // of worlds on this PC: hosted servers (world/playerdata/<uuid>.dat) and your singleplayer worlds (level.dat → Player).
 // Only for worlds whose files are on this PC — that is the "server-side permission": you can only look into worlds
 // you host or own. Read-only; nothing is changed. Bedrock worlds use another format and aren't read.

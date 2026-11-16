@@ -1,34 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Astra: a silver crescent moon and a star on a night-sky badge. -->
   <defs>
-    <radialGradient id="core" cx="38%" cy="34%" r="75%">
-      <stop offset="0" stop-color="#fff1b8"/>
-      <stop offset="0.35" stop-color="#ffc24a"/>
-      <stop offset="0.75" stop-color="#ff7a1f"/>
-      <stop offset="1" stop-color="#f2432f"/>
+    <radialGradient id="sky" cx="38%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#2a3a7a"/>
+      <stop offset="0.55" stop-color="#141c3d"/>
+      <stop offset="1" stop-color="#090d1d"/>
     </radialGradient>
-    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
-      <stop offset="0.6" stop-color="#ff8a1c" stop-opacity="0.45"/>
-      <stop offset="1" stop-color="#ff5a2a" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#ffd59a"/>
-      <stop offset="0.5" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#ffb35c"/>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9fb4ff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#4f63c9" stop-opacity="0.35"/>
     </linearGradient>
-    <radialGradient id="planet" cx="35%" cy="30%" r="80%">
+    <linearGradient id="moon" x1="0.1" y1="0.1" x2="0.9" y2="0.95">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#ffd27a"/>
+      <stop offset="0.5" stop-color="#e4eaff"/>
+      <stop offset="1" stop-color="#a9bcff"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0.5" stop-color="#9fb4ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#9fb4ff" stop-opacity="0"/>
     </radialGradient>
-    <!-- the part of the sun drawn over the ring (top half) so the orbit passes behind it -->
-    <clipPath id="top"><path d="M0 0H512V142L0 370Z"/></clipPath>
+    <mask id="crescent">
+      <rect width="512" height="512" fill="#000"/>
+      <circle cx="236" cy="272" r="150" fill="#fff"/>
+      <circle cx="312" cy="216" r="128" fill="#000"/>
+    </mask>
   </defs>
-  <circle cx="256" cy="256" r="214" fill="url(#halo)"/>
-  <circle cx="256" cy="256" r="148" fill="url(#core)"/>
-  <g transform="rotate(-24 256 256)">
-    <ellipse cx="256" cy="256" rx="228" ry="70" fill="none" stroke="#8a2410" stroke-opacity="0.55" stroke-width="30"/>
-    <ellipse cx="256" cy="256" rx="228" ry="70" fill="none" stroke="url(#ring)" stroke-width="20"/>
+  <circle cx="256" cy="256" r="240" fill="url(#sky)"/>
+  <circle cx="256" cy="256" r="236" fill="none" stroke="url(#rim)" stroke-width="8"/>
+  <!-- distant stars -->
+  <circle cx="132" cy="120" r="4" fill="#c9d4ff" fill-opacity="0.8"/>
+  <circle cx="98" cy="196" r="2.5" fill="#c9d4ff" fill-opacity="0.6"/>
+  <circle cx="410" cy="318" r="3" fill="#c9d4ff" fill-opacity="0.7"/>
+  <circle cx="352" cy="408" r="2.5" fill="#c9d4ff" fill-opacity="0.55"/>
+  <circle cx="196" cy="84" r="2.5" fill="#c9d4ff" fill-opacity="0.6"/>
+  <circle cx="236" cy="272" r="178" fill="url(#halo)" mask="url(#crescent)"/>
+  <g mask="url(#crescent)">
+    <circle cx="236" cy="272" r="150" fill="url(#moon)"/>
+    <circle cx="150" cy="300" r="20" fill="#8ea3f0" fill-opacity="0.35"/>
+    <circle cx="196" cy="376" r="13" fill="#8ea3f0" fill-opacity="0.32"/>
+    <circle cx="126" cy="236" r="10" fill="#8ea3f0" fill-opacity="0.3"/>
   </g>
-  <circle cx="256" cy="256" r="148" fill="url(#core)" clip-path="url(#top)"/>
-  <circle cx="451" cy="208" r="29" fill="#8a2410" fill-opacity="0.55"/>
-  <circle cx="451" cy="208" r="24" fill="url(#planet)"/>
+  <!-- the bright star -->
+  <path d="M372 122 L383 160 L421 171 L383 182 L372 220 L361 182 L323 171 L361 160 Z" fill="#ffffff"/>
 </svg>

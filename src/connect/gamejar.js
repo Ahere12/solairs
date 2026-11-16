@@ -1,4 +1,4 @@
-// Reads names and pictures from the Minecraft game jar Solaris downloaded for a version (versions/<mc>/<mc>.jar):
+// Reads names and pictures from the Minecraft game jar Astra downloaded for a version (versions/<mc>/<mc>.jar):
 // English names (assets/minecraft/lang/en_us.json) and item icons (assets/minecraft/textures/…). Read-only; when the
 // jar isn't there, callers fall back to names made from ids and no icons.
 const fs = require('fs');

@@ -1,5 +1,5 @@
 // OptiFine for vanilla instances. OptiFine may not be redistributed, so players download the installer .jar from
-// optifine.net themselves and Solaris imports it ("standalone install"). Solaris then uses OptiFine's own patcher to
+// optifine.net themselves and Astra imports it ("standalone install"). Astra then uses OptiFine's own patcher to
 // build the library and writes a version that launches through LaunchWrapper with OptiFine's tweaker.
 const fs = require('fs');
 const path = require('path');

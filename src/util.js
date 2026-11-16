@@ -7,7 +7,7 @@ const { pipeline } = require('stream/promises');
 const { Readable, Transform } = require('stream');
 const { app } = require('electron');
 
-const UA = 'Solaris-Launcher/1.0.0';
+const UA = 'Astra-Launcher/1.0.0';
 const events = new EventEmitter();
 events.setMaxListeners(50);
 /** Push an event to the renderer. */

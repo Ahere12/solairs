@@ -1,4 +1,4 @@
-// Solaris Connect step 5: save files (NBT), player statistics and advancements.  Run: npm test
+// Astra Connect step 5: save files (NBT), player statistics and advancements.  Run: npm test
 const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');

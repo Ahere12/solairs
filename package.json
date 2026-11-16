@@ -1,8 +1,8 @@
 {
   "name": "solaris-launcher",
-  "productName": "Solaris",
-  "version": "1.11.0",
-  "description": "Solaris — a fast, modern Minecraft: Java Edition launcher",
+  "productName": "Astra",
+  "version": "1.12.0",
+  "description": "Astra — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",
   "license": "MIT",
@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "app.solaris.launcher",
-    "productName": "Solaris",
+    "productName": "Astra",
     "files": [
       "main.js",
       "preload.js",
@@ -66,15 +66,16 @@
       "executableName": "solaris",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "synopsis": "A fast, modern Minecraft: Java Edition launcher",
-      "description": "Solaris — a fast, modern Minecraft: Java Edition launcher with mods, modpacks, skins and server hosting.",
+      "description": "Astra — a fast, modern Minecraft: Java Edition launcher with mods, modpacks, skins, server hosting and Astra Connect.",
       "maintainer": "Ahere12 <Ahere12@users.noreply.github.com>",
-      "vendor": "Solaris",
+      "vendor": "Astra",
       "desktop": {
         "entry": {
           "Keywords": "minecraft;launcher;game;"
         }
       },
       "mimeTypes": [
+        "x-scheme-handler/astra",
         "x-scheme-handler/solaris"
       ],
       "syncDesktopName": true
@@ -89,12 +90,15 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "shortcutName": "Astra",
+      "uninstallDisplayName": "Astra"
     },
     "protocols": [
       {
-        "name": "Solaris link",
+        "name": "Astra link",
         "schemes": [
+          "astra",
           "solaris"
         ]
       }
@@ -114,7 +118,8 @@
         "libasound2 | libasound2t64"
       ],
       "artifactName": "solaris_${version}_amd64.${ext}"
-    }
+    },
+    "executableName": "Solaris"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

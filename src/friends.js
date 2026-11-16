@@ -1,5 +1,5 @@
 // Friends list: Minecraft players you follow, looked up through Mojang's public profile API.
-// There is no official "online friends" API for Java Edition, so "online" means Solaris saw the player
+// There is no official "online friends" API for Java Edition, so "online" means Astra saw the player
 // in the live player list of a server it pinged (your servers, favourites and Discover).
 const { paths, readJSON, writeJSON, getJSON } = require('./util');
 const accounts = require('./accounts');

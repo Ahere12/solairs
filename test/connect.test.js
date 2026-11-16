@@ -1,4 +1,4 @@
-// Solaris Connect: the integration registry and Solaris's own integrations.  Run: npm test
+// Astra Connect: the integration registry and Astra's own integrations.  Run: npm test
 const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -89,7 +89,7 @@ test('compatibility with hosted servers', () => {
   assert.equal(r.compatibility('any', []), null);
 });
 
-test('Solaris’s own integrations: valid, and every status check works on a fresh install', async () => {
+test('Astra’s own integrations: valid, and every status check works on a fresh install', async () => {
   const connect = require('../src/connect');
   const list = await connect.list();
   const ids = list.map((i) => i.id);
@@ -103,7 +103,8 @@ test('Solaris’s own integrations: valid, and every status check works on a fre
   assert.ok(!list.some((i) => i.status.state === 'connected' && !['discord-rpc'].includes(i.id)));
   assert.equal(list.find((i) => i.id === 'bluemap').status.state, 'ready');
   assert.equal(list.find((i) => i.id === 'pl3xmap').status.state, 'ready');
-  assert.equal(list.find((i) => i.id === 'waypoints').status.state, 'planned');
+  assert.equal(list.find((i) => i.id === 'waypoints').status.state, 'ready');
+  assert.ok(!list.some((i) => i.status.state === 'planned'), 'every planned integration is built');
 
   assert.equal(list.find((i) => i.id === 'presence-cloud').status.state, 'unavailable');
   // Discord Rich Presence is the same switch as Settings → Discord Rich Presence

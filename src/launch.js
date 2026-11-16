@@ -21,7 +21,7 @@ const history = []; // finished runs (for the console)
 function cleanEnv() {
   const e = { ...process.env }; delete e.JAVA_TOOL_OPTIONS; delete e._JAVA_OPTIONS;
   if (process.platform === 'linux') {
-    // Solaris's own AppImage/Electron variables must not leak into Java (they can load the wrong libraries).
+    // Astra's own AppImage/Electron variables must not leak into Java (they can load the wrong libraries).
     for (const k of ['LD_PRELOAD', 'ELECTRON_RUN_AS_NODE', 'CHROME_DESKTOP', 'GDK_BACKEND']) delete e[k];
     // The AppImage puts its own folder (with Electron's libEGL/libvulkan) on LD_LIBRARY_PATH; the game must use the system's.
     if (e.APPDIR && e.LD_LIBRARY_PATH) {
@@ -54,7 +54,7 @@ function expandArgs(list, vars, features) {
 }
 
 /**
- * Automatic Java selection: instance Java → global Java → your Java for this major version → Solaris's
+ * Automatic Java selection: instance Java → global Java → your Java for this major version → Astra's
  * official runtime (installed on demand). A chosen Java that is too old for the version is skipped with a notice.
  */
 async function resolveJava(inst, version, onProgress) {
@@ -141,8 +141,8 @@ async function offlineSkin(inst, auth, gameDir) {
 }
 
 /**
- * World hosting through e4mc (Solaris Client "Host for friends"): e4mc prints the public address in chat when the
- * player uses Open to LAN. Solaris picks it up from the game log so the player can copy or share it.
+ * World hosting through e4mc (Astra Client "Host for friends"): e4mc prints the public address in chat when the
+ * player uses Open to LAN. Astra picks it up from the game log so the player can copy or share it.
  */
 const hosting = new Map(); // runId -> { address, instanceId, name, since }
 function hostingFromLog(line, { runId, instanceId, name }) {
@@ -181,7 +181,7 @@ async function launch(instanceId, opts = {}) {
   }
 }
 
-/** Save play time for games still running when Solaris quits (the games themselves keep running). */
+/** Save play time for games still running when Astra quits (the games themselves keep running). */
 function savePlaytimeOnQuit() {
   for (const r of running.values()) {
     try { const cur = instances.get(r.instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + (Date.now() - r.start) }); } catch {}
@@ -197,12 +197,12 @@ async function launchInner(instanceId, opts = {}) {
   authP.catch(() => {}); // awaited below; this only stops an early failure being reported twice
 
   if (inst.solarisModules) {
-    status(instanceId, 'Updating Solaris modules');
+    status(instanceId, 'Updating Astra modules');
     try {
-      const rep = await modrinth.syncModules(instanceId, (p, slug) => status(instanceId, 'Updating Solaris modules', p, slug));
-      if (rep?.offline) push('toast', { type: 'info', text: 'You’re offline — playing with the Solaris modules you already have.' });
+      const rep = await modrinth.syncModules(instanceId, (p, slug) => status(instanceId, 'Updating Astra modules', p, slug));
+      if (rep?.offline) push('toast', { type: 'info', text: 'You’re offline — playing with the Astra modules you already have.' });
     }
-    catch (e) { push('toast', { type: 'warn', text: 'Could not update Solaris modules: ' + e.message }); }
+    catch (e) { push('toast', { type: 'warn', text: 'Could not update Astra modules: ' + e.message }); }
   }
 
   const versionId = await ensureVersion(inst);
@@ -263,7 +263,7 @@ async function launchInner(instanceId, opts = {}) {
     auth_player_name: auth.name, version_name: version.id, game_directory: gameDir, assets_root: assetsRoot, game_assets: assetsRoot,
     assets_index_name: assetInfo.id, auth_uuid: auth.uuid, auth_access_token: auth.accessToken, auth_session: auth.accessToken,
     clientid: '', auth_xuid: auth.xuid, user_type: auth.userType, version_type: version.type || 'release', user_properties: '{}',
-    natives_directory: nativesDir, launcher_name: 'Solaris', launcher_version: '1.0.0', classpath, classpath_separator: sep,
+    natives_directory: nativesDir, launcher_name: 'Astra', launcher_version: '1.0.0', classpath, classpath_separator: sep,
     library_directory: paths.libraries(), resolution_width: String(res.width || 854), resolution_height: String(res.height || 480),
   };
 
@@ -304,7 +304,7 @@ async function launchInner(instanceId, opts = {}) {
   const run = { runId, proc, instanceId, name: inst.name, start: Date.now(), lines: [], logFile, gameDir };
   running.set(runId, run);
   const safe = (l) => (auth.accessToken.length > 8 ? l.split(auth.accessToken).join('••••••') : l);
-  const header = `[Solaris] Launching ${inst.name} — ${version.id} with ${javaPath} (${maxMem} MB)`;
+  const header = `[Astra] Launching ${inst.name} — ${version.id} with ${javaPath} (${maxMem} MB)`;
   run.lines.push(header); logStream.write(header + '\n');
   push('game:log', { runId, instanceId, line: header });
   let buf = '';
@@ -323,7 +323,7 @@ async function launchInner(instanceId, opts = {}) {
   proc.stdout.on('data', onData);
   proc.stderr.on('data', onData);
   proc.on('error', (e) => {
-    push('game:log', { runId, instanceId, line: '[Solaris] Failed to start Java: ' + e.message });
+    push('game:log', { runId, instanceId, line: '[Astra] Failed to start Java: ' + e.message });
     // Java never started: 'close' may not fire, so don't leave the instance marked as running.
     if (!proc.pid && running.has(runId)) {
       running.delete(runId); logStream.end();
@@ -337,7 +337,7 @@ async function launchInner(instanceId, opts = {}) {
   if (assetsLater) {
     downloadAll(assetInfo.tasks, { concurrency: 4 }).catch((e) => {
       try { fs.unlinkSync(assetsOk); } catch {} // check everything before the next launch instead
-      push('game:log', { runId, instanceId, line: '[Solaris] Some sounds/textures could not be downloaded: ' + e.message });
+      push('game:log', { runId, instanceId, line: '[Astra] Some sounds/textures could not be downloaded: ' + e.message });
     });
   }
 
@@ -359,7 +359,7 @@ async function launchInner(instanceId, opts = {}) {
     if (code !== 0 && !killed) {
       analysis = crash.analyze({ code: code ?? -1, lines: run.lines.slice(-400), gameDir, since: run.start });
       // Damaged game files: check and re-download everything on the next launch automatically.
-      if (analysis.corrupt) { try { fs.writeFileSync(paths.file('repair.flag'), new Date().toISOString()); } catch {} push('toast', { type: 'warn', text: 'Some game files look damaged — Solaris will check and repair them the next time you press Play.' }); }
+      if (analysis.corrupt) { try { fs.writeFileSync(paths.file('repair.flag'), new Date().toISOString()); } catch {} push('toast', { type: 'warn', text: 'Some game files look damaged — Astra will check and repair them the next time you press Play.' }); }
       if (settings.get().notifications && Notification.isSupported()) new Notification({ title: `${inst.name} crashed`, body: analysis.causes[0].title }).show();
     }
     history.unshift({ runId, instanceId, name: inst.name, start: run.start, end: Date.now(), code, lines: run.lines, logFile, analysis });

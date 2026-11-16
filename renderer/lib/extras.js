@@ -1,7 +1,7 @@
 /* Extras inspired by other launchers (ideas only, own code):
-   - Splash screen while Solaris starts (OneLauncher's splash curtain)
+   - Splash screen while Astra starts (OneLauncher's splash curtain)
    - Seasonal snow (NoRisk's snow effect)
-   - solaris:// links (NoRisk's deep links)
+   - astra:// links (NoRisk's deep links)
    - Minecraft news cards for Home (NoRisk / Silent news feed) */
 
 /* ---------- splash ---------- */
@@ -11,7 +11,7 @@ const Splash = {
     const el = $('#splash');
     if (!el || el.classList.contains('out')) return;
     el.classList.add('out');
-    setTimeout(() => el.remove(), 600);
+    setTimeout(() => el.remove(), 220);
   },
 };
 setTimeout(() => Splash.done(), 12000); // never stay stuck behind the splash
@@ -66,7 +66,7 @@ const Snow = {
 };
 Bus.on('settings', (s) => Snow.sync(s));
 
-/* ---------- solaris:// links ---------- */
+/* ---------- astra:// links ---------- */
 const DeepLinks = {
   queue: [],
   init() {
@@ -85,7 +85,7 @@ const DeepLinks = {
       setTimeout(() => Pages.browse.details(link.id, undefined, null), 150);
     } else if (link.kind === 'server') {
       if (await confirmDialog(`A link wants to join the server ${link.address}.\n\nOnly join servers you trust.`, { title: 'Join server?', ok: 'Choose instance' })) Pages.servers.join(link.address);
-    } else toast('Solaris couldn’t open that link.', 'error');
+    } else toast('Astra couldn’t open that link.', 'error');
   },
 };
 DeepLinks.init();
@@ -101,7 +101,7 @@ function bindMcNews(root) {
   $$('[data-link]', root).forEach((b) => (b.onclick = () => { if (b.dataset.link) api('shell:open', b.dataset.link); }));
 }
 
-/* ---------- world hosting (e4mc via Solaris Client) ---------- */
+/* ---------- world hosting (e4mc via Astra Client) ---------- */
 const Hosting = {
   list: [],
   init() {
@@ -109,7 +109,7 @@ const Hosting = {
     window.solaris.on('host:offline', (h) => { this.list = this.list.filter((x) => x.runId !== h.runId); this.render(); });
     api('host:list').then((l) => { this.list = l || []; this.render(); }).catch(() => {});
   },
-  invite(address) { return `solaris://server/${address}`; },
+  invite(address) { return `astra://server/${address}`; },
   render() {
     const card = $('#host-card'); if (!card) return;
     const h = this.list[this.list.length - 1];
@@ -118,7 +118,7 @@ const Hosting = {
     card.innerHTML = `<div class="hc-top"><span class="hc-dot"></span><div class="hc-txt"><b>Hosting ${esc(h.name)}</b><small class="mono">${esc(h.address)}</small></div></div>
       <div class="hc-btns"><button class="btn sm" data-copy>${icon('copy')}Address</button><button class="btn sm primary" data-invite>${icon('users')}Invite link</button></div>`;
     $('[data-copy]', card).onclick = () => { api('clipboard:write', h.address); toast('Address copied — friends add it as a server'); };
-    $('[data-invite]', card).onclick = () => { api('clipboard:write', this.invite(h.address)); toast('Invite link copied — friends with Solaris can click it to join'); };
+    $('[data-invite]', card).onclick = () => { api('clipboard:write', this.invite(h.address)); toast('Invite link copied — friends with Astra can click it to join'); };
     Bus.emit('hosting', this.list);
   },
 };

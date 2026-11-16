@@ -3,8 +3,8 @@ const { paths, readJSON, writeJSON } = require('./util');
 
 const DEFAULTS = {
   language: 'en',
-  theme: 'solar',
-  accent: '#ff9f1c',
+  theme: 'astra',
+  accent: '#7c9cff',
   customTheme: { bg: '#0d0b12', panel: '#16131d', text: '#f4efe6' },
   launchBehavior: 'minimize', // keep | minimize | hide
   startMinimized: false,
@@ -59,6 +59,16 @@ function get() {
     delete saved.discordClientId; // now built in (src/config.js)
     // older versions shipped Rich Presence off because players had to paste their own app ID
     if (saved.discordRpc === false && !saved.discordRpcChosen) delete saved.discordRpc;
+    // Solaris became Astra: everyone gets the Astra moon look once (theme, accent, background); they can pick
+    // another one in Settings → Appearance afterwards. Light/dark mode and every other look setting stay.
+    if (!saved.astraLook) {
+      if (saved.theme !== 'dawn') saved.theme = 'astra';
+      saved.accent = '#7c9cff';
+      saved.gradientOn = false;
+      if (saved.bgStyle !== 'image') saved.bgStyle = 'moon'; // their own background picture stays
+      saved.astraLook = true;
+      try { writeJSON(file(), saved); } catch {}
+    }
     cache = { ...structuredClone(DEFAULTS), ...saved, keybinds: { ...DEFAULTS.keybinds, ...(saved.keybinds || {}) } };
   }
   return cache;

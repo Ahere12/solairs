@@ -1,4 +1,4 @@
-// Modrinth: search, install (with dependencies), modpacks (.mrpack), updates, Solaris Client modules.
+// Modrinth: search, install (with dependencies), modpacks (.mrpack), updates, Astra Client modules.
 const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
@@ -52,7 +52,7 @@ async function bestVersion(projectId, inst, projectType = 'mod') {
 
 /**
  * project_id → { file, versionId } for every jar/zip already in `dir`, identified by SHA-1 through Modrinth.
- * This catches content Solaris didn't install itself (modpacks, imports, manual drops), so installing a mod
+ * This catches content Astra didn't install itself (modpacks, imports, manual drops), so installing a mod
  * never adds a second copy of something that is already there (e.g. Fabric API → "Duplicate mods" crash).
  */
 async function installedProjects(dir) {
@@ -82,7 +82,7 @@ async function install(instanceId, { projectId, versionId, projectType = 'mod', 
     dir = path.join(inst.gameDir, 'saves', world, 'datapacks');
   }
   if (!found[dir]) found[dir] = await installedProjects(dir);
-  // Replace any other version of the same project — whether Solaris installed it or not.
+  // Replace any other version of the same project — whether Astra installed it or not.
   const record = readRecord(inst);
   const prev = record[v.project_id] || found[dir][v.project_id];
   if (prev && prev.file && prev.file !== f.filename) {
@@ -191,7 +191,7 @@ async function packProjectId(inst) {
 async function modpackVersions(instanceId) {
   const inst = instances.get(instanceId);
   const pid = await packProjectId(inst);
-  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Solaris doesn’t know where to look for updates.' };
+  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Astra doesn’t know where to look for updates.' };
   const list = await versions(pid);
   return {
     updatable: true, projectId: pid, current: inst.modpack.versionId,
@@ -295,13 +295,13 @@ async function applyUpdate(instanceId, kind, file, versionId) {
   return finalName;
 }
 
-// ---------- Solaris Client: curated all-in-one module set ----------
+// ---------- Astra Client: curated all-in-one module set ----------
 const MODULES = [
   { slug: 'fabric-api', name: 'Fabric API', cat: 'Core', required: true, desc: 'Library required by most Fabric mods.' },
-  // Solaris's own in-game client (client-mod/ in this repo, bundled in assets/mods): Right Shift menu, HUD, zoom.
-  { slug: 'solaris-client', name: 'Solaris Client mod', cat: 'Core', default: true, own: true, desc: 'Our own in-game client: Right Shift menu, movable HUD (FPS, CPS, keystrokes, coordinates, ping, clock), zoom (C) and toggle sprint.' },
+  // Astra's own in-game client (client-mod/ in this repo, bundled in assets/mods): Right Shift menu, HUD, zoom.
+  { slug: 'solaris-client', name: 'Astra Client mod', cat: 'Core', default: true, own: true, desc: 'Our own in-game client: Right Shift menu, movable HUD (FPS, CPS, keystrokes, coordinates, ping, clock), zoom (C) and toggle sprint.' },
   // Extras from other projects (off by default; OneConfig also uses Right Shift)
-  { slug: 'oneconfig', name: 'OneConfig (Polyfrost)', cat: 'HUD & Utility', default: false, desc: 'Polyfrost’s mod menu. Uses Right Shift too — turn off the Solaris menu key if you use both.' },
+  { slug: 'oneconfig', name: 'OneConfig (Polyfrost)', cat: 'HUD & Utility', default: false, desc: 'Polyfrost’s mod menu. Uses Right Shift too — turn off the Astra menu key if you use both.' },
   { slug: 'polysprint', name: 'PolySprint', cat: 'HUD & Utility', default: false, desc: 'Toggle sprint and sneak (Polyfrost).' },
   { slug: 'chatting', name: 'Chatting', cat: 'HUD & Utility', default: false, desc: 'Chat tabs, chat search, screenshots of chat and a cleaner chat box.' },
   { slug: 'sodium', name: 'Sodium', cat: 'Performance', default: true, desc: 'Modern rendering engine — huge FPS boost.' },
@@ -315,7 +315,7 @@ const MODULES = [
   { slug: 'iris', name: 'Iris Shaders', cat: 'Graphics', default: false, desc: 'Shader pack support compatible with Sodium.' },
   { slug: 'continuity', name: 'Continuity', cat: 'Graphics', default: false, desc: 'Connected textures for resource packs.' },
   { slug: 'lambdynamiclights', name: 'LambDynamicLights', cat: 'Graphics', default: false, desc: 'Held torches light up the world.' },
-  { slug: 'zoomify', name: 'Zoomify', cat: 'HUD & Utility', default: false, desc: 'Configurable zoom (also on C — the Solaris Client mod already has zoom).' },
+  { slug: 'zoomify', name: 'Zoomify', cat: 'HUD & Utility', default: false, desc: 'Configurable zoom (also on C — the Astra Client mod already has zoom).' },
   { slug: 'betterf3', name: 'BetterF3', cat: 'HUD & Utility', default: false, desc: 'Customizable, readable F3 debug/coordinates screen.' },
   { slug: 'appleskin', name: 'AppleSkin', cat: 'HUD & Utility', default: true, desc: 'Shows hunger & saturation values.' },
   { slug: 'mouse-tweaks', name: 'Mouse Tweaks', cat: 'HUD & Utility', default: true, desc: 'Better inventory mouse handling.' },
@@ -333,7 +333,7 @@ const MODULES = [
   { slug: 'shulkerboxtooltip', name: 'Shulker Box Tooltip', cat: 'HUD & Utility', default: false, desc: 'See what is inside shulker boxes by hovering.' },
   { slug: 'xaeros-minimap', name: "Xaero's Minimap", cat: 'HUD & Utility', default: false, desc: 'Minimap with waypoints.' },
   // Social & multiplayer
-  { slug: 'e4mc', name: 'e4mc — Host for friends', cat: 'Social', default: true, desc: 'Open to LAN puts your world online — no port forwarding. Solaris shows the address to share.' },
+  { slug: 'e4mc', name: 'e4mc — Host for friends', cat: 'Social', default: true, desc: 'Open to LAN puts your world online — no port forwarding. Astra shows the address to share.' },
   { slug: 'world-host', name: 'World Host', cat: 'Social', default: false, desc: 'In-game friends list: see friends online and join their worlds (Minecraft 1.21.5 and older).' },
   { slug: 'chat-heads', name: 'Chat Heads', cat: 'Social', default: true, desc: 'Player heads next to chat messages.' },
   { slug: 'no-chat-reports', name: 'No Chat Reports', cat: 'Social', default: false, desc: 'Makes your chat messages unreportable to Mojang.' },
@@ -348,9 +348,9 @@ const MODULES = [
 const COMPANIONS = { appleskin: ['cloth-config'] };
 function modules() { return MODULES; }
 
-// ---------- Solaris's own mod (bundled with the launcher) ----------
+// ---------- Astra's own mod (bundled with the launcher) ----------
 const OWN_DIR = path.join(__dirname, '..', 'assets', 'mods');
-/** The bundled Solaris Client mod jar for a Minecraft version, or null (file name: solaris-client-<ver>+<mc>.jar). */
+/** The bundled Astra Client mod jar for a Minecraft version, or null (file name: solaris-client-<ver>+<mc>.jar). */
 function ownModFor(mc) {
   let files = [];
   try { files = fs.readdirSync(OWN_DIR); } catch {}
@@ -385,7 +385,7 @@ async function moduleAvailability(mc) {
   return out;
 }
 
-/** Install/update the selected modules in a Solaris-managed instance. */
+/** Install/update the selected modules in a Astra-managed instance. */
 /** Quick single check (no retries) so offline launches don't wait on dozens of retried lookups. */
 async function reachable() {
   try { const r = await fetch(API, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) }); return r.status < 500; } catch { return false; }
@@ -397,11 +397,11 @@ async function syncModules(instanceId, onProgress) {
   const wanted = [...new Set(['fabric-api', ...chosen, ...companions])];
   const record = readRecord(inst);
   const report = { installed: [], updated: [], unavailable: [], offline: false };
-  // Solaris's own mod first: it's bundled with the launcher, so it installs even offline.
+  // Astra's own mod first: it's bundled with the launcher, so it installs even offline.
   if (wanted.includes('solaris-client')) {
     const r = installOwnMod(inst);
     if (!r) report.unavailable.push('solaris-client');
-    else if (r.fresh) report.installed.push('Solaris Client mod');
+    else if (r.fresh) report.installed.push('Astra Client mod');
   } else disableOwnMod(inst);
   // Checked for updates recently with the same modules, and every file is still there: start right away.
   const key = `${inst.versionId}|${inst.loader?.type}|${[...wanted].sort().join(',')}`;
@@ -451,7 +451,7 @@ async function syncModules(instanceId, onProgress) {
   return report;
 }
 const MODULE_CHECK_EVERY = 6 * 60 * 60 * 1000; // look for module updates at most every 6 hours
-/** Disable modules the user turned off (only ones Solaris installed). */
+/** Disable modules the user turned off (only ones Astra installed). */
 function disableUnwanted(inst, wanted) {
   const fresh = readRecord(inst);
   for (const m of MODULES) {

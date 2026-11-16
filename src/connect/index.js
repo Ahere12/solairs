@@ -1,4 +1,4 @@
-// Solaris Connect — the app's registry: Solaris's integrations, their state in connect.json, secrets sealed with
+// Astra Connect — the app's registry: Astra's integrations, their state in connect.json, secrets sealed with
 // the operating system's key store (Electron safeStorage) so they never sit in the file as plain text.
 const { safeStorage } = require('electron');
 const { paths, readJSON, writeJSON } = require('../util');
@@ -21,7 +21,7 @@ module.exports = {
   setConfig: (id, patch) => registry().setConfig(String(id), patch && typeof patch === 'object' ? patch : {}),
   clearErrors: (id) => registry().clearErrors(String(id)),
   details: (id) => registry().details(String(id)),
-  /** Starts what runs in the background (server monitoring, desktop alerts). Called once when Solaris starts. */
+  /** Starts what runs in the background (server monitoring, desktop alerts). Called once when Astra starts. */
   init: () => require('./runtime').init((id) => registry().active(id)),
   restartWatch: () => require('./runtime').restartWatch((id) => registry().active(id)),
   compatibility: (id) => registry().compatibility(String(id), require('../hostserver').list().filter((s) => !s.missing)),

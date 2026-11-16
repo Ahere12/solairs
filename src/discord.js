@@ -1,22 +1,22 @@
 // Discord Rich Presence through Silent Client's discord-rpc (MIT, github.com/Silent-Client/discord-rpc).
-// Uses Solaris's built-in Discord application (src/config.js). Reconnects by itself when Discord is started later.
+// Uses Astra's built-in Discord application (src/config.js). Reconnects by itself when Discord is started later.
 // Loaded on first use: the library (with its websocket and fetch helpers) takes ~45 ms to load at startup.
 //
 // What friends see, most important first:
 //   1. Playing  — instance, and live from the game log: main menu / singleplayer world / server / hosting for friends
-//   2. Hosting  — a Solaris-hosted server with its player count (Discord's "2 of 10")
-//   3. Launcher — what you're doing in Solaris (browsing mods, picking a skin …)
+//   2. Hosting  — a Astra-hosted server with its player count (Discord's "2 of 10")
+//   3. Launcher — what you're doing in Astra (browsing mods, picking a skin …)
 // Privacy settings (Settings → Integrations) and streamer mode hide instance names, servers and worlds.
 const Client = function (opts) { const { Client: C } = require('silent-discord-rpc'); return new C(opts); };
 const settings = require('./settings');
 const { DISCORD_CLIENT_ID } = require('./config');
 
 const RETRY_MS = 20000;
-const BUTTONS = [{ label: 'Get Solaris', url: 'https://github.com/Ahere12/solairs/releases/latest' }];
+const BUTTONS = [{ label: 'Get Astra', url: 'https://github.com/Ahere12/solairs/releases/latest' }];
 const PAGES = {
   home: 'In the launcher', library: 'Organising instances', instance: 'Setting up an instance', browse: 'Browsing mods',
-  solaris: 'Setting up Solaris Client', servers: 'Looking for a server', skins: 'Picking a skin', friends: 'Checking on friends',
-  host: 'Managing servers', connect: 'Setting up Solaris Connect', maps: 'Looking at a map', stats: 'Checking their stats', gallery: 'Looking at screenshots', console: 'Reading game logs', settings: 'Tweaking settings',
+  solaris: 'Setting up Astra Client', servers: 'Looking for a server', skins: 'Picking a skin', friends: 'Checking on friends',
+  host: 'Managing servers', connect: 'Setting up Astra Connect', maps: 'Looking at a map', stats: 'Checking their stats', waypoints: 'Planning a trip', gallery: 'Looking at screenshots', console: 'Reading game logs', settings: 'Tweaking settings',
   changelog: 'Reading what’s new', roadmap: 'Reading the roadmap',
 };
 
@@ -84,14 +84,14 @@ function activity() {
       state: showServer && h.address ? `Join at ${h.address}` : `${h.software} ${h.mc}`,
       startTimestamp: h.since,
       partySize: Math.max(1, h.players), partyMax: Math.max(h.players, h.max || 1),
-      largeImageKey: 'solaris', largeImageText: `${h.software} ${h.mc} server · Solaris`,
+      largeImageKey: 'solaris', largeImageText: `${h.software} ${h.mc} server · Astra`,
     };
   }
   return {
     details: PAGES[page] || 'In the launcher',
-    state: 'Solaris Launcher',
+    state: 'Astra Launcher',
     startTimestamp: launcherSince,
-    largeImageKey: 'solaris', largeImageText: 'Solaris Launcher',
+    largeImageKey: 'solaris', largeImageText: 'Astra Launcher',
   };
 }
 const cap = (x) => String(x || '').charAt(0).toUpperCase() + String(x || '').slice(1);
@@ -110,7 +110,7 @@ function update() {
     if (key === lastKey) return;
     lastSent = Date.now();
     try { await client.setActivity({ ...a, buttons: BUTTONS, instance: false }); lastKey = key; }
-    catch (e) { console.warn('[Solaris] Discord presence failed:', e?.message || e); }
+    catch (e) { console.warn('[Astra] Discord presence failed:', e?.message || e); }
   }, wait);
   sendTimer.unref?.();
 }
@@ -159,7 +159,7 @@ function setHosted(id, info) {
 /** Back-compat: set an explicit activity. */
 function setActivity() { return update(); }
 
-/** For Solaris Connect: is Rich Presence on, and is Discord connected right now? */
+/** For Astra Connect: is Rich Presence on, and is Discord connected right now? */
 function status() { return { enabled: enabled(), connected: ready, hasApp: !!DISCORD_CLIENT_ID }; }
 
 module.exports = { setActivity, idle, playing, gameEnded, fromGameLog, setHosted, setPage, disconnect, status };

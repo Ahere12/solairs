@@ -1,5 +1,5 @@
-// Lets Solaris's main-process modules load under plain Node (no Electron): `require('electron')` gets a small stub,
-// and all Solaris data goes to a fresh temporary folder. Require this before any Solaris module.
+// Lets Astra's main-process modules load under plain Node (no Electron): `require('electron')` gets a small stub,
+// and all Astra data goes to a fresh temporary folder. Require this before any Astra module.
 const Module = require('module');
 const fs = require('fs');
 const os = require('os');

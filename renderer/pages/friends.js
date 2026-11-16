@@ -9,17 +9,17 @@ Pages.friends = {
       ${acct?.type !== 'msa' ? `<div class="card notice" style="margin-bottom:12px">${icon('info')}<span>Friends work best with a Microsoft account — your list is saved per account, and friends can only see you on online-mode servers with a Microsoft account.</span></div>` : ''}
       <h2 style="margin-top:0">Play together</h2>
       <div class="together">
-        <div class="card"><h3>${icon('globe')}Host your world</h3><p>No port forwarding. In a Solaris Client instance, press <b>Esc → Open to LAN → Start LAN World</b>. Solaris shows the address here and in the sidebar so you can send it.</p>
+        <div class="card"><h3>${icon('globe')}Host your world</h3><p>No port forwarding. In a Astra Client instance, press <b>Esc → Open to LAN → Start LAN World</b>. Astra shows the address here and in the sidebar so you can send it.</p>
           <div id="host-status" class="row"></div></div>
-        <div class="card"><h3>${icon('users')}Join a friend</h3><p>Got an address, a <span class="mono">JOIN-</span> code or a <span class="mono">solaris://server/…</span> invite link? Paste it here — or just click the link.</p>
+        <div class="card"><h3>${icon('users')}Join a friend</h3><p>Got an address, a <span class="mono">JOIN-</span> code or a <span class="mono">astra://server/…</span> invite link? Paste it here — or just click the link.</p>
           <div class="row"><input type="text" id="fr-join-addr" class="grow" placeholder="abc.e4mc.link, play.server.net or a JOIN- code" spellcheck="false"><button class="btn primary" id="fr-join">${icon('play')}Join</button></div></div>
-        <div class="card"><h3>${icon('sun')}In-game friends</h3><p>Turn on <b>World Host</b> in the Solaris Client to see friends online and join their worlds from inside Minecraft (1.21.5 and older).</p>
-          <div class="row"><button class="btn sm" id="fr-client">${icon('sun')}Open Solaris Client</button></div></div>
+        <div class="card"><h3>${icon('sun')}In-game friends</h3><p>Turn on <b>World Host</b> in the Astra Client to see friends online and join their worlds from inside Minecraft (1.21.5 and older).</p>
+          <div class="row"><button class="btn sm" id="fr-client">${icon('sun')}Open Astra Client</button></div></div>
       </div>
       <h2>Friends</h2>
       <div class="search" style="max-width:320px;margin-bottom:12px">${icon('search')}<input type="search" id="fr-q" placeholder="${T('Search')}…"></div>
       <div class="friends-grid" id="fr-list"><div class="faint">Loading…</div></div>
-      <p class="faint small" style="margin-top:14px">Minecraft: Java Edition has no official friends service, so “online” means Solaris saw the player in the live player list of a server it checked (Discover, My servers and Favourites). Big servers only show some of their players.</p>`;
+      <p class="faint small" style="margin-top:14px">Minecraft: Java Edition has no official friends service, so “online” means Astra saw the player in the live player list of a server it checked (Discover, My servers and Favourites). Big servers only show some of their players.</p>`;
     let list = [], q = '';
     const draw = () => {
       const box = $('#fr-list', el);
@@ -54,7 +54,7 @@ Pages.friends = {
     const drawHost = async () => {
       const box = $('#host-status', el); if (!box) return;
       const h = Hosting.list[Hosting.list.length - 1];
-      // your Solaris servers that are running right now (Hosting page), with who's on them
+      // your Astra servers that are running right now (Hosting page), with who's on them
       const servers = (await api('hosted:list').catch(() => [])).filter((s) => s.state !== 'offline' && !s.missing && s.software !== 'bedrock');
       if (!box.isConnected) return;
       box.innerHTML = (h ? `<div class="row" style="gap:8px"><span class="chip ok">Online</span><span class="mono small ellipsis grow" title="${esc(h.address)}">${esc(h.address)}</span><button class="btn sm primary" id="fr-invite">${icon('copy')}Invite link</button></div>` : '')
@@ -85,7 +85,7 @@ Pages.friends = {
       const m = modal({
         title: 'Add friend',
         body: `<input type="text" id="af-name" style="width:100%" maxlength="16" placeholder="Minecraft username" spellcheck="false">
-          <label class="row small" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="af-off"><span><b>Offline account</b><br><span class="faint">They play with an offline (cracked) account, not a bought Minecraft account. Solaris then doesn’t look the name up on Mojang (it could belong to someone else).</span></span></label>`,
+          <label class="row small" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="af-off"><span><b>Offline account</b><br><span class="faint">They play with an offline (cracked) account, not a bought Minecraft account. Astra then doesn’t look the name up on Mojang (it could belong to someone else).</span></span></label>`,
         footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go>${icon('plus')}Add</button>`,
       });
       const go = async () => {
@@ -115,7 +115,7 @@ Pages.friends = {
   async accountCheck(j) {
     const acct = State.accounts.accounts.find((x) => x.id === State.accounts.active);
     if (j?.requiresMicrosoft !== true || !acct || acct.type === 'msa') return true;
-    return confirmDialog(`This server only lets in bought (Microsoft) Minecraft accounts, and you’re playing as the offline account “${acct.name}”, so it will turn you away. Ask your friend to untick “Require Microsoft accounts” for the server in Solaris (Hosting → the server → Settings), or switch to a Microsoft account. Join anyway?`, { ok: 'Join anyway' });
+    return confirmDialog(`This server only lets in bought (Microsoft) Minecraft accounts, and you’re playing as the offline account “${acct.name}”, so it will turn you away. Ask your friend to untick “Require Microsoft accounts” for the server in Astra (Hosting → the server → Settings), or switch to a Microsoft account. Join anyway?`, { ok: 'Join anyway' });
   },
   /** Draw a friend's head from their real skin (falls back to their default skin). */
   head(el, uuid) {

@@ -1,4 +1,4 @@
-/* Solaris Connect: every integration in one place — what it is, whether it really works right now, its settings. */
+/* Astra Connect: every integration in one place — what it is, whether it really works right now, its settings. */
 const CONNECT_STATE = {
   connected: ['ok', 'Connected'], ready: ['ready', 'Ready'], 'needs-setup': ['warn', 'Needs setup'], off: ['off', 'Off'],
   error: ['err', 'Problem'], unavailable: ['off', 'Unavailable'], planned: ['off', 'Planned'],
@@ -8,7 +8,7 @@ Pages.connect = {
   view: { tab: 'installed', cat: 'all', q: '' },
 
   async render(el, params, ctx) {
-    el.innerHTML = `<div class="page-head"><div><h1>Solaris Connect</h1><div class="sub">Maps, friends, servers and player tools — every service Solaris connects to, and whether it’s working right now.</div></div>
+    el.innerHTML = `<div class="page-head"><div><h1>Astra Connect</h1><div class="sub">Maps, friends, servers and player tools — every service Astra connects to, and whether it’s working right now.</div></div>
         <div class="actions"><button class="btn" id="cn-refresh">${icon('refresh')}Check again</button></div></div>
       <div class="row cn-bar"><div class="hs-filter" id="cn-tabs"><button data-tab="installed">Installed</button><button data-tab="discover">Discover</button></div>
         <div class="hs-filter" id="cn-cats"></div><div class="grow"></div>
@@ -24,7 +24,7 @@ Pages.connect = {
       $('#cn-cats', el).innerHTML = cats.map(([k, n]) => `<button data-cat="${k}" class="${v.cat === k ? 'on' : ''}">${esc(n)}</button>`).join('');
       $$('[data-cat]', el).forEach((b) => (b.onclick = () => { v.cat = b.dataset.cat; draw(); }));
       const q = v.q.trim().toLowerCase();
-      // Installed: built into Solaris and usable. Discover: everything, including planned and unavailable ones.
+      // Installed: built into Astra and usable. Discover: everything, including planned and unavailable ones.
       const shown = list.filter((i) => (v.tab === 'discover' || !['planned', 'unavailable'].includes(i.status?.state))
         && (v.cat === 'all' || i.category === v.cat)
         && (!q || `${i.name} ${i.description} ${i.categoryName} ${i.types.map((t) => t.name).join(' ')}`.toLowerCase().includes(q)));
@@ -49,7 +49,7 @@ Pages.connect = {
     $('#cn-q', el).oninput = (e) => { v.q = e.target.value; draw(); };
     $('#cn-refresh', el).onclick = () => load();
     await load(false);
-    // statuses follow what happens elsewhere in Solaris (servers starting, playit.gg connecting…)
+    // statuses follow what happens elsewhere in Astra (servers starting, playit.gg connecting…)
     const soon = debounce(() => load(false), 1500);
     ctx.on('hosted', soon); ctx.on('playit', soon); ctx.on('connect-watch', soon);
   },
@@ -92,13 +92,13 @@ Pages.connect = {
       const st = i.status || {};
       m.$('#cn-d').innerHTML = `<div class="stack">
         <div class="row" style="gap:12px"><span class="cn-ic lg">${icon(i.icon)}</span><div class="grow"><div class="faint small">${esc(i.categoryName)} · ${i.types.map((t) => esc(t.name)).join(' · ')}</div><div>${esc(i.description)}</div></div>
-          ${i.canToggle ? `<label class="row small" style="gap:8px"><label class="switch"><input type="checkbox" id="cn-on" ${i.enabled ? 'checked' : ''}><span></span></label>${i.enabled ? 'On' : 'Off'}</label>` : i.core ? '<span class="chip">Part of Solaris</span>' : ''}</div>
+          ${i.canToggle ? `<label class="row small" style="gap:8px"><label class="switch"><input type="checkbox" id="cn-on" ${i.enabled ? 'checked' : ''}><span></span></label>${i.enabled ? 'On' : 'Off'}</label>` : i.core ? '<span class="chip">Part of Astra</span>' : ''}</div>
         <div class="card row" style="gap:10px;padding:10px 12px">${this.dot(st)}<span class="grow small">${esc(st.text || '')}</span>${st.at ? `<span class="faint small">checked ${timeAgo(st.at)}</span>` : ''}${['planned', 'unavailable'].includes(st.state) ? '' : `<button class="btn sm" id="cn-check">${icon('refresh')}Check</button>`}</div>
         ${i.hasDetails && i.enabled ? '<div id="cn-table"><div class="faint small">Loading…</div></div>' : ''}
         ${compat ? `<div><h4 style="margin:4px 0">Works with your servers</h4>${compat.length ? `<div class="stack" style="gap:2px">${compat.map((c) => `<div class="row small hs-person">${c.ok ? `<span class="ok-text">${icon('check')}</span>` : `<span class="faint">${icon('close')}</span>`}<b class="grow">${esc(c.name)}</b><span class="faint">${c.ok ? esc(c.software) : esc(c.why)}</span></div>`).join('')}</div>` : '<div class="faint small">You don’t host any servers yet.</div>'}${i.compat.note ? `<div class="faint small">${esc(i.compat.note)}</div>` : ''}</div>` : ''}
         ${i.config.length ? `<div><h4 style="margin:4px 0">Settings</h4><div class="stack" id="cn-cfg">${i.config.map(field).join('')}</div><div class="row" style="margin-top:8px"><div class="grow"></div><button class="btn sm primary" id="cn-save">${icon('check')}Save</button></div></div>` : ''}
         ${i.errors.length ? `<div><div class="row"><h4 class="grow" style="margin:4px 0">Recent problems</h4><button class="btn sm ghost" id="cn-clear">Clear</button></div><div class="stack" style="gap:2px">${i.errors.map((e) => `<div class="small"><span class="faint">${timeAgo(e.at)}</span> · <span class="danger-text">${esc(e.message)}</span></div>`).join('')}</div></div>` : ''}
-        <div class="row" style="gap:8px">${i.page ? `<button class="btn sm primary" id="cn-open">${icon('fwd')}Open in Solaris</button>` : ''}${i.docs ? `<button class="btn sm" id="cn-docs">${icon('external')}Documentation</button>` : ''}</div></div>`;
+        <div class="row" style="gap:8px">${i.page ? `<button class="btn sm primary" id="cn-open">${icon('fwd')}Open in Astra</button>` : ''}${i.docs ? `<button class="btn sm" id="cn-docs">${icon('external')}Documentation</button>` : ''}</div></div>`;
       if (m.$('#cn-table')) this.table(m.$('#cn-table'), id);
       const on = m.$('#cn-on');
       if (on) on.onchange = async () => { on.disabled = true; try { i = await api('connect:setEnabled', id, on.checked); onChange && onChange(); } catch (e) { toastErr(e); } draw(); };

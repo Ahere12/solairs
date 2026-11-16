@@ -1,4 +1,4 @@
-// Solaris Connect step 6: inventory viewer.  Run: npm test
+// Astra Connect step 6: inventory viewer.  Run: npm test
 const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -84,7 +84,7 @@ test('older saves (before 1.20.5): Count, tag, armour slots 100–103 and off ha
   assert.equal(v.dimension, 'The End');
 });
 
-test('names and icons come from the game jar when Solaris has it', () => {
+test('names and icons come from the game jar when Astra has it', () => {
   const AdmZip = require('adm-zip');
   const z = new AdmZip();
   z.addFile('assets/minecraft/lang/en_us.json', Buffer.from(JSON.stringify({ 'item.minecraft.stick': 'Stick (real name)', 'block.minecraft.stone': 'Stone (real name)', 'enchantment.minecraft.sharpness': 'Sharpness!' })));
@@ -98,7 +98,7 @@ test('names and icons come from the game jar when Solaris has it', () => {
   const stone = inv.item({ id: 'minecraft:stone', count: 1, components: { 'minecraft:enchantments': { 'minecraft:sharpness': 1 } } }, '7.7.7');
   assert.equal(stone.name, 'Stone (real name)'); assert.ok(stone.icon.endsWith(Buffer.from([137, 80, 78, 71, 2]).toString('base64')), 'icon through the block model');
   assert.equal(stone.enchantments[0].name, 'Sharpness!');
-  assert.equal(inv.item({ id: 'modded:thing', count: 1 }, '7.7.7').icon, null, 'no picture for items Solaris can’t find');
+  assert.equal(inv.item({ id: 'modded:thing', count: 1 }, '7.7.7').icon, null, 'no picture for items Astra can’t find');
 });
 
 test('singleplayer worlds read the player from level.dat; unknown players and worlds are refused', async () => {

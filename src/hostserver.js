@@ -39,7 +39,7 @@ async function bdsDownload() {
 const root = () => path.join(paths.getRoot(), 'hosted');
 const indexFile = () => path.join(root(), 'servers.json');
 const crashTimes = new Map(); // id -> recent crash times (auto restart)
-// Add-ons in their own files (Solaris Connect: BlueMap…) hook in here instead of growing this file.
+// Add-ons in their own files (Astra Connect: BlueMap…) hook in here instead of growing this file.
 const hooks = { beforeStart: new Set(), line: new Set() };
 /** Merges a few fields into a server's saved settings (for add-ons; the keys are theirs). */
 function patchMeta(id, patch) { const m = meta(id); Object.assign(m, patch); save(m); emit(id); return get(id); }
@@ -49,7 +49,7 @@ const running = new Map(); // id -> { proc, state, address, players:Set, lines, 
 function index() {
   const idx = readJSON(indexFile(), null);
   if (idx) return idx;
-  // first run of the index: pick up servers created by Solaris 1.4 under hosted/<id>
+  // first run of the index: pick up servers created by Astra 1.4 under hosted/<id>
   const found = [];
   try { for (const d of fs.readdirSync(root())) if (fs.existsSync(path.join(root(), d, 'solaris-server.json'))) found.push({ id: d, dir: path.join(root(), d) }); } catch {}
   writeJSON(indexFile(), found);
@@ -315,7 +315,7 @@ async function create(opts, resolveJava, onStep) {
   if (software === 'bedrock' && !['win32', 'linux'].includes(process.platform)) throw new Error('Mojang’s Bedrock server only runs on Windows and Linux.');
   let p = port ? Number(port) : nextPort(software);
   if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.');
-  if (list().some((s) => s.port === p)) throw new Error(`Another Solaris server already uses port ${p}.`);
+  if (list().some((s) => s.port === p)) throw new Error(`Another Astra server already uses port ${p}.`);
   const free = software === 'bedrock' ? (x) => udpFree(x) : (x) => portFree(x);
   if (!(await free(p))) {
     if (port) throw new Error(`Port ${p} is already used by another program on this PC. Pick another port, or leave it on “auto”.`);
@@ -338,11 +338,11 @@ async function create(opts, resolveJava, onStep) {
     if (isBds(m)) {
       writeProps(id, bdsProps({ 'server-name': m.name, 'server-port': p, 'server-portv6': p + 1, 'max-players': m.maxPlayers, 'online-mode': true, difficulty: 'normal', 'level-name': 'world', 'content-log-file-enabled': false, ...cleanProps(gameProps) }));
     } else {
-      fs.writeFileSync(path.join(dir, 'eula.txt'), `# Accepted in Solaris on ${new Date().toISOString()} (https://aka.ms/MinecraftEULA)\neula=true\n`);
-      writeProps(id, { motd: `${m.name} \\u00a77\\u2014 hosted with Solaris`, 'server-port': p, 'max-players': m.maxPlayers, 'online-mode': true, 'spawn-protection': 0, difficulty: 'normal', 'enable-command-block': false, ...cleanProps(gameProps) });
+      fs.writeFileSync(path.join(dir, 'eula.txt'), `# Accepted in Astra on ${new Date().toISOString()} (https://aka.ms/MinecraftEULA)\neula=true\n`);
+      writeProps(id, { motd: `${m.name} \\u00a77\\u2014 hosted with Astra`, 'server-port': p, 'max-players': m.maxPlayers, 'online-mode': true, 'spawn-protection': 0, difficulty: 'normal', 'enable-command-block': false, ...cleanProps(gameProps) });
     }
     if (m.tunnel === 'e4mc') { onStep && onStep('Adding e4mc for the public address'); if (!(await addE4mc(m))) m.tunnel = 'none'; }
-    // modpack first: Solaris's own extras are only added when the pack doesn't already bring them
+    // modpack first: Astra's own extras are only added when the pack doesn't already bring them
     if (modpack) { onStep && onStep('Installing the modpack'); await installModpack(m, modpack, onStep); }
     if (SOFTWARE[software].kind === 'mods') {
       // Quilt's loader often lags behind Fabric API's newest requirements: it gets Quilt's own API (QSL) instead
@@ -391,7 +391,7 @@ async function create(opts, resolveJava, onStep) {
     } catch (e) {
       m.playitSetupError = e.message;
       save(m);
-      push('toast', { type: 'warn', text: `The server is ready, but playit.gg isn’t set up yet: ${e.message} Solaris tries again when you start the server, or use “Restart tunnel”.` });
+      push('toast', { type: 'warn', text: `The server is ready, but playit.gg isn’t set up yet: ${e.message} Astra tries again when you start the server, or use “Restart tunnel”.` });
     } finally {
       pl.releaseServer(id); // the agent only runs while a server needs it
     }
@@ -434,7 +434,7 @@ const cleanSchedule = (sc) => ({ backupHours: Math.max(0, Math.min(168, Number(s
 // ---------- Simple Voice Chat (mod or plugin) + its own playit.gg UDP tunnel ----------
 const VOICE_ID = '9eGKb6K1'; // Modrinth project "simple-voice-chat"
 const voiceFile = (m) => path.join(m.dir, SOFTWARE[m.software].kind === 'plugins' ? 'plugins' : 'config', 'voicechat', 'voicechat-server.properties');
-// (an address the player set by hand means they made the tunnel themselves: Solaris doesn't make another)
+// (an address the player set by hand means they made the tunnel themselves: Astra doesn't make another)
 const voiceReq = (m) => (m.voice?.on && m.tunnel === 'playit' && !m.voice.manualAddress ? { port: m.voice.port, tunnelId: m.voice.tunnelId || null } : null);
 function udpFree(port) {
   return new Promise((resolve) => { const sock = require('dgram').createSocket('udp4'); sock.once('error', () => resolve(false)); sock.bind(port, '0.0.0.0', () => sock.close(() => resolve(true))); });
@@ -450,7 +450,7 @@ function writeVoiceConfig(m) {
   const file = voiceFile(m);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let lines = []; try { lines = fs.readFileSync(file, 'utf8').split(/\r?\n/); } catch {}
-  // voice_host: an address the player typed in Settings wins, then the playit.gg tunnel Solaris found or made.
+  // voice_host: an address the player typed in Settings wins, then the playit.gg tunnel Astra found or made.
   // With playit.gg but no address yet, an existing voice_host is left alone (it may be one the player set by hand);
   // on the home network it's empty, so players connect to the same address they joined with.
   const vh = m.voice.manualAddress || (m.tunnel === 'playit' ? m.voice.address : null);
@@ -459,7 +459,7 @@ function writeVoiceConfig(m) {
   else if (m.tunnel !== 'playit') left.voice_host = '';
   lines = lines.map((l) => { const k = (l.match(/^([a-z_]+)=/) || [])[1]; if (k && k in left) { const v = left[k]; delete left[k]; return `${k}=${v}`; } return l; });
   while (lines.length && !lines[lines.length - 1]) lines.pop();
-  if (!lines.length) lines.push('# Simple Voice Chat — port and voice_host are set by Solaris');
+  if (!lines.length) lines.push('# Simple Voice Chat — port and voice_host are set by Astra');
   for (const [k, v] of Object.entries(left)) lines.push(`${k}=${v}`);
   fs.writeFileSync(file, lines.join('\n') + '\n');
 }
@@ -471,7 +471,7 @@ function setVoiceAddress(id, address) {
   if (a && !/^[A-Za-z0-9.-]+:\d{1,5}$/.test(a)) throw new Error('Enter the address with its port, like scooter-unanimous.tun.ply.gg:50761 (both are shown on playit.gg).');
   if (a) m.voice.manualAddress = a; else delete m.voice.manualAddress;
   writeVoiceConfig(m); save(m);
-  if (running.has(id)) log(id, '[Solaris] Voice chat address saved — restart the server so players use it.');
+  if (running.has(id)) log(id, '[Astra] Voice chat address saved — restart the server so players use it.');
   emit(id);
   return get(id);
 }
@@ -502,14 +502,14 @@ async function setVoice(id, on) {
       try { const t = await pl.setupServer({ id, port: m.port, name: m.tunnelName || m.name, tunnelId: m.playitTunnelId, voice: voiceReq(m), bedrock: bedrockReq(m), main: isBds(m) ? 'bds' : 'java', pack: packReq(m) }, null); Object.assign(m, { playitTunnelId: t.tunnelId, playitAddress: t.address }); applyVoice(m, t); applyBedrock(m, t); save(m); }
       catch (e) { m.voice.error = e.message; save(m); }
       finally { pl.releaseServer(id); }
-    } else if (running.has(id)) { log(id, '[Solaris] Simple Voice Chat added — restart the server to turn it on.'); if (m.tunnel === 'playit') startTunnel(id).catch(() => {}); }
+    } else if (running.has(id)) { log(id, '[Astra] Simple Voice Chat added — restart the server to turn it on.'); if (m.tunnel === 'playit') startTunnel(id).catch(() => {}); }
   } else if (m.voice) {
     const rec = readJSON(recordFile(m), {});
     const vf = rec[VOICE_ID]?.file;
     if (vf) { fs.rmSync(path.join(contentDir(m), vf), { force: true }); fs.rmSync(path.join(contentDir(m), vf + '.disabled'), { force: true }); delete rec[VOICE_ID]; writeJSON(recordFile(m), rec); }
     require('./playit').deleteTunnel(m.voice.tunnelId);
     delete m.voice; save(m);
-    if (running.has(id)) log(id, '[Solaris] Simple Voice Chat removed — restart the server to finish.');
+    if (running.has(id)) log(id, '[Astra] Simple Voice Chat removed — restart the server to finish.');
   }
   emit(id);
   return get(id);
@@ -521,19 +521,19 @@ const unb64u = (t) => Buffer.from(String(t).replace(/-/g, '+').replace(/_/g, '/'
 function setupCode(id) {
   const m = meta(id), props = readProps(id), rec = readJSON(recordFile(m), {});
   const keep = {}; for (const k of PROP_KEYS) if (k in props && k !== 'motd') keep[k] = props[k];
-  const extras = new Set(['P7dR8mSH', 'gvQqBUqZ', 'uXXizFIs', VOICE_ID, 'wKkoqHrH', 'bWrNNfkb']); // fabric-api, lithium, ferrite-core, voice chat: Solaris adds those itself
+  const extras = new Set(['P7dR8mSH', 'gvQqBUqZ', 'uXXizFIs', VOICE_ID, 'wKkoqHrH', 'bWrNNfkb']); // fabric-api, lithium, ferrite-core, voice chat: Astra adds those itself
   const d = { v: 1, n: m.name, sw: m.software, mc: m.mc, mem: m.memory, max: m.maxPlayers, t: m.tunnel, p: keep, c: m.modpack ? [] : Object.keys(rec).filter((k) => !extras.has(k) && !k.startsWith('geysermc:')), vc: !!m.voice?.on, br: !!m.bedrock?.on, mp: m.modpack?.versionId || null, sc: m.schedule || null };
   return 'SOLARIS-' + b64u(zlib.deflateRawSync(Buffer.from(JSON.stringify(d))));
 }
 function readSetupCode(code) {
   const c = String(code || '').trim().replace(/\s+/g, '');
   const mm = c.match(/^SOLARIS-([A-Za-z0-9_-]+)$/i);
-  if (!mm) throw new Error('That isn’t a Solaris setup code. It starts with SOLARIS-');
+  if (!mm) throw new Error('That isn’t a Astra setup code. It starts with SOLARIS-');
   let d; try { d = JSON.parse(zlib.inflateRawSync(unb64u(mm[1])).toString('utf8')); } catch { throw new Error('That setup code is damaged — copy the whole code again.'); }
-  if (d.v !== 1 || !SOFTWARE[d.sw]) throw new Error('This setup code was made by a newer Solaris. Update Solaris and try again.');
+  if (d.v !== 1 || !SOFTWARE[d.sw]) throw new Error('This setup code was made by a newer Astra. Update Astra and try again.');
   return { name: String(d.n || '').slice(0, 40), software: d.sw, mc: String(d.mc || ''), memory: clampMem(d.mem), maxPlayers: Number(d.max) || 10, tunnel: d.t, props: cleanProps(d.p), content: (d.c || []).map(String).slice(0, 40), voice: !!d.vc, bedrock: !!d.br, modpack: d.mp ? { versionId: String(d.mp) } : null, schedule: d.sc ? cleanSchedule(d.sc) : null };
 }
-/** Join code: the address (+ version) in a short code friends paste into Solaris. */
+/** Join code: the address (+ version) in a short code friends paste into Astra. */
 const JOIN_SUFFIX = [['.gl.joinmc.link', '~j'], ['.joinmc.link', '~k'], ['.gl.at.ply.gg', '~a'], ['.tun.ply.gg', '~t'], ['.ply.gg', '~p'], ['.e4mc.link', '~e']];
 function joinCode(id) {
   const v = view(meta(id)), addr = v.address || v.knownAddress;
@@ -549,7 +549,7 @@ function readJoinCode(code) {
   const [a, mc, modded, acct] = unb64u(mm[1]).toString('utf8').split('|');
   let addr = a || ''; for (const [suf, k] of JOIN_SUFFIX) if (addr.includes(k)) { addr = addr.replace(k, suf); break; }
   if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(addr)) throw new Error('That join code is damaged — ask your friend for it again.');
-  // requiresMicrosoft: true / false, or null for codes made before Solaris put it in
+  // requiresMicrosoft: true / false, or null for codes made before Astra put it in
   return { address: addr, mc: mc || null, modded: modded || '', requiresMicrosoft: acct === 'm' ? true : acct === 'o' ? false : null };
 }
 
@@ -567,7 +567,7 @@ function onlinePlayers() {
 /**
  * "Require Microsoft accounts" decides which ID Minecraft gives a player: the Mojang one, or one made from the name
  * (offline). Inventories, positions, advancements and stats are saved per ID, so after switching everyone would
- * start over. Before the server starts, Solaris copies each known player's save to their ID for the new mode (the
+ * start over. Before the server starts, Astra copies each known player's save to their ID for the new mode (the
  * old files stay, so switching back finds them again). A save already made in the new mode is never overwritten.
  */
 async function movePlayerData(m, say) {
@@ -618,7 +618,7 @@ async function allowOffline(id, { whitelist = true, name = '' } = {}) {
   const owner = require('./accounts').active();
   if (whitelist && owner?.name) { try { await addPerson(id, 'whitelist', owner.name); } catch {} }
   if (whitelist && name && /^[A-Za-z0-9_]{1,16}$/.test(name)) await addPerson(id, 'whitelist', name);
-  if (running.has(id)) { log(id, '[Solaris] Offline accounts allowed — restarting so it takes effect.'); restart(id); }
+  if (running.has(id)) { log(id, '[Astra] Offline accounts allowed — restarting so it takes effect.'); restart(id); }
   return get(id);
 }
 
@@ -652,10 +652,10 @@ async function runTask(id, t) {
   const r = running.get(id), live = r?.state === 'online' && !r.stopping;
   const label = t.name || t.action;
   const mark = () => { try { const m = meta(id); const x = (m.tasks || []).find((y) => y.id === t.id); if (x) { x.last = Date.now(); save(m); } } catch {} };
-  if (t.action === 'start') { if (running.has(id)) return; mark(); log(id, `[Solaris] Task “${label}”: starting the server.`); if (javaResolver) await start(id, javaResolver); return; }
+  if (t.action === 'start') { if (running.has(id)) return; mark(); log(id, `[Astra] Task “${label}”: starting the server.`); if (javaResolver) await start(id, javaResolver); return; }
   if (!live) return;
   mark();
-  log(id, `[Solaris] Task “${label}”.`);
+  log(id, `[Astra] Task “${label}”.`);
   if (t.action === 'command') for (const c of t.command.split('\n')) command(id, c);
   else if (t.action === 'say') command(id, 'say ' + t.command.replace(/\n/g, ' '));
   else if (t.action === 'restart') { try { command(id, 'say Restarting in 1 minute.'); } catch {} setTimeout(() => { if (running.get(id) === r && !r.stopping) restart(id); }, 60000); }
@@ -675,7 +675,7 @@ function taskDue(t, r, now = Date.now()) {
 }
 function runTasks(id, why) {
   let list; try { list = tasks(id); } catch { return; }
-  for (const t of list) if (t.enabled && (why === 'start' ? t.when.type === 'start' : taskDue(t, running.get(id)))) runTask(id, t).catch((e) => log(id, `[Solaris] Task “${t.name || t.action}” failed: ${e.message}`));
+  for (const t of list) if (t.enabled && (why === 'start' ? t.when.type === 'start' : taskDue(t, running.get(id)))) runTask(id, t).catch((e) => log(id, `[Astra] Task “${t.name || t.action}” failed: ${e.message}`));
 }
 setInterval(() => {
   for (const e of index()) {
@@ -686,7 +686,7 @@ setInterval(() => {
     for (const t of m.tasks) {
       if (!taskDue(t, r)) continue;
       if (t.action === 'start' ? running.has(m.id) : r?.state !== 'online' || r.stopping) continue;
-      runTask(m.id, t).catch((er) => log(m.id, `[Solaris] Task “${t.name || t.action}” failed: ${er.message}`));
+      runTask(m.id, t).catch((er) => log(m.id, `[Astra] Task “${t.name || t.action}” failed: ${er.message}`));
     }
   }
 }, 30000).unref?.();
@@ -701,7 +701,7 @@ function setSchedule(id, sc) { const m = meta(id); m.schedule = cleanSchedule(sc
 function setAutoStart(id, on) {
   const m = meta(id); m.autoStart = !!on; save(m);
   if (on) {
-    // a server can only start with Windows if Solaris does (hidden in the tray)
+    // a server can only start with Windows if Astra does (hidden in the tray)
     const st = require('./settings');
     if (!st.get().openAtLogin) { st.set({ openAtLogin: true }); require('electron').app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] }); }
   }
@@ -722,14 +722,14 @@ setInterval(async () => {
         await backup(id, 'auto');
         const cur = meta(id); cur.lastAutoBackup = Date.now(); save(cur);
         for (const b of backups(id).filter((x) => /^auto-/.test(x.file)).slice(sc.keepBackups || 10)) fs.rmSync(path.join(backupsDir(id), b.file), { force: true });
-        log(id, '[Solaris] Automatic backup saved.');
-      } catch (e) { log(id, '[Solaris] Automatic backup failed: ' + e.message); }
+        log(id, '[Astra] Automatic backup saved.');
+      } catch (e) { log(id, '[Astra] Automatic backup failed: ' + e.message); }
       finally { r.autoBackup = false; }
     }
     if (sc.restartHours && !r.restartWarned && now - r.started >= sc.restartHours * 3600000) {
       r.restartWarned = true;
       try { command(id, 'say Scheduled restart in 1 minute.'); } catch {}
-      setTimeout(() => { if (running.get(id) === r && !r.stopping) { log(id, '[Solaris] Scheduled restart.'); restart(id); } }, 60000);
+      setTimeout(() => { if (running.get(id) === r && !r.stopping) { log(id, '[Astra] Scheduled restart.'); restart(id); } }, 60000);
     }
   }
 }, 60000).unref?.();
@@ -778,7 +778,7 @@ function writeBedrockConfig(m) {
   const file = geyserFile(m);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let y = ''; try { y = fs.readFileSync(file, 'utf8'); } catch {}
-  if (!y.trim()) y = '# Geyser — port, login and address are set by Solaris; Geyser adds everything else on first start.\n';
+  if (!y.trim()) y = '# Geyser — port, login and address are set by Astra; Geyser adds everything else on first start.\n';
   y = setYaml(y, ['bedrock', 'port'], String(m.bedrock.port));
   y = setYaml(y, ['bedrock', 'clone-remote-port'], 'false');
   // playit.gg address: Bedrock players' game data goes there; without it Geyser finds this PC's own address
@@ -856,7 +856,7 @@ async function setBedrock(id, on) {
       try { const t = await pl.setupServer({ id, port: m.port, name: m.tunnelName || m.name, tunnelId: m.playitTunnelId, voice: voiceReq(m), bedrock: bedrockReq(m), main: isBds(m) ? 'bds' : 'java', pack: packReq(m) }, null); Object.assign(m, { playitTunnelId: t.tunnelId, playitAddress: t.address }); applyVoice(m, t); applyBedrock(m, t); save(m); }
       catch (e) { m.bedrock.error = e.message; save(m); }
       finally { pl.releaseServer(id); }
-    } else if (running.has(id)) { log(id, '[Solaris] Bedrock support added — restart the server to turn it on.'); if (m.tunnel === 'playit') startTunnel(id).catch(() => {}); }
+    } else if (running.has(id)) { log(id, '[Astra] Bedrock support added — restart the server to turn it on.'); if (m.tunnel === 'playit') startTunnel(id).catch(() => {}); }
   } else if (m.bedrock) {
     const rec = readJSON(recordFile(m), {});
     for (const k of ['geysermc:geyser', 'geysermc:floodgate', GEYSER.geyser, GEYSER.floodgate]) {
@@ -866,7 +866,7 @@ async function setBedrock(id, on) {
     writeJSON(recordFile(m), rec);
     require('./playit').deleteTunnel(m.bedrock.tunnelId);
     delete m.bedrock; save(m);
-    if (running.has(id)) log(id, '[Solaris] Bedrock support removed — restart the server to finish.');
+    if (running.has(id)) log(id, '[Astra] Bedrock support removed — restart the server to finish.');
   }
   emit(id);
   return get(id);
@@ -904,7 +904,7 @@ async function modrinthFor(m, modId) {
 async function diagnose(id) {
   const m = meta(id);
   let lines = running.get(id)?.lines || lastRun.get(id)?.lines || [];
-  // Solaris was closed since: the server's own log file of its last run (plus the crash report it wrote, if any)
+  // Astra was closed since: the server's own log file of its last run (plus the crash report it wrote, if any)
   if (!lines.length) { try { lines = fs.readFileSync(path.join(m.dir, 'logs', 'latest.log'), 'utf8').split(/\r?\n/).slice(-800); } catch {} }
   lines = lines.map(stripAnsi);
   const text = lines.join('\n');
@@ -953,7 +953,7 @@ async function diagnose(id) {
   // messages servers print on every start that mean nothing (Windows performance counters, an empty data map …)
   const harmless = /Perflib|counter names|Win32Exception: The parameter is incorrect|No key layers in MapLike|sun\.misc\.Unsafe/i;
   const errors = lines.filter((l) => /\b(ERROR|FATAL)\b|Exception|Caused by/.test(l) && !harmless.test(l)).slice(-6);
-  // did the last run end normally? (stopped from Solaris or with /stop, no crash)
+  // did the last run end normally? (stopped from Astra or with /stop, no crash)
   const lr = lastRun.get(id);
   const normal = !out.length && (lr ? !lr.crashed : /Stopping (the )?server|Saving worlds|ThreadedAnvilChunkStorage: All dimensions are saved|All RegionFile I\/O tasks to complete/i.test(lines.slice(-60).join('\n')));
   return { id, name: m.name, findings: out, errors: normal ? [] : errors, hasLog: lines.length > 0, normal };
@@ -970,7 +970,7 @@ async function applyFix(id, fix) {
   if (fix.type === 'dedupe') { fixDuplicateMods(id); return 'Removed duplicate copies'; }
   if (fix.type === 'memory') { m.memory = clampMem(fix.mb); save(m); return `Memory set to ${(m.memory / 1024).toFixed(1)} GB`; }
   if (fix.type === 'port') { if (running.has(id)) throw new Error('Stop the server first.'); const p = nextPort(); setSettings(id, { props: { 'server-port': p } }); return `Port changed to ${p}`; }
-  if (fix.type === 'eula') { fs.writeFileSync(path.join(m.dir, 'eula.txt'), `# Accepted in Solaris on ${new Date().toISOString()} (https://aka.ms/MinecraftEULA)\neula=true\n`); return 'EULA accepted'; }
+  if (fix.type === 'eula') { fs.writeFileSync(path.join(m.dir, 'eula.txt'), `# Accepted in Astra on ${new Date().toISOString()} (https://aka.ms/MinecraftEULA)\neula=true\n`); return 'EULA accepted'; }
   throw new Error('Unknown fix.');
 }
 
@@ -1046,15 +1046,15 @@ async function lagCheck(id, { profile = true } = {}) {
 // ---------- Discord alerts (webhook) ----------
 const DISCORD_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/;
 async function postDiscord(url, content) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'Solaris', content: String(content).slice(0, 1900), allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(10000) });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'Astra', content: String(content).slice(0, 1900), allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(r.status === 404 ? 'Discord says this webhook doesn’t exist any more.' : `Discord answered HTTP ${r.status}.`);
 }
 function notifyDiscord(id, event, text) {
   let m; try { m = meta(id); } catch { return; }
-  // Solaris Connect's desktop alerts listen here too (online / stop / crash / join / leave)
+  // Astra Connect's desktop alerts listen here too (online / stop / crash / join / leave)
   try { events.emit('hosted:event', { id, name: m.name, event, text: String(text).replace(/\*\*/g, '').replace(/`/g, '') }); } catch {}
   const d = m.discord; if (!d?.url || !d.events?.[event]) return;
-  postDiscord(d.url, text).catch((e) => log(id, '[Solaris] Discord alert failed: ' + e.message));
+  postDiscord(d.url, text).catch((e) => log(id, '[Astra] Discord alert failed: ' + e.message));
 }
 function setDiscord(id, { url, events } = {}) {
   const m = meta(id);
@@ -1068,7 +1068,7 @@ function setDiscord(id, { url, events } = {}) {
 async function testDiscord(id, url) {
   const u = String(url || meta(id).discord?.url || '').trim();
   if (!DISCORD_RE.test(u)) throw new Error('Paste a Discord webhook link first.');
-  await postDiscord(u, `✅ Solaris is connected — alerts for **${meta(id).name}** will show up here.`);
+  await postDiscord(u, `✅ Astra is connected — alerts for **${meta(id).name}** will show up here.`);
   return true;
 }
 
@@ -1161,19 +1161,19 @@ async function start(id, resolveJava) {
   const bds = isBds(m);
   let java = null;
   if (!bds) {
-    try { java = await serverJava(m, resolveJava, (s) => log(id, '[Solaris] ' + s)); }
+    try { java = await serverJava(m, resolveJava, (s) => log(id, '[Astra] ' + s)); }
     catch (e) { running.delete(id); emit(id); throw e; }
   }
-  // Stopped (or Solaris quitting) while Java was still being prepared: don't start it after all.
+  // Stopped (or Astra quitting) while Java was still being prepared: don't start it after all.
   if (r.cancelled) { running.delete(id); emit(id); return get(id); }
   // The port must be free. Usually it isn't because an earlier copy of this same server kept running after
-  // Solaris closed (or updated) — close that one safely, otherwise explain what's wrong instead of crashing.
+  // Astra closed (or updated) — close that one safely, otherwise explain what's wrong instead of crashing.
   const free = bds ? udpFree : portFree;
   try {
     if (!(await free(m.port))) {
       const old = readPid(m.dir);
       if (old && (await isOurServer(old, m.dir))) {
-        log(id, `[Solaris] An earlier copy of this server is still running (process ${old}) — closing it first.`);
+        log(id, `[Astra] An earlier copy of this server is still running (process ${old}) — closing it first.`);
         try { process.kill(old); } catch {}
         for (let i = 0; i < 40 && !(await free(m.port)); i++) await new Promise((res) => setTimeout(res, 500));
       }
@@ -1182,35 +1182,35 @@ async function start(id, resolveJava) {
   } catch (e) { running.delete(id); emit(id); throw e; }
   writeProps(id, bds ? { 'server-port': m.port, 'server-portv6': m.port + 1 } : { 'server-port': m.port });
   if (!bds) {
-    try { await movePlayerData(m, (t) => log(id, '[Solaris] ' + t)); } catch (e) { log(id, '[Solaris] Couldn’t move player progress: ' + e.message); }
+    try { await movePlayerData(m, (t) => log(id, '[Astra] ' + t)); } catch (e) { log(id, '[Astra] Couldn’t move player progress: ' + e.message); }
     try { writeVoiceConfig(m); } catch {}
-    await updateBedrock(m, (t) => log(id, '[Solaris] ' + t));
+    await updateBedrock(m, (t) => log(id, '[Astra] ' + t));
     if (r.cancelled) { running.delete(id); emit(id); return get(id); } // stopped while Geyser was updating
     try { writeBedrockConfig(m); } catch {}
     try { fixDuplicateMods(id); } catch {}
     if (m.pack) { try { writePackProps(m); } catch {} openPackServer(m); }
-    for (const h of hooks.beforeStart) { try { h(m); } catch (e) { log(id, '[Solaris] ' + e.message); } }
+    for (const h of hooks.beforeStart) { try { h(m); } catch (e) { log(id, '[Astra] ' + e.message); } }
   }
   const st = m.start || { jar: 'server.jar' };
   const args = bds ? [] : [`-Xmx${m.memory}M`, `-Xms${Math.min(1024, m.memory)}M`, ...(m.aikar ? AIKAR : ['-XX:+UseG1GC']), ...splitArgs(m.jvmArgs), ...(st.argsFile ? ['@' + st.argsFile] : ['-jar', st.jar]), 'nogui'];
-  log(id, `[Solaris] Starting ${m.name} — ${SOFTWARE[m.software].name} ${m.mc}${bds ? '' : `, ${m.memory} MB`}, port ${m.port}`);
+  log(id, `[Astra] Starting ${m.name} — ${SOFTWARE[m.software].name} ${m.mc}${bds ? '' : `, ${m.memory} MB`}, port ${m.port}`);
   if (m.tunnel === 'playit' && !m.playitStopped) startTunnel(id).catch(() => {});
   const exe = bds ? path.join(m.dir, st.exe || (process.platform === 'win32' ? 'bedrock_server.exe' : 'bedrock_server')) : java.replace(/javaw\.exe$/i, 'java.exe');
   const env = bds && process.platform === 'linux' ? { ...process.env, LD_LIBRARY_PATH: '.' } : process.env;
   const proc = spawn(exe, args, { cwd: m.dir, windowsHide: true, env });
   r.proc = proc;
   if (proc.pid) writePid(m.dir, proc.pid);
-  proc.stdin.on('error', () => {}); // writing a command to a server that just exited (EPIPE) must not crash Solaris
+  proc.stdin.on('error', () => {}); // writing a command to a server that just exited (EPIPE) must not crash Astra
   let buf = '';
   const onData = (d) => { buf += d; const parts = buf.split(/\r?\n/); buf = parts.pop(); parts.forEach((l) => onLine(id, l)); };
   proc.stdout.on('data', onData); proc.stderr.on('data', onData);
-  proc.on('error', (e) => { log(id, `[Solaris] Could not start ${bds ? 'the Bedrock server' : 'Java'}: ` + e.message); running.delete(id); emit(id); });
+  proc.on('error', (e) => { log(id, `[Astra] Could not start ${bds ? 'the Bedrock server' : 'Java'}: ` + e.message); running.delete(id); emit(id); });
   proc.on('close', (code) => {
     if (buf) { onLine(id, buf); buf = ''; }
     writePid(m.dir, null);
     closePackServer(id);
     const restart = r.restart;
-    log(id, `[Solaris] Server stopped${code && !r.stopping ? ` (exit code ${code})` : ''} after ${fmtUptime(Date.now() - r.started)}.`);
+    log(id, `[Astra] Server stopped${code && !r.stopping ? ` (exit code ${code})` : ''} after ${fmtUptime(Date.now() - r.started)}.`);
     // crashed = exited with an error, or stopped by itself before it finished starting
     const crashed = !r.stopping && (!!code || r.state !== 'online');
     lastRun.set(id, { lines: r.lines.slice(-800), code, at: Date.now(), crashed });
@@ -1229,9 +1229,9 @@ async function start(id, resolveJava) {
       const recent = (crashTimes.get(id) || []).filter((t) => Date.now() - t < 600000);
       if (recent.length < 3) {
         crashTimes.set(id, [...recent, Date.now()]);
-        log(id, '[Solaris] Restarting after the crash in 10 seconds…');
+        log(id, '[Astra] Restarting after the crash in 10 seconds…');
         setTimeout(() => { if (!running.has(id)) start(id, resolveJava).catch((e) => push('toast', { type: 'error', text: 'Restart failed: ' + e.message })); }, 10000);
-      } else log(id, '[Solaris] It crashed 3 times in 10 minutes — not restarting again by itself. See “Why did it stop?”.');
+      } else log(id, '[Astra] It crashed 3 times in 10 minutes — not restarting again by itself. See “Why did it stop?”.');
     }
   });
   return get(id);
@@ -1243,29 +1243,29 @@ async function startTunnel(id) {
   const m = meta(id);
   r.tunnelBusy = true; r.tunnelError = null; emit(id);
   try {
-    const t = await require('./playit').setupServer({ id, port: m.port, name: m.tunnelName || m.name, tunnelId: m.playitTunnelId, voice: voiceReq(m), bedrock: bedrockReq(m), main: isBds(m) ? 'bds' : 'java', pack: packReq(m) }, (s) => log(id, '[Solaris] playit.gg: ' + s));
+    const t = await require('./playit').setupServer({ id, port: m.port, name: m.tunnelName || m.name, tunnelId: m.playitTunnelId, voice: voiceReq(m), bedrock: bedrockReq(m), main: isBds(m) ? 'bds' : 'java', pack: packReq(m) }, (s) => log(id, '[Astra] playit.gg: ' + s));
     const cur = meta(id); // re-read: settings may have changed meanwhile
     Object.assign(cur, { playitTunnelId: t.tunnelId, playitAddress: t.address }); delete cur.playitSetupError;
     const voiceChanged = applyVoice(cur, t), bedrockChanged = applyBedrock(cur, t);
     save(cur);
-    log(id, `[Solaris] playit.gg tunnel ready: ${t.address} → localhost:${m.port}`);
+    log(id, `[Astra] playit.gg tunnel ready: ${t.address} → localhost:${m.port}`);
     if (cur.voice?.on) {
-      if (t.voiceError) log(id, '[Solaris] ' + t.voiceError);
-      else if (cur.voice.address) log(id, `[Solaris] Voice chat tunnel ready: ${cur.voice.address} → UDP localhost:${cur.voice.port}`);
+      if (t.voiceError) log(id, '[Astra] ' + t.voiceError);
+      else if (cur.voice.address) log(id, `[Astra] Voice chat tunnel ready: ${cur.voice.address} → UDP localhost:${cur.voice.port}`);
     }
     if (cur.bedrock?.on) {
-      if (t.bedrockError) log(id, '[Solaris] ' + t.bedrockError);
-      else if (cur.bedrock.address) log(id, `[Solaris] Bedrock tunnel ready: ${cur.bedrock.address} → localhost:${cur.bedrock.port}`);
+      if (t.bedrockError) log(id, '[Astra] ' + t.bedrockError);
+      else if (cur.bedrock.address) log(id, `[Astra] Bedrock tunnel ready: ${cur.bedrock.address} → localhost:${cur.bedrock.port}`);
     }
     // The server read the old voice_host / Bedrock address when it started: restart it once (right away while
     // nobody is on it, otherwise ask) so it uses the new address.
     if ((voiceChanged || bedrockChanged) && running.get(id) === r) {
-      if (!r.players.size) { if (r.state === 'online') { log(id, '[Solaris] Restarting once so the new voice chat / Bedrock address is used.'); restart(id); } else r.voiceRestart = true; }
+      if (!r.players.size) { if (r.state === 'online') { log(id, '[Astra] Restarting once so the new voice chat / Bedrock address is used.'); restart(id); } else r.voiceRestart = true; }
       else push('toast', { type: 'warn', text: `${cur.name}: ${voiceChanged ? 'voice chat' : 'Bedrock'} has a new address — restart the server so it’s used.` });
     }
   } catch (e) {
     if (running.get(id) === r) r.tunnelError = e.message;
-    log(id, '[Solaris] playit.gg: ' + e.message);
+    log(id, '[Astra] playit.gg: ' + e.message);
     // nothing to tunnel for this server any more — let the agent stop if no other server needs it
     if (!running.has(id)) require('./playit').releaseServer(id);
   } finally {
@@ -1278,7 +1278,7 @@ async function tunnelStop(id) {
   const m = meta(id);
   m.playitStopped = true; save(m);
   require('./playit').releaseServer(id);
-  if (running.has(id)) log(id, '[Solaris] playit.gg tunnel stopped — the server is only reachable on your network now.');
+  if (running.has(id)) log(id, '[Astra] playit.gg tunnel stopped — the server is only reachable on your network now.');
   emit(id);
   return get(id);
 }
@@ -1303,7 +1303,7 @@ async function tunnelRestart(id) {
     emit(id);
     return get(id);
   }
-  log(id, '[Solaris] Restarting the playit.gg tunnel…');
+  log(id, '[Astra] Restarting the playit.gg tunnel…');
   await require('./playit').restartAgent();
   await startTunnel(id);
   return get(id);
@@ -1343,7 +1343,7 @@ function log(id, line) {
 /** The server finished starting (Java "Done (…)!" or Bedrock "Server started."). */
 function onOnline(id, r) {
   try { const mm = meta(id), v = view(mm); if (!r.notifiedOnline) { r.notifiedOnline = true; notifyDiscord(id, 'online', `🟢 **${mm.name}** is online${v.address || v.knownAddress ? ` — join at \`${v.address || v.knownAddress}\`` : ''} (${isBds(mm) ? 'Bedrock' : 'Java'} ${mm.mc}).`); } } catch {}
-  if (r.voiceRestart && !r.players.size) { r.voiceRestart = false; log(id, '[Solaris] Restarting once so voice chat uses its new address.'); setTimeout(() => { if (running.get(id) === r && !r.players.size) restart(id); }, 1500); }
+  if (r.voiceRestart && !r.players.size) { r.voiceRestart = false; log(id, '[Astra] Restarting once so voice chat uses its new address.'); setTimeout(() => { if (running.get(id) === r && !r.players.size) restart(id); }, 1500); }
   runTasks(id, 'start');
 }
 /**
@@ -1368,7 +1368,7 @@ function notePlayer(id, name, joined) {
 function knownPlayers(id) {
   const m = meta(id), r = running.get(id), now = Date.now();
   const all = { ...readJSON(path.join(m.dir, 'solaris-players.json'), {}) };
-  // players from before Solaris kept this list: the server's own name cache
+  // players from before Astra kept this list: the server's own name cache
   if (!isBds(m)) for (const u of readJSON(path.join(m.dir, 'usercache.json'), [])) { const k = String(u.name || '').toLowerCase(); if (k && !all[k]) all[k] = { name: u.name, uuid: u.uuid, first: null, last: null, playMs: 0 }; }
   const ops = new Set(people(id, 'ops').map((p) => p.name.toLowerCase()));
   const wl = new Set(people(id, 'whitelist').map((p) => p.name.toLowerCase()));
@@ -1389,7 +1389,7 @@ function onLine(id, line) {
     const st = ck[1] === 'running' ? 'running' : ck[1] === 'finished' ? 'done' : ck[1] === 'paused' ? 'paused' : 'idle';
     r.chunky = { ...(r.chunky || {}), state: st, percent: ck[2] != null ? Number(ck[2]) : st === 'done' ? 100 : r.chunky?.percent || 0, eta: ck[3] || null };
     push('hosted:chunky', { id, ...r.chunky });
-    if (st === 'done') log(id, '[Solaris] World pre-generation finished.');
+    if (st === 'done') log(id, '[Astra] World pre-generation finished.');
   }
   // Mojang's Bedrock server: "Server started." / "Player connected: Some Name, xuid: 2535…" / "Player disconnected: …"
   const bj = line.match(/Player connected: (.+?), xuid/), bl = line.match(/Player disconnected: (.+?), xuid/);
@@ -1540,7 +1540,7 @@ function writePackProps(m) {
     : { 'resource-pack': '', 'resource-pack-sha1': '', 'require-resource-pack': false, 'resource-pack-prompt': '' });
 }
 async function sha1Of(file) { return require('./util').sha1File(file); }
-/** Settings → Resource pack: a .zip from this PC (Solaris serves it), a download link, or nothing. */
+/** Settings → Resource pack: a .zip from this PC (Astra serves it), a download link, or nothing. */
 async function setPack(id, { file, url, required = false, prompt = '', remove = false } = {}) {
   const m = meta(id);
   if (isBds(m)) throw new Error('Bedrock servers use add-on packs from the worlds folder, not a resource pack link.');
@@ -1591,7 +1591,7 @@ function openPackServer(m) {
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });
-  srv.on('error', (e) => log(m.id, `[Solaris] The resource pack couldn’t be shared on port ${m.pack.port}: ${e.message}`));
+  srv.on('error', (e) => log(m.id, `[Astra] The resource pack couldn’t be shared on port ${m.pack.port}: ${e.message}`));
   srv.listen(m.pack.port, '0.0.0.0');
   packServers.set(m.id, srv);
 }
@@ -1616,15 +1616,15 @@ async function exportServer(id, dest) {
   await zip.writeZipPromise(dest);
   return { file: dest, size: fs.statSync(dest).size };
 }
-/** A server exported from Solaris (on this PC or another one) becomes a server here, with free ports. */
+/** A server exported from Astra (on this PC or another one) becomes a server here, with free ports. */
 async function importServer(file, onStep) {
   if (!file || !fs.existsSync(file)) throw new Error('Pick the server .zip to import.');
   const zip = new AdmZip(file);
   const entry = zip.getEntries().find((e) => /(^|\/)solaris-server\.json$/.test(e.entryName) && e.entryName.split('/').length <= 2);
-  if (!entry) throw new Error('That .zip isn’t a server exported from Solaris (it has no solaris-server.json).');
+  if (!entry) throw new Error('That .zip isn’t a server exported from Astra (it has no solaris-server.json).');
   const prefix = entry.entryName.replace(/solaris-server\.json$/, '');
   const data = JSON.parse(entry.getData().toString('utf8'));
-  if (!SOFTWARE[data.software]) throw new Error('This server was made with a newer Solaris. Update Solaris first.');
+  if (!SOFTWARE[data.software]) throw new Error('This server was made with a newer Astra. Update Astra first.');
   let id = slugify(data.name || 'imported-server') || 'server';
   while (index().some((e) => e.id === id)) id += '-2';
   const dir = path.join(root(), id);
@@ -1712,7 +1712,7 @@ function setSettings(id, patch) {
   if (patch.props) {
     let props = {};
     for (const [k, v] of Object.entries(patch.props)) { if (!/^[a-z0-9.-]+$/i.test(k)) continue; props[k] = String(v).replace(/[\r\n]/g, ' ').slice(0, 300); }
-    if (props['server-port']) { const p = Number(props['server-port']); if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.'); if (list().some((s) => s.id !== id && s.port === p)) throw new Error(`Another Solaris server uses port ${p}.`); if (p !== m.port) delete m.playitAddress; m.port = p; }
+    if (props['server-port']) { const p = Number(props['server-port']); if (!(p >= 1024 && p <= 65535)) throw new Error('Port must be between 1024 and 65535.'); if (list().some((s) => s.id !== id && s.port === p)) throw new Error(`Another Astra server uses port ${p}.`); if (p !== m.port) delete m.playitAddress; m.port = p; }
     if (props['max-players']) m.maxPlayers = Number(props['max-players']) || m.maxPlayers;
     if (isBds(m)) { props = bdsProps(props); if (props['server-port']) props['server-portv6'] = m.port + 1; }
     const wasOnline = readProps(id)['online-mode'] !== 'false';
@@ -1745,7 +1745,7 @@ async function remove(id) {
       if (t && !others.some((o) => [o.playitTunnelId, o.voice?.tunnelId, o.bedrock?.tunnelId, o.pack?.tunnelId].includes(t))) await pl.deleteTunnel(t);
     }
   } catch {}
-  // Deleted for good, like instances. Only folders that really are Solaris servers are removed.
+  // Deleted for good, like instances. Only folders that really are Astra servers are removed.
   if (fs.existsSync(path.join(dir, 'solaris-server.json'))) await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   writeJSON(indexFile(), index().filter((x) => x.id !== id));
   return list();
@@ -1812,7 +1812,7 @@ async function addPerson(id, kind, name) {
   }
   const p = await playerId(id, name);
   const r = running.get(id);
-  // Solaris writes the list itself (with the right UUID for this server's mode), then a running server reloads it.
+  // Astra writes the list itself (with the right UUID for this server's mode), then a running server reloads it.
   const l = people(id, kind).filter((x) => x.uuid !== p.uuid && x.name.toLowerCase() !== p.name.toLowerCase());
   l.push(kind === 'ops' ? { uuid: p.uuid, name: p.name, level: 4, bypassesPlayerLimit: false } : { uuid: p.uuid, name: p.name });
   writeJSON(listFile(id, kind), l);
@@ -1820,7 +1820,7 @@ async function addPerson(id, kind, name) {
     if (kind === 'ops') {
       // there's no "op reload": a player who is online gets op right away, everyone else from the next start
       if ([...r.players].some((x) => x.toLowerCase() === p.name.toLowerCase())) command(id, `op ${p.name}`);
-      else log(id, `[Solaris] ${p.name} becomes an operator the next time the server starts (or use “op ${p.name}” once they are online).`);
+      else log(id, `[Astra] ${p.name} becomes an operator the next time the server starts (or use “op ${p.name}” once they are online).`);
     } else command(id, 'whitelist reload');
   }
   return people(id, kind);
@@ -1952,7 +1952,7 @@ async function installContent(mOrId, projectId, versionId = null, quiet = false,
   if (rec[v.project_id]?.file && rec[v.project_id].file !== f.filename) fs.rmSync(path.join(dir, rec[v.project_id].file), { force: true });
   await download(f.url, path.join(dir, f.filename), { sha1: f.hashes.sha1 });
   // The same mod under another file name (e.g. it came with the modpack): never keep two copies.
-  // Extras Solaris adds by itself (quiet) give way to the copy that's already there; a mod the player picks
+  // Extras Astra adds by itself (quiet) give way to the copy that's already there; a mod the player picks
   // replaces the older copy.
   const newFile = path.join(dir, f.filename);
   const dupes = sameModFiles(dir, newFile);
@@ -1997,7 +1997,7 @@ function fixDuplicateMods(id) {
     if (list.length < 2) continue;
     list.sort(cmp);
     for (const old of list.slice(1)) {
-      try { fs.renameSync(path.join(dir, old.f), path.join(dir, old.f + '.disabled')); log(id, `[Solaris] ${modId} was installed twice — using ${list[0].f}, turned off ${old.f}.`); } catch {}
+      try { fs.renameSync(path.join(dir, old.f), path.join(dir, old.f + '.disabled')); log(id, `[Astra] ${modId} was installed twice — using ${list[0].f}, turned off ${old.f}.`); } catch {}
     }
   }
 }
@@ -2019,7 +2019,7 @@ function jarInfo(file) {
 /** Why `file` can't go on this server, or null if it can. */
 function wontRun(m, file) {
   const kind = SOFTWARE[m.software].kind, info = jarInfo(file);
-  if (/^solaris-client/i.test(path.basename(file))) return 'the Solaris client mod only runs in the game';
+  if (/^solaris-client/i.test(path.basename(file))) return 'the Astra client mod only runs in the game';
   if (info.clientOnly) return 'it only works in the game client, not on servers';
   if (!info.loader) return null;
   if (kind === 'plugins') return info.loader === 'plugin' ? null : `it’s a ${info.loader} mod, and this is a plugin server`;
@@ -2187,5 +2187,5 @@ module.exports = {
   perf, setPack, copyServer, exportServer, importServer, importWorld, clientMods, addClientMod, removeClientMod, searchClientMods, taskDue, cleanTask,
 };
 
-// Solaris Connect add-ons that hook into hosting (their own files)
+// Astra Connect add-ons that hook into hosting (their own files)
 try { require('./connect/webmap').register(hooks); } catch (e) { console.error('Web map hooks:', e.message); }

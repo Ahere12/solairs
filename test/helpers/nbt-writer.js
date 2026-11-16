@@ -1,4 +1,4 @@
-// A small NBT writer, only for making test save files (Solaris itself only reads them).
+// A small NBT writer, only for making test save files (Astra itself only reads them).
 const T = { byte: 1, short: 2, int: 3, long: 4, float: 5, double: 6, bytes: 7, string: 8, list: 9, compound: 10, ints: 11, longs: 12 };
 function enc(type, v) {
   const b = (n) => Buffer.alloc(n);

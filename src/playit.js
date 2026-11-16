@@ -3,7 +3,7 @@
 // How playit.gg officially works (checked against github.com/playit-cloud/playit-agent, packages/api_client/src/api.rs
 // and packages/playitd): an agent is linked to a playit.gg account through a one-time "claim" — the player opens
 // playit.gg/claim/<code> and approves it (signing in, or continuing as a guest, happens on playit.gg). There is no
-// supported way for an app to approve itself, so Solaris does that one step in the browser and everything else
+// supported way for an app to approve itself, so Astra does that one step in the browser and everything else
 // automatically:
 //   claim (once) → agent secret (stored encrypted) → official playitd agent → Minecraft Java tunnel per server
 //   (POST /v1/tunnels/create with the agent key) → the real address from POST /v1/agents/rundata.
@@ -69,7 +69,7 @@ async function call(p, body, secret = loadSecret(), probe = false) {
 const friendlyMap = {
   RequiresVerifiedAccount: 'playit.gg wants you to verify your account (or turn your guest account into a free account) before it makes more tunnels. Open playit.gg, then try again.',
   RequiresPlayitPremium: 'playit.gg only allows this with playit Premium (free accounts have a limited number of tunnels — remove unused ones on playit.gg).',
-  AgentVersionTooOld: 'playit.gg says this agent is too old — Solaris will download the newest one; try again.',
+  AgentVersionTooOld: 'playit.gg says this agent is too old — Astra will download the newest one; try again.',
   AgentNotFound: 'playit.gg doesn’t know this PC any more. Connect playit.gg again.',
   InvalidTunnelConfig: 'playit.gg rejected the tunnel settings.',
   TunnelNameIsNotAscii: 'The tunnel name has characters playit.gg doesn’t allow.',
@@ -96,7 +96,7 @@ async function startClaim() {
       await new Promise((r) => setTimeout(r, 2500));
       let s;
       try { s = await call('/claim/setup', { code, agent_type: 'self-managed', version: VERSION }, null); } catch { continue; }
-      if (s === 'UserRejected') { claim.state = 'rejected'; claimDone(new Error('You declined Solaris on playit.gg.')); return; }
+      if (s === 'UserRejected') { claim.state = 'rejected'; claimDone(new Error('You declined Astra on playit.gg.')); return; }
       if (s === 'UserAccepted') {
         try {
           const ex = await call('/claim/exchange', { code }, null);
@@ -119,7 +119,7 @@ function cancelClaim() { if (claim) { claim = null; claimDone(new Error('playit.
 /** Resolves once this PC is linked; opens the approval page if it isn't yet. */
 async function waitForLink(onStep) {
   if (linked()) return;
-  onStep && onStep('Approve Solaris on playit.gg (one time) — a browser tab opened');
+  onStep && onStep('Approve Astra on playit.gg (one time) — a browser tab opened');
   await startClaim();
   await new Promise((resolve, reject) => { if (linked()) return resolve(); claimWaiters.push((e) => (e ? reject(e) : resolve())); });
 }
@@ -161,7 +161,7 @@ async function agentExe() {
   const linuxArch = { x64: 'amd64', arm64: 'aarch64', arm: 'armv7', ia32: 'i686' }[process.arch];
   const names = win ? [/^playitd-windows-x86_64-signed\.exe$/, /^playitd-windows-x86_64\.exe$/]
     : process.platform === 'linux' && linuxArch ? [new RegExp(`^playit-linux-${linuxArch}$`)] : [];
-  if (!names.length) throw new Error('playit.gg hosting from Solaris works on Windows and Linux.');
+  if (!names.length) throw new Error('playit.gg hosting from Astra works on Windows and Linux.');
   let rel;
   try { rel = await getJSON('https://api.github.com/repos/playit-cloud/playit-agent/releases/latest'); }
   catch (e) { throw new Error('Couldn’t reach GitHub to download the playit.gg agent. Check your internet connection and try again.'); }
@@ -176,7 +176,7 @@ async function agentExe() {
     const want = String(a.digest || '').replace(/^sha256:/i, '').toLowerCase();
     if (want) {
       const got = crypto.createHash('sha256').update(fs.readFileSync(tmp)).digest('hex');
-      if (got !== want) throw new Error('The downloaded playit.gg agent didn’t match its official checksum, so Solaris didn’t use it. Try again.');
+      if (got !== want) throw new Error('The downloaded playit.gg agent didn’t match its official checksum, so Astra didn’t use it. Try again.');
     }
     fs.renameSync(tmp, exe);
   } catch (e) { try { fs.rmSync(tmp, { force: true }); } catch {} throw e; }
@@ -288,7 +288,7 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
   if (!id) {
     onStep && onStep('Creating public tunnel…');
     try {
-      const tname = `Solaris ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40);
+      const tname = `Astra ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40);
       const config = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
       let made;
       try { made = await call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: 'minecraft-java' }, origin: { type: 'agent', data: { agent_id: agentId, config } }, enabled: true, alloc: null, firewall_id: null }); }
@@ -299,7 +299,7 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
       }
       id = made?.id || made;
     } catch (e) {
-      // e.g. account limits: the player can still add it on playit.gg by hand — Solaris picks it up by port.
+      // e.g. account limits: the player can still add it on playit.gg by hand — Astra picks it up by port.
       push('hosted:playit-manual', { port, name, reason: e.message });
       throw e;
     }
@@ -313,7 +313,7 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
     if (t && t.display_address) return { tunnelId: t.id, address: t.display_address, disabled: t.disabled_reason || null };
     const p = run.pending.find((x) => x.id === id);
     if (p?.status_msg && onStep) onStep('Waiting for public address… (' + p.status_msg + ')');
-    if (Date.now() > until) throw new Error('playit.gg hasn’t given the tunnel an address yet. It usually appears within a minute — Solaris keeps checking while the server runs.');
+    if (Date.now() > until) throw new Error('playit.gg hasn’t given the tunnel an address yet. It usually appears within a minute — Astra keeps checking while the server runs.');
     await new Promise((r) => setTimeout(r, 2500));
   }
 }
@@ -335,18 +335,18 @@ async function udpAddress(t) {
 // A tunnel the player made by hand counts too, whether playit.gg lists it as UDP or TCP+UDP.
 const SIDE = {
   voice: { label: 'voice chat', portType: 'udp', tunnelType: 'mc-simple-voice-chat', oldType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'UDP',
-    manual: (port) => `On playit.gg: Add Tunnel → “MC: Simple Voice Chat” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris — it finds that tunnel and sets voice_host for you.` },
+    manual: (port) => `On playit.gg: Add Tunnel → “MC: Simple Voice Chat” (free) → Local Port ${port} → Add. Then press Restart tunnel in Astra — it finds that tunnel and sets voice_host for you.` },
   bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', oldType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'NetherNet',
-    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock (NetherNet)” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris.` },
-  // a resource pack .zip from the player's PC: Solaris serves it over HTTP through a free TCP tunnel
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock (NetherNet)” (free) → Local Port ${port} → Add. Then press Restart tunnel in Astra.` },
+  // a resource pack .zip from the player's PC: Astra serves it over HTTP through a free TCP tunnel
   pack: { label: 'resource pack', portType: 'tcp', tunnelType: 'minecraft-java', oldType: 'minecraft-java', ports: { type: 'custom-tcp', details: 1 }, is: (t) => isJava(t), kind: 'TCP',
-    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Java” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris. (Or paste a download link for the pack instead.)` },
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Java” (free) → Local Port ${port} → Add. Then press Restart tunnel in Astra. (Or paste a download link for the pack instead.)` },
   // the main tunnel of a Bedrock Dedicated Server (Mojang's server speaks RakNet: “Minecraft Bedrock”)
   bds: { label: 'Bedrock server', portType: 'udp', tunnelType: 'minecraft-bedrock', oldType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'Minecraft Bedrock',
-    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock” (free) → Local Port ${port} → Add. Then press Restart tunnel in Solaris.` },
+    manual: (port) => `On playit.gg: Add Tunnel → “Minecraft Bedrock” (free) → Local Port ${port} → Add. Then press Restart tunnel in Astra.` },
 };
 /**
- * Creates a voice chat / Bedrock tunnel to this PC's `port` and returns its id. Solaris tries the ways playit.gg
+ * Creates a voice chat / Bedrock tunnel to this PC's `port` and returns its id. Astra tries the ways playit.gg
  * accepts in order and moves on only while playit.gg says the *request* isn't right (an account answer such as
  * "verify your account" or "tunnel limit" stops right away, it would be the same for every way):
  *   1. POST /v1/tunnels/create the way the playit.gg website does it today: protocol = the tunnel type,
@@ -385,9 +385,9 @@ async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
   let id = t?.id || (run.pending.some((p) => p.id === tunnelId) ? tunnelId : null);
   if (!id) {
     onStep && onStep(`Creating ${k.label} tunnel (${k.kind})…`);
-    try { id = await createPortTunnel(k, `Solaris ${kind} ${String(name || 'server')}`, port); }
+    try { id = await createPortTunnel(k, `Astra ${kind} ${String(name || 'server')}`, port); }
     catch (e) {
-      const err = new Error(`playit.gg didn’t let Solaris make the ${k.label} tunnel (${e.message}). ${k.manual ? k.manual(port) : `You can add it on playit.gg yourself: type ${k.kind}, local port ${port}, then press Restart tunnel.`}`);
+      const err = new Error(`playit.gg didn’t let Astra make the ${k.label} tunnel (${e.message}). ${k.manual ? k.manual(port) : `You can add it on playit.gg yourself: type ${k.kind}, local port ${port}, then press Restart tunnel.`}`);
       err.manual = true; throw err;
     }
   }
@@ -397,12 +397,12 @@ async function ensureSideTunnel(kind, { port, name, tunnelId }, onStep) {
     await refresh().catch(() => {});
     t = run.tunnels.find((x) => x.id === id);
     if (t && t.display_address) { const address = await udpAddress(t); if (address) return { tunnelId: t.id, address }; }
-    if (Date.now() > until) throw new Error(`playit.gg hasn’t given the ${k.label} tunnel an address with a port yet — Solaris tries again next start.`);
+    if (Date.now() > until) throw new Error(`playit.gg hasn’t given the ${k.label} tunnel an address with a port yet — Astra tries again next start.`);
     await new Promise((r) => setTimeout(r, 2500));
   }
 }
 const ensureVoiceTunnel = (o, onStep) => ensureSideTunnel('voice', o, onStep);
-/** Removes a tunnel Solaris made (best effort). */
+/** Removes a tunnel Astra made (best effort). */
 function deleteTunnel(tunnelId) { if (tunnelId && linked()) return call('/tunnels/delete', { tunnel_id: tunnelId }).catch(() => {}); }
 /** Waits until the agent reports it is connected to playit.gg (or fails). */
 async function waitConnected(ms = 45000) {
@@ -444,7 +444,7 @@ function releaseServer(id) {
 /** Tunnel state for a server's dashboard. Never "online" unless the agent is connected and the server runs. */
 function statusFor(m, serverRunning, stopped) {
   if (authProblem) return { ok: false, state: 'error', text: 'playit.gg needs to be connected again', needsLink: true };
-  if (!linked()) return { ok: false, state: 'off', text: claim?.state === 'waiting' ? 'Waiting for you to approve Solaris on playit.gg' : 'playit.gg not connected', needsLink: claim?.state !== 'waiting' };
+  if (!linked()) return { ok: false, state: 'off', text: claim?.state === 'waiting' ? 'Waiting for you to approve Astra on playit.gg' : 'playit.gg not connected', needsLink: claim?.state !== 'waiting' };
   if (stopped) return { ok: false, state: 'off', text: 'Tunnel stopped — the server is only on your network' };
   if (!serverRunning) return { ok: false, state: 'off', text: m.playitAddress ? 'Public again when the server starts' : 'Public when the server starts (playit.gg)' };
   const t = mainTunnel(m);

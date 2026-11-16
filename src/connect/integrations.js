@@ -1,10 +1,10 @@
-// Solaris Connect — the integrations Solaris has. Each one wraps a feature that already exists in Solaris and
+// Astra Connect — the integrations Astra has. Each one wraps a feature that already exists in Astra and
 // reports its real state; nothing here pretends to be connected. Things that aren't built yet are listed as
-// "planned", and things that would need an online Solaris service (which doesn't exist) as "unavailable".
+// "planned", and things that would need an online Astra service (which doesn't exist) as "unavailable".
 // How to add one: docs/connect.md.
 
 const DOCS = 'https://github.com/Ahere12/solairs/blob/main/docs/connect.md';
-const lazy = (m) => () => require(m); // load Solaris modules only when a status is asked for
+const lazy = (m) => () => require(m); // load Astra modules only when a status is asked for
 const settings = lazy('../settings');
 const discord = lazy('../discord');
 const hosting = lazy('../hostserver');
@@ -48,7 +48,7 @@ function webMap(pid, description) {
         const i = await wmap().info(s.id);
         rows.push([s.name, i.url || '—', s.state !== 'online' ? 'Server is off' : i.online ? 'Live' : i.error || 'Starting', i.maps.map((mp) => mp.name).join(', ') || '—', String(i.maps.reduce((a, mp) => a + mp.players.length, 0))]);
       }
-      return { columns: ['Server', 'Map address', 'Map', 'Worlds', 'Players on map'], rows, note: rows.length ? 'Open the Maps page to see them inside Solaris.' : '' };
+      return { columns: ['Server', 'Map address', 'Map', 'Worlds', 'Players on map'], rows, note: rows.length ? 'Open the Maps page to see them inside Astra.' : '' };
     },
   };
 }
@@ -69,14 +69,14 @@ const INTEGRATIONS = [
     onConfig: () => discord().setActivity(),
     status() {
       const s = discord().status();
-      if (!s.hasApp) return { state: 'unavailable', text: 'This build of Solaris has no Discord application' };
+      if (!s.hasApp) return { state: 'unavailable', text: 'This build of Astra has no Discord application' };
       if (s.connected) return { state: 'connected', text: 'Connected to Discord' };
-      return { state: 'needs-setup', text: 'Discord isn’t running — Solaris connects by itself when it starts' };
+      return { state: 'needs-setup', text: 'Discord isn’t running — Astra connects by itself when it starts' };
     },
   },
   {
     id: 'friends', name: 'Friends', icon: 'users', category: 'social', type: 'api', core: true,
-    description: 'Players you follow, with their skins from Mojang. They show as online when Solaris sees them on a server (yours, a favourite or one you checked) — Java Edition has no official online-friends service.',
+    description: 'Players you follow, with their skins from Mojang. They show as online when Astra sees them on a server (yours, a favourite or one you checked) — Java Edition has no official online-friends service.',
     docs: `${DOCS}#friends`, page: 'friends',
     status() {
       const list = friends().list();
@@ -87,7 +87,7 @@ const INTEGRATIONS = [
   },
   {
     id: 'invites', name: 'Invite links & join codes', icon: 'link', category: 'social', type: 'local', core: true,
-    description: 'solaris:// links and JOIN- codes: send one to a friend and Solaris opens the right server (and warns about account types). They travel through any chat — Solaris has no inbox of its own.',
+    description: 'astra:// links and JOIN- codes: send one to a friend and Astra opens the right server (and warns about account types). They travel through any chat — Astra has no inbox of its own.',
     docs: `${DOCS}#invite-links`, page: 'host',
     status() {
       const pub = running().filter((s) => s.address);
@@ -95,9 +95,9 @@ const INTEGRATIONS = [
     },
   },
   {
-    id: 'presence-cloud', name: 'Solaris online status & inbox', icon: 'globe', category: 'social', type: 'api',
-    description: 'Seeing which Solaris friends are online anywhere, sending invites to their Solaris and sharing screenshots inside Solaris.',
-    unavailable: 'Needs an online Solaris service, which doesn’t exist. Use invite links, join codes and Discord instead.',
+    id: 'presence-cloud', name: 'Astra online status & inbox', icon: 'globe', category: 'social', type: 'api',
+    description: 'Seeing which Astra friends are online anywhere, sending invites to their Astra and sharing screenshots inside Astra.',
+    unavailable: 'Needs an online Astra service, which doesn’t exist. Use invite links, join codes and Discord instead.',
   },
 
   // ---------------- Server integrations ----------------
@@ -144,7 +144,7 @@ const INTEGRATIONS = [
   },
   {
     id: 'server-alerts', name: 'Desktop alerts for your servers', icon: 'alert', category: 'servers', type: 'local', defaultEnabled: true,
-    description: 'A desktop notification when a server you host goes online, stops, crashes, or someone joins — while Solaris is in the background or the tray.',
+    description: 'A desktop notification when a server you host goes online, stops, crashes, or someone joins — while Astra is in the background or the tray.',
     docs: `${DOCS}#desktop-alerts`, page: 'host',
     config: [
       { key: 'online', label: 'Server is online', type: 'bool', default: true },
@@ -178,14 +178,14 @@ const INTEGRATIONS = [
     status() {
       const s = playit().status();
       if (s.problem) return { state: 'error', text: s.problem };
-      if (!s.linked) return { state: 'needs-setup', text: s.claim?.state === 'waiting' ? 'Waiting for you to approve Solaris on playit.gg' : 'Not connected — connect it on the Hosting page' };
+      if (!s.linked) return { state: 'needs-setup', text: s.claim?.state === 'waiting' ? 'Waiting for you to approve Astra on playit.gg' : 'Not connected — connect it on the Hosting page' };
       const a = s.agent?.state;
       return { state: a === 'connected' ? 'connected' : 'ready', text: a === 'connected' ? 'Connected — tunnels are live' : 'Connected — the agent starts with a server that uses it' };
     },
   },
   {
     id: 'e4mc', name: 'e4mc', icon: 'globe', category: 'servers', type: 'mod', core: true,
-    description: 'An instant public address through the free e4mc relay, with no account. Solaris installs the mod on the server.',
+    description: 'An instant public address through the free e4mc relay, with no account. Astra installs the mod on the server.',
     docs: 'https://modrinth.com/mod/e4mc', page: 'host',
     compat: { software: MOD_SERVERS, why: () => 'e4mc is a mod — only Fabric, Quilt, Forge and NeoForge servers' },
     status() {
@@ -195,7 +195,7 @@ const INTEGRATIONS = [
   },
   {
     id: 'simple-voice-chat', name: 'Simple Voice Chat', icon: 'mic', category: 'servers', type: ['mod', 'plugin'], core: true,
-    description: 'Proximity voice chat. Solaris installs it on the server, makes the UDP tunnel on playit.gg and sets voice_host — players need the mod in their game too.',
+    description: 'Proximity voice chat. Astra installs it on the server, makes the UDP tunnel on playit.gg and sets voice_host — players need the mod in their game too.',
     docs: 'https://modrepo.de/minecraft/voicechat/wiki', page: 'host',
     compat: { software: [...PLUGIN_SERVERS, ...MOD_SERVERS], why: (s) => `${s.softwareName || s.software} servers can’t run mods or plugins` },
     status() {
@@ -208,7 +208,7 @@ const INTEGRATIONS = [
   },
   {
     id: 'geyser', name: 'Bedrock players (Geyser)', icon: 'globe', category: 'servers', type: ['plugin', 'mod'], core: true,
-    description: 'Lets phone, console and Windows (Bedrock Edition) players join a Java server, through Geyser + Floodgate. Solaris sets it up and makes the tunnel.',
+    description: 'Lets phone, console and Windows (Bedrock Edition) players join a Java server, through Geyser + Floodgate. Astra sets it up and makes the tunnel.',
     docs: 'https://geysermc.org/wiki/geyser/', page: 'host',
     compat: { software: ['paper', 'purpur', 'fabric', 'quilt', 'neoforge'], why: (s) => `Geyser doesn’t run on ${s.softwareName || s.software} servers` },
     status() {
@@ -240,7 +240,7 @@ const INTEGRATIONS = [
   },
   {
     id: 'spark', name: 'spark lag check', icon: 'chart', category: 'servers', type: ['mod', 'plugin'], core: true,
-    description: 'Measures TPS and tick time on a hosted server and makes a report that shows what causes lag. Solaris installs spark when you press Lag check.',
+    description: 'Measures TPS and tick time on a hosted server and makes a report that shows what causes lag. Astra installs spark when you press Lag check.',
     docs: 'https://spark.lucko.me/docs', page: 'host',
     compat: { software: [...PLUGIN_SERVERS, ...MOD_SERVERS], why: (s) => `spark can’t run on ${s.softwareName || s.software} servers` },
     status() {
@@ -257,7 +257,7 @@ const INTEGRATIONS = [
     status() {
       const a = accounts().active();
       if (!a) return { state: 'needs-setup', text: 'Add an account first' };
-      return a.type === 'msa' ? { state: 'connected', text: `Signed in as ${a.name}` } : { state: 'ready', text: `${a.name} is an offline account — skins show in Solaris and in modded games only` };
+      return a.type === 'msa' ? { state: 'connected', text: `Signed in as ${a.name}` } : { state: 'ready', text: `${a.name} is an offline account — skins show in Astra and in modded games only` };
     },
   },
   {
@@ -299,7 +299,7 @@ const INTEGRATIONS = [
     docs: `${DOCS}#play-time`, page: 'library',
     status() {
       const ms = instances().list().reduce((t, i) => t + (i.playTime || 0), 0), h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
-      return { state: ms ? 'ready' : 'needs-setup', text: ms ? `${h} h ${m} min played in Solaris` : 'Nothing played yet' };
+      return { state: ms ? 'ready' : 'needs-setup', text: ms ? `${h} h ${m} min played in Astra` : 'Nothing played yet' };
     },
   },
   {
@@ -310,12 +310,22 @@ const INTEGRATIONS = [
   },
 
   // ---------------- Maps & navigation ----------------
-  webMap('bluemap', '3D web map of a hosted server’s world, opened inside Solaris with live player positions. Also opens the BlueMap maps of servers you play on.'),
-  webMap('pl3xmap', 'Fast 2D web map of a hosted server’s world (like a satellite view), inside Solaris with live player positions. Also opens Pl3xMap maps of servers you play on.'),
-  webMap('dynmap', 'The classic web map — flat and 3D views, inside Solaris with live player positions. Also opens Dynmap maps of servers you play on.'),
+  webMap('bluemap', '3D web map of a hosted server’s world, opened inside Astra with live player positions. Also opens the BlueMap maps of servers you play on.'),
+  webMap('pl3xmap', 'Fast 2D web map of a hosted server’s world (like a satellite view), inside Astra with live player positions. Also opens Pl3xMap maps of servers you play on.'),
+  webMap('dynmap', 'The classic web map — flat and 3D views, inside Astra with live player positions. Also opens Dynmap maps of servers you play on.'),
 
   // ---------------- Not built yet (step by step, see docs/connect.md) ----------------
-  { id: 'waypoints', name: 'Waypoints & coordinates', icon: 'roadmap', category: 'maps', type: 'local', planned: true, description: 'Save places and share coordinates with friends as a code.' },
+  {
+    id: 'waypoints', name: 'Waypoints & coordinates', icon: 'roadmap', category: 'maps', type: 'local', core: true,
+    description: 'Save places — or take them from save files: where a player is, their last death, their bed, the world spawn — and share them as a code or plain text. On a server you host, teleport a player there or post it in chat.',
+    docs: `${DOCS}#waypoints`, page: 'waypoints',
+    status() {
+      const l = require('./waypoints').list();
+      if (!l.length) return { state: 'ready', text: 'No waypoints yet — add one, or paste a code a friend sent' };
+      const places = new Set(l.map((w) => w.place || '')).size;
+      return { state: 'ready', text: `${n(l.length, 'waypoint')} in ${n(places, 'place')}` };
+    },
+  },
 
 ];
 

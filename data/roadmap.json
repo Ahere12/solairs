@@ -1,12 +1,12 @@
 {
   "todo": [
     {
-      "title": "Solaris cosmetics service",
-      "text": "Solaris-own capes and badges that other Solaris players can see."
+      "title": "Astra cosmetics service",
+      "text": "Astra-own capes and badges that other Astra players can see."
     },
     {
       "title": "Friends presence",
-      "text": "See which Solaris friends are online without pinging servers."
+      "text": "See which Astra friends are online without pinging servers."
     },
     {
       "title": "OptiFine one-click updates",
@@ -26,11 +26,11 @@
   "done": [
     {
       "title": "Linux",
-      "text": "Solaris runs on Linux as an AppImage or .deb, with self-updates, hosting and everything else."
+      "text": "Astra runs on Linux as an AppImage or .deb, with self-updates, hosting and everything else."
     },
     {
       "title": "Cosmetics",
-      "text": "Optional cosmetics for the Solaris Client: capes, 3D skin layers, wavy capes, emotes, ears."
+      "text": "Optional cosmetics for the Astra Client: capes, 3D skin layers, wavy capes, emotes, ears."
     },
     {
       "title": "Local P2P server hosting",
@@ -53,11 +53,11 @@
       "text": "Search and install CurseForge mods and modpacks."
     },
     {
-      "title": "Solaris 1.0",
+      "title": "Astra 1.0",
       "text": "Launcher with instances, loaders, Modrinth, servers, skins and crash assistant."
     },
     {
-      "title": "Solaris Client modpack",
+      "title": "Astra Client modpack",
       "text": "One-click performance and quality-of-life bundle that updates itself."
     },
     {

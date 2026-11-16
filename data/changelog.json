@@ -1,6 +1,53 @@
 [
   {
     "product": "launcher",
+    "version": "1.12.0",
+    "date": "2026-11-15",
+    "title": "Solaris is now Astra 🌙",
+    "groups": [
+      {
+        "area": "Astra",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New name: Solaris is now Astra. Your instances, worlds, servers, settings and sign-ins all stay — nothing to set up again."
+          },
+          {
+            "type": "feature",
+            "text": "New moon look: the Astra theme (deep night blue with a moon-blue accent), the Moonlight background with stars, and a new moon icon. Your look switches to it once; pick another one any time in Settings → Appearance."
+          },
+          {
+            "type": "improvement",
+            "text": "Invite links now start with astra:// — old solaris:// links still work."
+          }
+        ]
+      },
+      {
+        "area": "Astra Connect",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Waypoints: save places, or take them straight from save files — where a player is, their last death, their bed and the world spawn. Share them as a code (or plain coordinates) that friends paste into Astra. On a server you host: teleport a player to a waypoint or post it in chat."
+          },
+          {
+            "type": "feature",
+            "text": "A Waypoints button on every player in Stats."
+          }
+        ]
+      },
+      {
+        "area": "Speed",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "Astra opens about a third faster: the window appears before the rest of Astra has loaded, and the start screen fades away quicker."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.11.0",
     "date": "2026-11-15",
     "title": "Solaris Connect, faster launches and a much bigger Hosting",

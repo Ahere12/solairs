@@ -14,7 +14,7 @@ exports.default = async function afterPack(ctx) {
   if (!fs.existsSync(bin) || fs.existsSync(real)) return;
   fs.renameSync(bin, real);
   const script = `#!/bin/sh
-# Solaris launcher wrapper: starts ${name}-bin, adding --no-sandbox only where Chromium's sandbox is unavailable.
+# Astra launcher wrapper: starts ${name}-bin, adding --no-sandbox only where Chromium's sandbox is unavailable.
 HERE="$(dirname "$(readlink -f "$0")")"
 NEED=0
 if [ ! -u "$HERE/chrome-sandbox" ]; then

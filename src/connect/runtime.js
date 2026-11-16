@@ -1,13 +1,13 @@
-// Solaris Connect — what runs in the background: the server watcher and desktop alerts. Started by index.js init().
+// Astra Connect — what runs in the background: the server watcher and desktop alerts. Started by index.js init().
 const { events, push } = require('../util');
 const { createWatcher } = require('./watch');
 
-/** A desktop notification, only when notifications are on (Settings) and Solaris isn't the window in front. */
+/** A desktop notification, only when notifications are on (Settings) and Astra isn't the window in front. */
 function desktopNotify({ title, body, address }) {
   try {
     const { Notification, BrowserWindow } = require('electron');
     if (!require('../settings').get().notifications || !Notification.isSupported()) return false;
-    if (BrowserWindow?.getFocusedWindow?.()) return false; // Solaris is in front: the in-app toast is enough
+    if (BrowserWindow?.getFocusedWindow?.()) return false; // Astra is in front: the in-app toast is enough
     const n = new Notification({ title: String(title).slice(0, 100), body: String(body || '').slice(0, 200) });
     if (address) n.on('click', () => { events.emit('window', 'restore'); push('deeplink', { kind: 'server', address }); }); // click: offer to join it
     n.show();

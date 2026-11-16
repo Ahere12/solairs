@@ -1,18 +1,19 @@
 :root {
-  --win: #09090b;
-  --bg: #0e0e10;
-  --bg-2: #111113;
-  --panel: #18181b;
-  --panel-2: #1f1f23;
-  --panel-3: #2a2a30;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-2: rgba(255, 255, 255, 0.11);
-  --text: #f4f4f5;
-  --muted: #a1a1aa;
-  --faint: #6b6b76;
-  --accent: #ff9f1c;
-  --accent-2: #ff5e3a;
-  --accent-ink: #1a0f02;
+  /* Astra — moonlit night: deep navy, cool blue-grey panels, moon-blue accent */
+  --win: #05070e;
+  --bg: #080b15;
+  --bg-2: #0a0e1a;
+  --panel: #10162a;
+  --panel-2: #151c34;
+  --panel-3: #1e2744;
+  --border: rgba(160, 180, 255, 0.08);
+  --border-2: rgba(160, 180, 255, 0.15);
+  --text: #eef1fb;
+  --muted: #9aa5c4;
+  --faint: #67718f;
+  --accent: #7c9cff;
+  --accent-2: #4f6bff;
+  --accent-ink: #ffffff;
   --ok: #3ddc84;
   --warn: #ffcc4d;
   --danger: #ff5470;
@@ -25,6 +26,7 @@
   --sidebar: 236px;
   --gap: 8px;
 }
+:root[data-theme='solar'] { --win: #09090b; --bg: #0e0e10; --bg-2: #111113; --panel: #18181b; --panel-2: #1f1f23; --panel-3: #2a2a30; --border: rgba(255, 255, 255, 0.06); --border-2: rgba(255, 255, 255, 0.11); --text: #f4f4f5; --muted: #a1a1aa; --faint: #6b6b76; }
 :root[data-theme='eclipse'] { --win: #000; --bg: #070708; --bg-2: #0a0a0c; --panel: #111114; --panel-2: #17171b; --panel-3: #222228; }
 :root[data-theme='nebula'] { --win: #070912; --bg: #0b0e1a; --bg-2: #0d1120; --panel: #131a30; --panel-2: #19213d; --panel-3: #232d50; --muted: #9aa6c8; --faint: #66729a; }
 :root[data-theme='dawn'] {
@@ -657,3 +659,18 @@ textarea.file-view { width: 100%; height: min(62vh, 640px); resize: vertical; fo
 .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .card.notice { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
 .card.notice svg.i { color: var(--info); flex: none; }
+
+/* ---------- Astra: "Moonlight" background — a quiet starfield with the moon's glow ---------- */
+:root[data-bg='moon'] .bg-img, [data-bg-preview='moon'] {
+  background-image:
+    radial-gradient(1.3px 1.3px at 22px 34px, rgba(255,255,255,.9), transparent), radial-gradient(1px 1px at 132px 86px, rgba(210,220,255,.75), transparent),
+    radial-gradient(1.6px 1.6px at 214px 168px, rgba(255,255,255,.85), transparent), radial-gradient(1px 1px at 64px 196px, rgba(200,212,255,.55), transparent),
+    radial-gradient(1.1px 1.1px at 262px 44px, rgba(255,255,255,.7), transparent), radial-gradient(1px 1px at 300px 230px, rgba(200,212,255,.6), transparent),
+    radial-gradient(900px 520px at 88% -12%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+    radial-gradient(700px 420px at -5% 105%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 70%),
+    linear-gradient(180deg, #070a14 0%, #080b16 55%, #05070e 100%);
+  background-size: 320px 260px, 320px 260px, 320px 260px, 320px 260px, 320px 260px, 320px 260px, 100% 100%, 100% 100%, 100% 100%;
+  background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat; }
+/* the moon art on Home and the Astra Client page floats instead of spinning */
+.hero .sunburst, .hero-strip .sunburst { animation: moonfloat 9s ease-in-out infinite; filter: drop-shadow(0 0 40px color-mix(in srgb, var(--accent) 45%, transparent)); }
+@keyframes moonfloat { 0%, 100% { transform: translateY(-50%); } 50% { transform: translateY(calc(-50% - 8px)); } }

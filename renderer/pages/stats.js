@@ -1,4 +1,4 @@
-/* Stats (Solaris Connect): players' statistics and advancements from the save files of your worlds and servers. */
+/* Stats (Astra Connect): players' statistics and advancements from the save files of your worlds and servers. */
 const statDur = (ms) => { const m = Math.floor((ms || 0) / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
 const toRoman = (n) => (n >= 1 && n <= 10 ? ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][n - 1] : String(n));
 const ADV_TABS = { story: 'Minecraft', nether: 'Nether', end: 'The End', adventure: 'Adventure', husbandry: 'Husbandry' };
@@ -8,7 +8,7 @@ Pages.stats = {
 
   async render(el, params) {
     if (params.world) this.sel = { world: params.world, player: params.player || null, name: params.name || null, view: params.view || null };
-    el.innerHTML = `<div class="page-head"><div><a href="#" id="st-back" class="small">← Solaris Connect</a><h1>Stats</h1><div class="sub">Play time, deaths, distance, mining, advancements and inventories — read from the save files of your worlds and the servers you host.</div></div></div>
+    el.innerHTML = `<div class="page-head"><div><a href="#" id="st-back" class="small">← Astra Connect</a><h1>Stats</h1><div class="sub">Play time, deaths, distance, mining, advancements and inventories — read from the save files of your worlds and the servers you host.</div></div></div>
       <div class="maps-layout"><div class="stack maps-side" id="st-side"><div class="faint">Loading…</div></div><div id="st-main"></div></div>`;
     $('#st-back', el).onclick = (e) => { e.preventDefault(); Router.go('connect'); };
     const worlds = await api('stats:worlds').catch((e) => (toastErr(e), []));
@@ -32,7 +32,7 @@ Pages.stats = {
     main.innerHTML = '<div class="faint">Adding it all up…</div>';
     const t = await api('stats:totals').catch((e) => (toastErr(e), []));
     main.innerHTML = `<div class="card"><h3 style="margin:0 0 8px">${icon('clock')} Play time in all worlds</h3>${t.length ? `<table class="hs-ptable"><tr><th>Player</th><th>Play time</th><th>Worlds</th><th>Deaths</th></tr>${t.map((p) => `<tr><td><b>${esc(p.name || p.uuid.slice(0, 8))}</b></td><td>${statDur(p.playMs)}</td><td>${p.worlds}</td><td>${p.deaths}</td></tr>`).join('')}</table>` : '<div class="faint small">No stats yet.</div>'}
-      <p class="faint small">From each world’s own stats. Play time in Solaris instances (including multiplayer) is in Library.</p></div>`;
+      <p class="faint small">From each world’s own stats. Play time in Astra instances (including multiplayer) is in Library.</p></div>`;
   },
 
   async world(main, el) {
@@ -56,11 +56,12 @@ Pages.stats = {
   /** Stats | Inventory switch above a player. */
   playerBar(main, el, name, worldName, owner) {
     return `<div class="row" style="gap:10px;margin-bottom:10px"><button class="btn sm ghost" id="st-up">${icon('back')}Players</button><h3 class="grow" style="margin:0">${esc(name)} <span class="faint small">in ${esc(worldName)} (${esc(owner)})</span></h3>
-      <div class="hs-filter"><button data-view="stats" class="${this.sel.view !== 'inv' ? 'on' : ''}">Stats</button><button data-view="inv" class="${this.sel.view === 'inv' ? 'on' : ''}">Inventory</button></div></div>`;
+      <div class="hs-filter"><button data-view="stats" class="${this.sel.view !== 'inv' ? 'on' : ''}">Stats</button><button data-view="inv" class="${this.sel.view === 'inv' ? 'on' : ''}">Inventory</button></div><button class="btn sm" id="st-wp" title="Where they are, their last death and bed">${icon('roadmap')}Waypoints</button></div>`;
   },
   bindBar(main, el) {
     $('#st-up', main).onclick = () => { this.sel.player = null; this.sel.view = null; this.render(el, {}); };
     $$('[data-view]', main).forEach((b) => (b.onclick = () => { this.sel.view = b.dataset.view; this.render(el, {}); }));
+    $('#st-wp', main).onclick = () => Router.go('waypoints', { place: this.sel.world, player: this.sel.player });
   },
 
   /** Inventory, armour, off hand and ender chest from the player's save (read-only). */
@@ -87,7 +88,7 @@ Pages.stats = {
             <div><div class="faint small">Ender chest</div><div class="inv-grid">${v.ender.map((it) => slot(it)).join('')}</div></div></div>
           <div class="card inv-detail" id="inv-detail"><div class="faint small">Click an item to see it.</div></div>
         </div>
-        <p class="faint small">Read-only, from ${v.from === 'level.dat' ? 'the world’s level.dat (singleplayer)' : 'the server’s player save'}. ${v.world.kind === 'server' ? 'Players’ files are written when the server saves (every few minutes and when they leave).' : ''}${v.names ? '' : ` Solaris doesn’t have Minecraft ${esc(v.world.mc)}’s files, so names are made from item ids and there are no pictures.`}</p></div>`;
+        <p class="faint small">Read-only, from ${v.from === 'level.dat' ? 'the world’s level.dat (singleplayer)' : 'the server’s player save'}. ${v.world.kind === 'server' ? 'Players’ files are written when the server saves (every few minutes and when they leave).' : ''}${v.names ? '' : ` Astra doesn’t have Minecraft ${esc(v.world.mc)}’s files, so names are made from item ids and there are no pictures.`}</p></div>`;
     this.bindBar(main, el);
     const detail = (it) => `<div class="row" style="gap:10px">${it.icon ? `<img class="inv-big" src="${it.icon}" alt="">` : ''}<div><b>${esc(it.customName || it.name)}</b>${it.customName ? `<div class="faint small">${esc(it.name)}</div>` : ''}<div class="faint small mono">${esc(it.id)}${it.count > 1 ? ` ×${it.count}` : ''}</div></div></div>
       ${it.enchantments.length ? `<div class="small" style="margin-top:6px">${it.enchantments.map((e) => `<div class="ench-text">${esc(e.name)} ${e.level > 1 ? toRoman(e.level) : ''}</div>`).join('')}</div>` : ''}
@@ -109,7 +110,7 @@ Pages.stats = {
       <div class="hs-tiles">${tile('Play time', statDur(s.playMs))}${tile('Deaths', s.deaths)}${tile('Mobs killed', s.mobKills.toLocaleString())}${tile('Distance', `${s.distanceKm} km`)}${tile('Blocks mined', s.blocksMined.toLocaleString())}${tile('Items crafted', s.itemsCrafted.toLocaleString())}${tile('Jumps', s.jumps.toLocaleString())}${tile('Since last death', s.sinceDeathMs != null ? statDur(s.sinceDeathMs) : '—')}${s.playerKills ? tile('Players killed', s.playerKills) : ''}${s.flownKm ? tile('Flown', `${s.flownKm} km`) : ''}${s.tradedWithVillagers ? tile('Villager trades', s.tradedWithVillagers) : ''}</div>
       <div class="st-lists">${list('Most mined', s.topMined)}${list('Most killed', s.topKilled)}${list('Killed by', s.topKilledBy)}${list('Most crafted', s.topCrafted)}</div>
       <div class="card" style="margin-top:12px"><div class="row" style="gap:10px"><h3 class="grow" style="margin:0">${icon('star')} Advancements</h3><b>${a.done}${a.total ? ` / ${a.total}` : ''}</b></div>
-        ${a.total ? `<div class="hs-pregen-bar" style="margin:8px 0"><div style="width:${Math.min(100, (a.done / a.total) * 100)}%"></div></div>` : `<p class="faint small">Solaris doesn’t have Minecraft ${esc(p.world.mc)}’s files, so it can’t list the advancements not done yet or their real names.</p>`}
+        ${a.total ? `<div class="hs-pregen-bar" style="margin:8px 0"><div style="width:${Math.min(100, (a.done / a.total) * 100)}%"></div></div>` : `<p class="faint small">Astra doesn’t have Minecraft ${esc(p.world.mc)}’s files, so it can’t list the advancements not done yet or their real names.</p>`}
         ${tabs.map((t) => { const l = a.list.filter((x) => x.tab === t); return `<details ${t === 'story' ? 'open' : ''}><summary><b>${esc(ADV_TABS[t] || t)}</b> <span class="faint small">${l.filter((x) => x.done).length}/${l.length}</span></summary><div class="st-adv">${l.map((x) => `<div class="st-adv-item ${x.done ? 'done' : ''} ${x.frame}" title="${esc(x.description)}">${icon(x.done ? 'check' : 'close')}<span class="grow"><b>${esc(x.title)}</b><span class="faint small">${esc(x.description.split('\n')[0])}</span></span>${x.when ? `<span class="faint small">${new Date(x.when).toLocaleDateString()}</span>` : ''}</div>`).join('')}</div></details>`; }).join('')}</div>`;
     this.bindBar(main, el);
   },

@@ -1,6 +1,6 @@
 Pages.console = {
   lineClass(l) {
-    if (l.startsWith('[Solaris]')) return 'l-solaris';
+    if (l.startsWith('[Astra]')) return 'l-solaris';
     if (/\b(ERROR|FATAL|Exception|Caused by)\b|^\s+at /.test(l)) return 'l-error';
     if (/\bWARN\b/.test(l)) return 'l-warn';
     if (/\bDEBUG\b/.test(l)) return 'l-debug';
@@ -54,7 +54,7 @@ Pages.console = {
       const runs = Object.entries(State.runs).reverse();
       // nothing picked yet (or the picked run vanished): follow the newest run, e.g. a game started after opening this page
       if (!runId || !State.runs[runId]) runId = runs[0]?.[0];
-      el.innerHTML = `<div class="page-head"><div><h1>${T('Console')}</h1><div class="sub">Live game output for this session · logs are saved in the Solaris logs folder</div></div>
+      el.innerHTML = `<div class="page-head"><div><h1>${T('Console')}</h1><div class="sub">Live game output for this session · logs are saved in the Astra logs folder</div></div>
         <div class="actions"><button class="btn" id="ologs">${icon('folder')}Logs folder</button></div></div>
         ${runs.length ? `<div class="tabs">${runs.map(([id, r]) => `<button data-run="${esc(id)}" class="${id === runId ? 'on' : ''}">${r.running ? '<span class="dot pulse" style="display:inline-block;margin-right:6px"></span>' : ''}${esc(r.name)} <span class="faint small">${new Date(r.start).toLocaleTimeString()}</span></button>`).join('')}</div><div id="cbox"></div>`
           : `<div class="empty">${icon('console')}<div>Nothing has run yet this session. Launch an instance to see its live console here.</div></div>`}`;

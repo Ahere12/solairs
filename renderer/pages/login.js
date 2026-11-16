@@ -52,7 +52,7 @@ const AuthGate = {
     el.innerHTML = `
       <div class="ag-art">
         <div class="ag-sun" aria-hidden="true"></div>
-        <div class="ag-brand"><img src="../assets/icon.png" alt=""><div><b>Solaris</b><span>Minecraft: Java Edition launcher</span></div></div>
+        <div class="ag-brand"><img src="../assets/icon.png" alt=""><div><b>Astra</b><span>Minecraft: Java Edition launcher</span></div></div>
         <div class="ag-stage"><canvas id="ag-skin"></canvas><div class="ag-floor"></div></div>
         <div class="ag-name" id="ag-name"></div>
       </div>
@@ -72,7 +72,7 @@ const AuthGate = {
             <ul class="ag-perks">
               <li>${icon('check')}Online servers & Realms</li>
               <li>${icon('check')}Your own skin and capes</li>
-              <li>${icon('check')}Solaris never sees your password</li>
+              <li>${icon('check')}Astra never sees your password</li>
             </ul>
             <p class="faint small"><a href="#" id="ag-code">Sign in with a code instead</a> — for when the browser can't reach this PC.</p>
           </div>
@@ -92,7 +92,7 @@ const AuthGate = {
     this.el = el;
 
     $$('[data-tab]', el).forEach((b) => (b.onclick = () => this.setTab(b.dataset.tab)));
-    $('#ag-ver', el).textContent = State.info?.version ? 'Solaris ' + State.info.version : 'Solaris';
+    $('#ag-ver', el).textContent = State.info?.version ? 'Astra ' + State.info.version : 'Astra';
     $('#ag-buy', el).onclick = (e) => { e.preventDefault(); api('shell:open', 'https://www.minecraft.net/store/minecraft-java-bedrock-edition-pc'); };
     $('#ag-ms', el).onclick = () => this.msOk && microsoftLogin(null, null);
     $('#ag-code', el).onclick = (e) => { e.preventDefault(); if (this.msOk) microsoftLogin(null, null, 'code'); };
@@ -122,7 +122,7 @@ const AuthGate = {
     ms.disabled = !this.msOk;
     $('#ag-ms-note', this.el).textContent = this.msOk
       ? 'Opens Microsoft’s secure sign-in page in your browser. Use the account that owns Minecraft: Java Edition.'
-      : 'Microsoft sign-in isn’t available in this version of Solaris yet. You can play offline meanwhile.';
+      : 'Microsoft sign-in isn’t available in this version of Astra yet. You can play offline meanwhile.';
     if (tab === 'offline') setTimeout(() => $('#ag-off', this.el)?.focus(), 30);
   },
 
@@ -141,7 +141,7 @@ const AuthGate = {
       await api('accounts:setActive', b.dataset.use); await refreshAccounts();
     }));
     $$('[data-forget]', box).forEach((b) => (b.onclick = async () => {
-      if (!(await confirmDialog('Remove this account from Solaris?', { danger: true, ok: 'Remove' }))) return;
+      if (!(await confirmDialog('Remove this account from Astra?', { danger: true, ok: 'Remove' }))) return;
       await api('accounts:remove', b.dataset.forget);
       await api('accounts:setActive', null); // removing must not sign anyone else in
       await refreshAccounts();

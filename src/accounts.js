@@ -78,15 +78,15 @@ const MS_TOKEN = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token'
 const MS_DEVICE = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode';
 let pendingLogin = null;
 
-// Solaris signs everyone in through ONE OAuth app owned by the Solaris developer (src/config.js).
+// Astra signs everyone in through ONE OAuth app owned by the Astra developer (src/config.js).
 // Players never see or provide a client ID.
-const UNAVAILABLE = 'Microsoft sign-in isn’t available in this version of Solaris yet. Please update Solaris, or play offline in the meantime.';
+const UNAVAILABLE = 'Microsoft sign-in isn’t available in this version of Astra yet. Please update Astra, or play offline in the meantime.';
 function microsoftAvailable() { return !!config.MS_CLIENT_ID; }
 function clientId() {
   if (!config.MS_CLIENT_ID) throw new Error(UNAVAILABLE);
   return config.MS_CLIENT_ID;
 }
-/** Problems with the Solaris app registration itself are the developer's to fix, not the player's. */
+/** Problems with the Astra app registration itself are the developer's to fix, not the player's. */
 function appConfigProblem(code, text) {
   return code === 'unauthorized_client' || code === 'invalid_client' || /AADSTS(700016|7000218|70002|50011|700054|500113)/.test(text || '');
 }
@@ -104,10 +104,10 @@ function oauthError(e) {
 function friendlyOAuth(e) {
   const { code, text } = oauthError(e);
   if (appConfigProblem(code, text)) {
-    console.error('[Solaris] Microsoft OAuth app misconfigured:', code, text);
-    return 'Microsoft sign-in is temporarily unavailable. Please try again later or update Solaris.';
+    console.error('[Astra] Microsoft OAuth app misconfigured:', code, text);
+    return 'Microsoft sign-in is temporarily unavailable. Please try again later or update Astra.';
   }
-  console.error('[Solaris] Microsoft OAuth error:', code, text);
+  console.error('[Astra] Microsoft OAuth error:', code, text);
   if (code === 'invalid_grant') return 'That sign-in expired or was already used. Please sign in again.';
   if (code === 'interaction_required' || code === 'consent_required') return 'Microsoft needs you to finish signing in. Please try again.';
   if (code === 'temporarily_unavailable' || code === 'server_error') return 'Microsoft’s sign-in service is busy. Please try again in a moment.';
@@ -140,9 +140,9 @@ async function minecraftFromMsToken(msAccess) {
     mc = await postJSON('https://api.minecraftservices.com/authentication/login_with_xbox', { identityToken: `XBL3.0 x=${uhs};${xsts.Token}` });
   } catch (e) {
     if (e.status === 403) {
-      // Mojang has not (yet) approved the Solaris app for Minecraft services. Developer-side issue.
-      console.error('[Solaris] login_with_xbox returned 403 — the Solaris client ID is not approved by Mojang yet.');
-      throw new Error('Minecraft sign-in for Solaris is still being enabled by Mojang. Please try again later or update Solaris.');
+      // Mojang has not (yet) approved the Astra app for Minecraft services. Developer-side issue.
+      console.error('[Astra] login_with_xbox returned 403 — the Astra client ID is not approved by Mojang yet.');
+      throw new Error('Minecraft sign-in for Astra is still being enabled by Mojang. Please try again later or update Astra.');
     }
     if (e.status === 429) throw new Error('Too many sign-in attempts. Wait a minute and try again.');
     throw new Error('Minecraft services sign-in failed. Please try again.');
@@ -185,7 +185,7 @@ async function finishLogin(cid, ms, token) {
   if (!token.cancelled) push('account:login', { ok: true, account: acct });
 }
 
-const PAGE = (title, text, ok) => `<!doctype html><meta charset="utf-8"><title>Solaris</title>
+const PAGE = (title, text, ok) => `<!doctype html><meta charset="utf-8"><title>Astra</title>
 <body style="margin:0;height:100vh;display:grid;place-items:center;background:#0d0b12;color:#f4efe6;font-family:Segoe UI,system-ui,sans-serif">
 <div style="text-align:center;max-width:420px;padding:24px"><div style="font-size:56px">${ok ? '☀️' : '⚠️'}</div>
 <h1 style="margin:8px 0;font-size:22px">${title}</h1><p style="color:#a49cb1">${text}</p></div></body>`;
@@ -194,7 +194,7 @@ const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<'
 /**
  * Browser sign-in (OAuth 2.0 authorization code + PKCE, RFC 8252 loopback redirect).
  * Opens Microsoft's sign-in page in the user's default browser; Microsoft redirects back to
- * http://localhost:<port> on this machine, where Solaris receives the code.
+ * http://localhost:<port> on this machine, where Astra receives the code.
  */
 async function browserLogin(cid, token) {
   const verifier = b64url(crypto.randomBytes(32));
@@ -211,7 +211,7 @@ async function browserLogin(cid, token) {
   try { port = await listen('127.0.0.1', config.MS_REDIRECT_PORT); }
   catch (e) {
     if (e.code !== 'EADDRINUSE') throw e;
-    console.warn(`[Solaris] Port ${config.MS_REDIRECT_PORT} is busy; using a free port for the sign-in callback.`);
+    console.warn(`[Astra] Port ${config.MS_REDIRECT_PORT} is busy; using a free port for the sign-in callback.`);
     port = await listen('127.0.0.1', 0);
   }
   try { await listen('::1', port); } catch {}
@@ -225,7 +225,7 @@ async function browserLogin(cid, token) {
       const u = new URL(req.url, redirectUri);
       if (u.pathname !== config.MS_REDIRECT_PATH) { resp.writeHead(404).end(); return; }
       const send = (title, text, ok) => { resp.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); resp.end(PAGE(title, text, ok)); };
-      if (u.searchParams.get('state') !== state) { send('Sign-in failed', 'This sign-in link is not from Solaris. Start again from the launcher.', false); return; }
+      if (u.searchParams.get('state') !== state) { send('Sign-in failed', 'This sign-in link is not from Astra. Start again from the launcher.', false); return; }
       clearTimeout(timer);
       const err = u.searchParams.get('error');
       if (err) {
@@ -234,7 +234,7 @@ async function browserLogin(cid, token) {
         reject(new Error(err === 'access_denied' ? 'Sign-in was cancelled.' : friendlyOAuth({ body: JSON.stringify({ error: err, error_description: desc }) })));
         return;
       }
-      send('Signed in to Solaris', 'You can close this tab and return to the launcher.', true);
+      send('Signed in to Astra', 'You can close this tab and return to the launcher.', true);
       resolve(u.searchParams.get('code'));
     };
     servers.forEach((s) => s.on('request', handler));

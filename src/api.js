@@ -24,14 +24,14 @@ const DATA = path.join(__dirname, '..', 'data');
 
 function withRunning(list) { return list.map((i) => ({ ...i, running: launch.isRunning(i.id) })); }
 
-/** File actions from the UI are limited to Solaris's own folders (data folder + instance game folders). */
+/** File actions from the UI are limited to Astra's own folders (data folder + instance game folders). */
 function assertKnownPath(p) {
   const r = path.resolve(String(p || ''));
   // Windows and macOS paths ignore case; Linux paths don't.
   const fold = process.platform === 'linux' ? (x) => x : (x) => x.toLowerCase();
   const roots = [paths.getRoot(), ...instances.list().map((i) => i.gameDir)].map((x) => fold(path.resolve(x)));
   const rl = fold(r);
-  if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Solaris folders.');
+  if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Astra folders.');
   return r;
 }
 /** Scan newly installed jars in the background and warn if something looks like malware. */
@@ -75,7 +75,7 @@ module.exports = (getWin) => ({
   'settings:set': (patch) => {
     const s = settings.set(patch);
     if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin, args: ['--hidden'] });
-    if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Solaris to apply the GPU acceleration change.' });
+    if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Astra to apply the GPU acceleration change.' });
     if ('discordRpc' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
     else if (['discordShowInstance', 'discordShowServer', 'discordShowHead', 'streamerMode'].some((k) => k in patch)) discord.setActivity(); // privacy change: update right away
     return s;
@@ -115,7 +115,7 @@ module.exports = (getWin) => ({
   'instances:worlds': (id) => instances.worlds(id),
   'instances:export': async (id, include) => {
     const inst = instances.get(id);
-    const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${inst.name}.solpack`, filters: [{ name: 'Solaris pack', extensions: ['solpack'] }] })).filePath;
+    const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${inst.name}.solpack`, filters: [{ name: 'Astra pack', extensions: ['solpack'] }] })).filePath;
     if (!dest) return null;
     await instances.exportPack(id, dest, include);
     shell.showItemInFolder(dest);
@@ -225,7 +225,7 @@ module.exports = (getWin) => ({
   'hosted:addClientMod': (id, pid) => require('./hostserver').addClientMod(id, pid),
   'hosted:removeClientMod': (id, pid) => require('./hostserver').removeClientMod(id, pid),
   'hosted:searchClientMods': (id, q) => require('./hostserver').searchClientMods(id, q),
-  // ---------- Solaris Connect ----------
+  // ---------- Astra Connect ----------
   'connect:list': () => require('./connect').list(),
   'connect:get': (id) => require('./connect').get(id),
   'connect:status': (id) => require('./connect').status(id),
@@ -238,6 +238,14 @@ module.exports = (getWin) => ({
   'stats:players': (key) => require('./connect/saves').players(String(key)),
   'stats:player': (key, uuid) => require('./connect/saves').player(String(key), String(uuid)),
   'stats:totals': () => require('./connect/saves').totals(),
+  'wp:list': () => require('./connect/waypoints').list(),
+  'wp:save': (w) => require('./connect/waypoints').save(w || {}),
+  'wp:remove': (id) => require('./connect/waypoints').remove(String(id)),
+  'wp:encode': (ids) => require('./connect/waypoints').encode(Array.isArray(ids) ? ids.map(String) : []),
+  'wp:decode': (text) => require('./connect/waypoints').decode(text),
+  'wp:places': (key, uuid) => require('./connect/waypoints').placesFrom(String(key), uuid ? String(uuid) : null),
+  'wp:teleport': (id, player) => require('./connect/waypoints').teleport(String(id), String(player)),
+  'wp:announce': (id) => require('./connect/waypoints').announce(String(id)),
   'stats:inventory': (key, uuid) => require('./connect/inventory').inventory(String(key), String(uuid)),
   'stats:saveNow': (serverId) => require('./connect/inventory').saveNow(String(serverId)),
   'maps:info': (id) => require('./connect/webmap').info(id),
@@ -331,15 +339,15 @@ module.exports = (getWin) => ({
   'safety:disable': (id, file) => instances.setEnabled(id, 'mods', [path.basename(file)], false),
   'modrinth:installModpack': (o) => modrinth.installModpack(o),
 
-  // ---------- Solaris Client ----------
+  // ---------- Astra Client ----------
   'solaris:modules': () => modrinth.modules(),
   'solaris:availability': (mc) => modrinth.moduleAvailability(mc),
   'solaris:create': async ({ mc, modules, name }) => {
-    const inst = instances.create({ name: name || `Solaris ${mc}`, versionId: mc, loader: { type: 'fabric' }, icon: 'sun', extra: { solarisModules: modules } });
+    const inst = instances.create({ name: name || `Astra ${mc}`, versionId: mc, loader: { type: 'fabric' }, icon: 'sun', extra: { solarisModules: modules } });
     return inst;
   },
   'solaris:setModules': (id, modules) => instances.update(id, { solarisModules: modules }),
-  'solaris:sync': (id) => modrinth.syncModules(id, (p, slug) => push('task', { id: 'sync-' + id, label: 'Syncing Solaris modules', progress: p, detail: slug })),
+  'solaris:sync': (id) => modrinth.syncModules(id, (p, slug) => push('task', { id: 'sync-' + id, label: 'Syncing Astra modules', progress: p, detail: slug })),
 
   // ---------- servers ----------
   'servers:list': () => servers.list(),
@@ -426,11 +434,11 @@ module.exports = (getWin) => ({
     if (require('./hostserver').anyRunning()) throw new Error('Stop your hosted servers before moving the data folder.');
     const [dir] = (await dialog.showOpenDialog(getWin(), { properties: ['openDirectory', 'createDirectory'] })).filePaths;
     if (!dir) return null;
-    const target = path.join(dir, 'Solaris');
+    const target = path.join(dir, 'Astra');
     const old = paths.getRoot();
     if (path.resolve(target) === path.resolve(old)) return null;
     // Copying a folder into itself never ends.
-    if (path.resolve(target).startsWith(path.resolve(old) + path.sep)) throw new Error('Pick a folder outside the current Solaris data folder.');
+    if (path.resolve(target).startsWith(path.resolve(old) + path.sep)) throw new Error('Pick a folder outside the current Astra data folder.');
     push('task', { id: 'relocate', label: 'Moving data folder', progress: null });
     try { await fs.promises.cp(old, target, { recursive: true }); } finally { push('task', { id: 'relocate', done: true }); }
     paths.setRoot(target);

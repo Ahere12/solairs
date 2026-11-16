@@ -1,11 +1,11 @@
-/* Maps (Solaris Connect): BlueMap, Pl3xMap and Dynmap web maps of your hosted servers and of servers you play on, inside Solaris. */
+/* Maps (Astra Connect): BlueMap, Pl3xMap and Dynmap web maps of your hosted servers and of servers you play on, inside Astra. */
 const MAP_FRAME = (url) => `<iframe class="map-frame" src="${esc(url)}" sandbox="allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer" title="Map"></iframe>`;
 
 Pages.maps = {
   sel: null, // { kind: 'server'|'link', id }
 
   async render(el, params, ctx) {
-    el.innerHTML = `<div class="page-head"><div><a href="#" id="mp-back" class="small">← Solaris Connect</a><h1>Maps</h1><div class="sub">BlueMap, Pl3xMap and Dynmap web maps of your servers and of servers you play on — inside Solaris.</div></div>
+    el.innerHTML = `<div class="page-head"><div><a href="#" id="mp-back" class="small">← Astra Connect</a><h1>Maps</h1><div class="sub">BlueMap, Pl3xMap and Dynmap web maps of your servers and of servers you play on — inside Astra.</div></div>
         <div class="actions"><button class="btn" id="mp-refresh">${icon('refresh')}Check again</button></div></div>
       <div class="maps-layout"><div class="stack maps-side" id="mp-side"><div class="faint">Loading…</div></div><div class="maps-view" id="mp-view"></div></div>`;
     $('#mp-back', el).onclick = (e) => { e.preventDefault(); Router.go('connect'); };
@@ -65,7 +65,7 @@ Pages.maps = {
       const draw = () => {
         const p = i.providers.find((x) => x.id === pick);
         box.innerHTML = `<div class="card stack"><h3 style="margin:0">${icon('roadmap')} Map</h3>
-          <div>A map of your world in your browser and inside Solaris, with players moving on it live. Pick one — Solaris installs it on this server and sets it up.</div>
+          <div>A map of your world in your browser and inside Astra, with players moving on it live. Pick one — Astra installs it on this server and sets it up.</div>
           <div class="hc-types" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${i.providers.map((x) => `<button class="hc-type ${x.id === pick ? 'on' : ''}" data-prov="${x.id}"><b>${esc(x.name)}</b><span class="faint small">${esc(x.style)}</span><span class="small">${esc(INFO[x.id][0])}</span></button>`).join('')}</div>
           <ul class="small faint" style="margin:0 0 0 18px;line-height:1.6"><li>The map is drawn while the server runs — the first full map of a big world takes a while and uses some CPU.</li><li>It opens at <span class="mono">localhost</span> on this PC and on your Wi-Fi; friends outside your network can’t open it yet.</li><li>The map files are saved in the server folder (they can get big for large worlds).</li></ul>
           ${INFO[pick][1] ? `<label class="row small" style="gap:10px;align-items:flex-start"><input type="checkbox" id="bm-eula"><span>${INFO[pick][1]}</span></label>` : ''}
@@ -83,7 +83,7 @@ Pages.maps = {
       draw();
       return;
     }
-    const why = s.state !== 'online' ? 'Start the server to see the map.' : !i.configured ? `${i.providerName} is starting for the first time — Solaris sets it up and reloads it; the map appears in a minute.` : i.error || 'Starting…';
+    const why = s.state !== 'online' ? 'Start the server to see the map.' : !i.configured ? `${i.providerName} is starting for the first time — Astra sets it up and reloads it; the map appears in a minute.` : i.error || 'Starting…';
     box.innerHTML = `${this.viewer(`${s.name} — map`, i.online ? i.url : null, i.maps, why, i.lanUrl ? [['Copy LAN link', i.lanUrl]] : [])}
       <div class="row small" style="gap:8px;margin-top:10px"><span class="faint grow">${esc(i.providerName)} · web map on port ${i.port}${i.online ? ` · ${i.maps.length} world${i.maps.length === 1 ? '' : 's'}` : ''}. New areas appear as it draws them.</span>
         <button class="btn sm" id="bm-check">${icon('refresh')}Check again</button><button class="btn sm ghost" id="bm-off">Turn off the map</button></div>`;

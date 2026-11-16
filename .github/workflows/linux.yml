@@ -1,5 +1,5 @@
-# Builds the Linux version of Solaris (AppImage + .deb) for every published release and adds it to that release,
-# together with latest-linux.yml so Linux copies of Solaris can update themselves.
+# Builds the Linux version of Astra (formerly Solaris) (AppImage + .deb) for every published release and adds it to that release,
+# together with latest-linux.yml so Linux copies of Astra can update themselves.
 # Run it by hand for an older release from the Actions tab ("Run workflow", then type the tag, e.g. v1.7.0).
 name: Linux build
 

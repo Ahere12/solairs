@@ -89,7 +89,7 @@ async function detect() {
       add(path.join(r, e, 'Contents', 'Home'));
     }
   }
-  // Solaris-managed runtimes
+  // Astra-managed runtimes
   try { for (const c of fs.readdirSync(paths.runtime())) { const e = javaExe(path.join(paths.runtime(), c)); if (fs.existsSync(e)) candidates.add(e); } } catch {}
   // Check all candidates at the same time (each `java -version` takes ~0.3 s).
   const found = await Promise.all([...candidates].map(async (exe) => { const v = await javaVersionOf(exe); return v ? { path: exe, ...v, managed: exe.startsWith(paths.runtime()) } : null; }));
