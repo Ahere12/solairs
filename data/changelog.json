@@ -1,6 +1,40 @@
 [
   {
     "product": "launcher",
+    "version": "1.15.0",
+    "date": "2026-11-17",
+    "title": "CurseForge in Hosting, and pick your source in Discover",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Server Mods and Plugins tabs have a Modrinth / CurseForge switch: search and install CurseForge mods (Fabric, Quilt, Forge, NeoForge) and Bukkit plugins (Paper, Purpur), with their required dependencies."
+          },
+          {
+            "type": "feature",
+            "text": "New server → Modpack: pick a modpack from Modrinth or CurseForge. CurseForge modpacks install the mods the server needs, leave out game-only ones, and copy the pack’s configs."
+          },
+          {
+            "type": "improvement",
+            "text": "Mods that only work in the game (like Sodium) are checked after download and refused with a clear reason, whichever site they come from."
+          }
+        ]
+      },
+      {
+        "area": "Discover",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Choose where to search: Both, Modrinth or CurseForge. Astra remembers your choice."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.14.1",
     "date": "2026-11-17",
     "title": "CurseForge works out of the box",

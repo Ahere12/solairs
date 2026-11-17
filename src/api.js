@@ -182,7 +182,7 @@ module.exports = (getWin) => ({
   'hosted:deleteBackup': (id, f) => require('./hostserver').deleteBackup(id, f),
   'hosted:logFiles': (id) => require('./hostserver').logFiles(id),
   'hosted:readLog': (id, f) => require('./hostserver').readLog(id, f),
-  'hosted:search': (id, q, off) => require('./hostserver').searchContent(id, q, off),
+  'hosted:search': (id, q, off, src) => require('./hostserver').searchContent(id, q, off, src === 'curseforge' ? 'curseforge' : 'modrinth'),
   'hosted:content': (id) => require('./hostserver').installedContent(id),
   'hosted:install': (id, pid, vid) => require('./hostserver').installContent(id, pid, vid),
   'hosted:removeContent': (id, f) => require('./hostserver').removeContent(id, f),
@@ -192,7 +192,7 @@ module.exports = (getWin) => ({
   'hosted:addFiles': (id, files) => require('./hostserver').addContentFiles(id, files),
   'hosted:toggleContent': (id, f) => require('./hostserver').toggleContent(id, f),
   'hosted:modpackVersions': (pid, sw, mc) => require('./hostserver').modpackVersions(pid, sw, mc),
-  'hosted:searchModpacks': async (q, sw, mc) => { const facets = [['project_type:modpack'], [`categories:${sw}`], [`versions:${mc}`]]; const r = await getJSON(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(q || '')}&facets=${encodeURIComponent(JSON.stringify(facets))}&limit=12&index=${q ? 'relevance' : 'downloads'}`); return r.hits.map((h) => ({ id: h.project_id, title: h.title, icon: h.icon_url, downloads: h.downloads, description: h.description })); },
+  'hosted:searchModpacks': async (q, sw, mc, src) => { if (src === 'curseforge') return require('./hostserver').searchModpacksCf(q, sw, mc); const facets = [['project_type:modpack'], [`categories:${sw}`], [`versions:${mc}`]]; const r = await getJSON(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(q || '')}&facets=${encodeURIComponent(JSON.stringify(facets))}&limit=12&index=${q ? 'relevance' : 'downloads'}`); return r.hits.map((h) => ({ id: h.project_id, title: h.title, icon: h.icon_url, downloads: h.downloads, description: h.description })); },
   // ---------- playit.gg ----------
   'hosted:setVoice': (id, on) => require('./hostserver').setVoice(id, !!on),
   'hosted:setVoiceAddress': (id, addr) => require('./hostserver').setVoiceAddress(id, addr),

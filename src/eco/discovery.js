@@ -56,7 +56,7 @@ function providers(kind, { curseforgeKey = false } = {}) {
  * deps = { modrinth: { search }, curseforge: { search, available } } — passed in for tests.
  * Each provider is asked in parallel; one that fails is reported with its error, the others still show.
  */
-async function search({ kind = 'mod', query = '', gameVersion, loader, sort = 'relevance', limit = 20, offset = 0, page = null } = {}, deps) {
+async function search({ kind = 'mod', query = '', gameVersion, loader, sort = 'relevance', limit = 20, offset = 0, page = null, source = 'all' } = {}, deps) {
   // page n asks every provider/type for its own n-th slice, so scrolling on keeps going until every provider runs out
   if (page == null) page = Math.floor(offset / Math.max(1, limit));
   const k = KINDS[kind];
@@ -66,6 +66,7 @@ async function search({ kind = 'mod', query = '', gameVersion, loader, sort = 'r
   let more = false;
   const mrSort = { relevance: 'relevance', downloads: 'downloads', updated: 'updated', newest: 'newest' }[sort] || 'relevance';
   for (const p of prov) {
+    if (source !== 'all' && source !== p.id) continue; // the player picked one source
     if (!p.ok) { status.push({ provider: p.id, name: p.name, ok: false, why: p.why }); continue; }
     const types = [].concat(k[p.id]);
     asks.push(Promise.all(types.map(async (type) => {
@@ -104,7 +105,7 @@ function deps() {
 // The same search within two minutes (switching tabs, typing back) is answered from memory. Failed searches aren't kept.
 const cache = new Map();
 async function run(q = {}) {
-  const k = JSON.stringify([q.kind, q.query, q.sort, q.gameVersion, q.loader, q.limit, q.offset, q.page, require('../curseforge').available()]);
+  const k = JSON.stringify([q.kind, q.query, q.sort, q.gameVersion, q.loader, q.limit, q.offset, q.page, q.source, require('../curseforge').available()]);
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 120000) return hit.value;
   const value = await search(q, deps());

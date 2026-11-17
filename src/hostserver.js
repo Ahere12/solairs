@@ -1117,7 +1117,9 @@ async function makeInstance(id, onStep) {
   if (m.modpack?.versionId) {
     onStep && onStep('Installing the modpack');
     // the same modpack version is already installed for this server: keep it (its worlds and settings too)
-    const inst = old && old.modpack?.versionId === m.modpack.versionId ? old : await modrinth.installModpack({ versionId: m.modpack.versionId, name: `${m.name} (play)` });
+    const cfv = String(m.modpack.versionId).startsWith('cf:') ? String(m.modpack.versionId).split(':') : null;
+    const same = old && (cfv ? old.modpack?.source === 'curseforge' && old.modpack?.fileId === cfv[2] : old.modpack?.versionId === m.modpack.versionId);
+    const inst = same ? old : cfv ? await require('./curseforge').installModpack({ projectId: cfv[1], fileId: cfv[2] }) : await modrinth.installModpack({ versionId: m.modpack.versionId, name: `${m.name} (play)` });
     const added = [];
     if (m.voice?.on && inst?.id && ['fabric', 'forge', 'neoforge', 'quilt'].includes(inst.loader?.type)) { try { await modrinth.install(inst.id, { projectId: VOICE_ID }); added.push('Simple Voice Chat'); } catch {} }
     const cur = meta(id); cur.playInstance = inst.id; save(cur);
@@ -2012,8 +2014,9 @@ function readLog(id, file) {
 // ---------- mods / plugins / modpacks (Modrinth, checked against version + loader) ----------
 const contentDir = (m) => path.join(m.dir, SOFTWARE[m.software].kind === 'plugins' ? 'plugins' : 'mods');
 const loadersFor = (m) => (m.software === 'paper' ? ['paper', 'spigot', 'bukkit'] : m.software === 'purpur' ? ['purpur', 'paper', 'spigot', 'bukkit'] : m.software === 'quilt' ? ['quilt', 'fabric'] : [m.software]);
-async function searchContent(id, query = '', offset = 0) {
+async function searchContent(id, query = '', offset = 0, source = 'modrinth') {
   const m = meta(id);
+  if (SOFTWARE[m.software].kind !== 'none' && source === 'curseforge') return searchContentCf(m, query, offset);
   if (SOFTWARE[m.software].kind === 'none') throw new Error(`${SOFTWARE[m.software].name} servers can’t run mods or plugins. Create a Paper, Purpur, Fabric, Quilt, Forge or NeoForge server.`);
   const kind = SOFTWARE[m.software].kind === 'plugins' ? 'plugin' : 'mod';
   const facets = [[`project_type:${kind}`], loadersFor(m).map((l) => `categories:${l}`), [`versions:${m.mc}`], ['server_side:required', 'server_side:optional']];
@@ -2040,6 +2043,7 @@ async function installContent(mOrId, projectId, versionId = null, quiet = false,
   const m = typeof mOrId === 'string' ? meta(mOrId) : mOrId;
   const kind = SOFTWARE[m.software].kind;
   if (kind === 'none') throw new Error('Vanilla servers can’t run mods or plugins.');
+  if (String(projectId).startsWith('cf:')) return installContentCf(m, projectId, versionId, quiet, seen);
   let v = null;
   if (versionId) v = await getJSON(`https://api.modrinth.com/v2/version/${versionId}`);
   else for (const l of loadersFor(m)) { v = await bestModFile(projectId, m.mc, l); if (v) break; }
@@ -2243,8 +2247,95 @@ function toggleContent(id, file) {
   fs.renameSync(path.join(dir, f), path.join(dir, f.endsWith('.disabled') ? f.slice(0, -9) : f + '.disabled'));
   return installedContent(id);
 }
+// ---------- CurseForge for hosted servers ----------
+// CurseForge results carry ids like "cf:238222" (mods/plugins) and modpack versions like "cf:<modId>:<fileId>", so
+// the rest of hosting (installed marks, setup codes, the content list) works the same for both sources.
+// CurseForge doesn't say which mods are client-only, so every jar is checked after download (wontRun) and removed
+// if it can't run on a server.
+const cfLoader = (m) => (m.software === 'quilt' ? 'fabric' : m.software); // Quilt runs Fabric mods; few are tagged Quilt
+async function searchContentCf(m, query = '', offset = 0) {
+  const cfm = require('./curseforge');
+  const plugins = SOFTWARE[m.software].kind === 'plugins';
+  const r = await cfm.search({ query, type: plugins ? 'plugin' : 'mod', gameVersion: plugins ? undefined : m.mc, loader: plugins ? undefined : cfLoader(m), sort: query ? 'relevance' : 'downloads', offset, limit: 20 });
+  const have = new Set(Object.keys(readJSON(recordFile(m), {})));
+  return { total: r.total_hits, source: 'curseforge', hits: r.hits.map((h) => ({ id: 'cf:' + h.project_id, slug: h.slug, title: h.title, description: h.description, icon: h.icon_url, downloads: h.downloads, author: h.author, installed: have.has('cf:' + h.project_id) })) };
+}
+async function installContentCf(m, modId, fileId = null, quiet = false, seen = new Set()) {
+  const cfm = require('./curseforge');
+  modId = String(modId).replace(/^cf:/, '');
+  if (seen.has('cf:' + modId)) return [];
+  seen.add('cf:' + modId);
+  const plugins = SOFTWARE[m.software].kind === 'plugins';
+  const mod = (await cfm.request(`/mods/${modId}`)).data;
+  if (mod.classId === 4471) throw new Error(`${mod.name} is a modpack — pick it when you create a server (Server type → Modpack).`);
+  const f = fileId ? (await cfm.request(`/mods/${modId}/files/${fileId}`)).data : await cfm.serverFile(modId, plugins ? {} : { mc: m.mc, loader: cfLoader(m) });
+  if (!f) { if (quiet) return []; throw new Error(`${mod.name} has no file for ${SOFTWARE[m.software].name} ${m.mc} on CurseForge.`); }
+  let url; try { url = cfm.urlOf(f, mod); } catch (e) { if (quiet) return []; throw e; }
+  const dir = contentDir(m); fs.mkdirSync(dir, { recursive: true });
+  const name = cfm.safeName(f.fileName), dest = path.join(dir, name);
+  const rec = readJSON(recordFile(m), {});
+  const key = 'cf:' + modId;
+  if (rec[key]?.file && rec[key].file !== name) fs.rmSync(path.join(dir, rec[key].file), { force: true });
+  await download(url, dest, { sha1: cfm.sha1Of(f) });
+  const why = wontRun(m, dest);
+  if (why) { fs.rmSync(dest, { force: true }); if (quiet) return []; throw new Error(`${mod.name}: ${why}.`); }
+  const dupes = sameModFiles(dir, dest);
+  if (dupes.length && quiet) { fs.rmSync(dest, { force: true }); return []; }
+  for (const d of dupes) fs.rmSync(path.join(dir, d), { force: true });
+  rec[key] = { file: name, version: f.displayName || '', title: mod.name, source: 'curseforge' };
+  writeJSON(recordFile(m), rec);
+  const out = [mod.name];
+  for (const d of f.dependencies || []) if (d.relationType === 3 && d.modId) out.push(...(await installContentCf(m, d.modId, null, true, seen).catch(() => [])));
+  return out;
+}
+/** CurseForge modpacks for the create dialog: { id: 'cf:<modId>', … } */
+async function searchModpacksCf(query, software, mc) {
+  const r = await require('./curseforge').search({ query, type: 'modpack', gameVersion: mc, loader: software === 'quilt' ? 'quilt' : software, sort: query ? 'relevance' : 'downloads', limit: 12 });
+  return r.hits.map((h) => ({ id: 'cf:' + h.project_id, title: h.title, icon: h.icon_url, downloads: h.downloads, description: h.description, source: 'curseforge' }));
+}
+async function modpackVersionsCf(projectId, software, mc) {
+  const cfm = require('./curseforge'), modId = String(projectId).replace(/^cf:/, '');
+  const q = new URLSearchParams({ pageSize: '50', gameVersion: mc });
+  if (cfm.LOADER[software]) q.set('modLoaderType', String(cfm.LOADER[software]));
+  const list = ((await cfm.request(`/mods/${modId}/files?${q}`)).data || []).filter((f) => !f.isServerPack);
+  const rank = { 1: 0, 2: 1, 3: 2 };
+  return list.sort((a, b) => (rank[a.releaseType] - rank[b.releaseType]) || (b.id - a.id)).map((f) => ({ id: `cf:${modId}:${f.id}`, name: f.displayName, number: f.displayName, type: f.releaseType === 1 ? 'release' : f.releaseType === 2 ? 'beta' : 'alpha' }));
+}
+/** CurseForge modpack server install: the pack's server-capable mods + overrides. Files the author keeps website-only are listed. */
+async function installModpackCf(m, versionId, onStep) {
+  const cfm = require('./curseforge');
+  const [, modId, fileId] = String(versionId).split(':');
+  const mod = (await cfm.request(`/mods/${modId}`)).data, f = (await cfm.request(`/mods/${modId}/files/${fileId}`)).data;
+  const tmp = path.join(m.dir, '.modpack.zip');
+  await download(cfm.urlOf(f, mod), tmp, { sha1: cfm.sha1Of(f) });
+  const { zip, man, over, overrides, info } = cfm.readPack(tmp);
+  const required = (man.files || []).filter((x) => x && x.required !== false).map((x) => ({ projectID: +x.projectID, fileID: +x.fileID }));
+  const { meta: files, mods } = required.length ? await cfm.resolveFiles(required) : { meta: [], mods: {} };
+  const dir = contentDir(m); fs.mkdirSync(dir, { recursive: true });
+  const rec = readJSON(recordFile(m), {});
+  const manual = [], clientOnly = [];
+  const jars = files.filter((x) => (mods[x.modId]?.classId || 6) === 6); // resource packs / shaders are for the players' game
+  let n = 0;
+  for (const x of jars) {
+    onStep && onStep(`Modpack files ${++n}/${jars.length}`);
+    const pm = mods[x.modId];
+    if (!x.downloadUrl) { manual.push({ name: pm?.name || x.fileName, page: cfm.pageOf(x, pm) }); continue; }
+    const name = cfm.safeName(x.fileName), dest = path.join(dir, name);
+    await download(x.downloadUrl, dest, { sha1: cfm.sha1Of(x) });
+    if (wontRun(m, dest)) { fs.rmSync(dest, { force: true }); clientOnly.push(pm?.name || name); continue; }
+    rec['cf:' + x.modId] = { file: name, version: x.displayName || '', title: pm?.name || name, source: 'curseforge', pack: true };
+  }
+  writeJSON(recordFile(m), rec);
+  cfm.copyOverrides(zip, over, overrides, m.dir);
+  fs.rmSync(tmp, { force: true });
+  m.modpack = { versionId, name: info.name, version: info.version, source: 'curseforge', ...(manual.length ? { manual } : {}) };
+  if (clientOnly.length) onStep && onStep(`Left out ${clientOnly.length} game-only mod${clientOnly.length === 1 ? '' : 's'} (the server doesn’t need them)`);
+  if (manual.length) onStep && onStep(`${manual.length} mod${manual.length === 1 ? '' : 's'} must be downloaded from the CurseForge website: ${manual.map((x) => x.name).join(', ')}`);
+}
+
 /** Modrinth modpack (.mrpack) server install: server-side files + overrides + server-overrides. */
 async function installModpack(m, { versionId }, onStep) {
+  if (String(versionId).startsWith('cf:')) return installModpackCf(m, versionId, onStep);
   const v = await getJSON(`https://api.modrinth.com/v2/version/${versionId}`);
   const f = v.files.find((x) => x.primary) || v.files[0];
   const tmp = path.join(m.dir, '.modpack.mrpack');
@@ -2272,6 +2363,7 @@ async function installModpack(m, { versionId }, onStep) {
 }
 /** Modpacks whose loader matches this software + Minecraft version (for the create dialog). */
 async function modpackVersions(projectId, software, mc) {
+  if (String(projectId).startsWith('cf:')) return modpackVersionsCf(projectId, software, mc);
   const vs = await getJSON(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version?loaders=${encodeURIComponent(JSON.stringify([software]))}&game_versions=${encodeURIComponent(JSON.stringify([mc]))}`);
   // stable releases first (a server shouldn't get a beta or alpha unless that's all there is)
   const rank = { release: 0, beta: 1, alpha: 2 };
@@ -2281,7 +2373,7 @@ async function modpackVersions(projectId, software, mc) {
 module.exports = {
   SOFTWARE, list, get, create, start, stop, restart, stopAll, anyRunning, command, logs, getSettings, setSettings, saveSettings, applyLive, setTunnel, remove, openFolder,
   softwareVersions, worlds, setActiveWorld, deleteWorld, people, addPerson, removePerson, backups, backup, restore, deleteBackup,
-  logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, modSources, instanceMods, copyFromInstance, addContentFiles, modpackVersions,
+  logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, searchModpacksCf, modSources, instanceMods, copyFromInstance, addContentFiles, modpackVersions,
   tunnelStop, tunnelStart, tunnelRestart,
   setVoice, setVoiceAddress, setBedrock, onlinePlayers, movePlayerData, allowOffline, diagnose, applyFix, pregen, lagCheck, setDiscord, testDiscord, makeInstance, setupCode, readSetupCode, joinCode, readJoinCode, setSchedule, setAutoStart, autoStartAll, bans, pardon,
   knownPlayers, tasks, saveTask, deleteTask, runTaskNow: async (id, taskId) => { const t = tasks(id).find((x) => x.id === taskId); if (!t) throw new Error('Task not found'); if (t.action !== 'start' && running.get(id)?.state !== 'online') throw new Error('Start the server first.'); await runTask(id, t); return tasks(id); },

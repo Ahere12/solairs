@@ -318,7 +318,7 @@ Pages.host = {
           <div class="row hc-codebar"><span class="faint small grow">${icon('key')} Have a setup code? Paste it to fill everything in.</span><input type="text" id="hc-code" class="mono" style="width:260px" placeholder="SOLARIS-…" spellcheck="false"><button class="btn sm" id="hc-code-use">Use</button></div>
           <h3 style="margin:4px 0 0">Server Type Setup</h3><div class="faint small">Select the type of Minecraft server you want to run</div>
           <div class="hc-types">${HOST_TYPES.map(card).join('')}</div>
-          <div class="field hidden" id="hc-pack-wrap">Modpack <span class="faint small">(from Modrinth)</span>
+          <div class="field hidden" id="hc-pack-wrap">Modpack <span class="faint small">(Modrinth or CurseForge)</span>
             <div class="row" style="gap:8px"><div class="seg" id="hc-pl">${['fabric', 'quilt', 'forge', 'neoforge'].map((l) => `<button data-pl="${l}">${HOST_SW.find((x) => x[0] === l)[1]}</button>`).join('')}</div><span class="grow small" id="hc-pack">None picked</span><button class="btn sm primary" id="hc-pack-pick">${icon('search')}Choose modpack…</button></div></div>
           <div class="faint small" id="hc-sw-note"></div>
         </section>
@@ -615,18 +615,23 @@ Pages.host = {
   pickModpack(sw, mc) {
     return new Promise((resolve) => {
       let done = false;
-      const m = modal({ title: `Modpacks for ${sw} ${mc}`, body: `<div class="search" style="margin-bottom:10px">${icon('search')}<input type="search" id="mp-q" placeholder="Search modpacks…"></div><div id="mp-list" class="stack" style="gap:6px"><div class="faint">Loading…</div></div>`, onClose: () => { if (!done) resolve(null); } });
+      let src = 'modrinth';
+      const m = modal({ title: `Modpacks for ${sw} ${mc}`, body: `<div class="row" style="gap:8px;margin-bottom:10px"><div class="search grow">${icon('search')}<input type="search" id="mp-q" placeholder="Search modpacks…"></div><span class="seg" id="mp-src"><button data-src="modrinth" class="on">Modrinth</button><button data-src="curseforge">CurseForge</button></span></div><div id="mp-list" class="stack" style="gap:6px"><div class="faint">Loading…</div></div>`, onClose: () => { if (!done) resolve(null); } });
       const load = debounce(async () => {
-        const list = await api('hosted:searchModpacks', m.$('#mp-q').value, sw, mc).catch(() => []);
+        const box0 = m.$('#mp-list'); if (box0) box0.innerHTML = '<div class="faint">Loading…</div>';
+        let err = null;
+        const list = await api('hosted:searchModpacks', m.$('#mp-q').value, sw, mc, src).catch((e) => { err = e; return []; });
         const box = m.$('#mp-list'); if (!box) return;
-        box.innerHTML = list.length ? list.map((p) => `<div class="list-row" data-mp="${esc(p.id)}" style="cursor:pointer"><img src="${esc(p.icon || '')}" style="width:36px;height:36px;border-radius:8px" alt=""><div class="info"><div class="title">${esc(p.title)}</div><div class="desc">${esc(p.description)}</div></div></div>`).join('') : `<div class="faint">No ${esc(sw)} modpacks for ${esc(mc)}.</div>`;
+        box.innerHTML = list.length ? list.map((p) => `<div class="list-row" data-mp="${esc(p.id)}" style="cursor:pointer"><img src="${esc(p.icon || '')}" style="width:36px;height:36px;border-radius:8px" alt=""><div class="info"><div class="title">${esc(p.title)}</div><div class="desc">${esc(p.description)}</div></div></div>`).join('') : `<div class="faint">${err ? esc(err.message) : `No ${esc(sw)} modpacks for ${esc(mc)} on ${src === 'curseforge' ? 'CurseForge' : 'Modrinth'}.`}</div>`;
         $$('[data-mp]', box).forEach((r) => (r.onclick = async () => {
           const vs = await api('hosted:modpackVersions', r.dataset.mp, sw, mc).catch(() => []);
           if (!vs.length) return toast('No version of this modpack for that Minecraft version', 'warn');
           done = true; resolve({ title: list.find((p) => p.id === r.dataset.mp).title, versionId: vs[0].id, versionName: vs[0].number }); m.close();
         }));
       }, 300);
-      m.$('#mp-q').oninput = load; load();
+      m.$('#mp-q').oninput = load;
+      $$('#mp-src [data-src]', m.el).forEach((b) => (b.onclick = () => { src = b.dataset.src; $$('#mp-src [data-src]', m.el).forEach((x) => x.classList.toggle('on', x === b)); load(); }));
+      load();
     });
   },
 
@@ -873,7 +878,7 @@ Pages.host = {
       const bindSub = () => $$('[data-sub]', box).forEach((b) => (b.onclick = () => { this.contentSub = b.dataset.sub; this.tabs.content.call(this, box, id, s); }));
       if (sub === 'client') { box.innerHTML = subBar + '<div id="cm-root"><div class="faint">Checking the server’s mods…</div></div>'; bindSub(); return this.clientModsPanel($('#cm-root', box), id, s); }
       box.innerHTML = subBar + `<div class="hs-cols two" id="ct-root">
-        <div class="card"><h3>${icon('search')} Find ${what} <span class="faint small">for ${esc(s.softwareName)} ${esc(s.mc)} (Modrinth)</span></h3><div class="search" style="margin-bottom:10px">${icon('search')}<input type="search" id="ct-q" placeholder="Search ${what}…"></div><div id="ct-res" class="stack" style="gap:6px"></div></div>
+        <div class="card"><h3 class="row" style="gap:8px;flex-wrap:wrap">${icon('search')}<span class="grow">Find ${what} <span class="faint small">for ${esc(s.softwareName)} ${esc(s.mc)}</span></span><span class="seg" id="ct-src"><button data-src="modrinth">Modrinth</button><button data-src="curseforge">CurseForge</button></span></h3><div class="search" style="margin-bottom:10px">${icon('search')}<input type="search" id="ct-q" placeholder="Search ${what}…"></div><div id="ct-res" class="stack" style="gap:6px"></div></div>
         <div class="card"><h3 class="row" style="gap:8px">${icon('package')}<span class="grow">Installed <span class="faint small" id="ct-n"></span></span><button class="icon-btn" id="ct-open" title="Open the ${what} folder">${icon('folder')}</button></h3>
           <div class="row wrap" style="gap:6px;margin-bottom:10px">${what === 'mods' ? `<button class="btn sm primary" id="ct-from">${icon('library')}Copy from an instance</button>` : ''}<button class="btn sm" id="ct-files">${icon('upload')}Add files from PC</button></div>
           <div id="ct-inst" class="stack" style="gap:4px"></div><p class="faint small">You can also drag .jar files here. Changes apply after a restart.</p></div></div>`;
@@ -902,12 +907,17 @@ Pages.host = {
         const res = $('#ct-res', box); if (!res) return;
         res.innerHTML = '<div class="faint small">Searching…</div>';
         try {
-          const r = await api('hosted:search', id, $('#ct-q', box).value, 0);
+          const src = this.contentSrc || 'modrinth';
+          const r = await api('hosted:search', id, $('#ct-q', box).value, 0, src);
           res.innerHTML = r.hits.map((h) => `<div class="list-row hs-res" data-pid="${esc(h.id)}"><img src="${esc(h.icon || '')}" alt=""><div class="info"><div class="title">${esc(h.title)}</div><div class="desc">${esc(h.description)}</div></div><button class="btn sm primary" data-inst="${esc(h.id)}">${icon('download')}Install</button></div>`).join('') || '<div class="faint small">Nothing found for this version.</div>';
           $$('[data-inst]', res).forEach((b) => { if (r.hits.find((h) => h.id === b.dataset.inst)?.installed) installFeedback.mark(b); b.onclick = () => installFeedback(b, async () => { try { const names = await api('hosted:install', id, b.dataset.inst); toast(`Installed ${names.join(', ')}`); drawInst(); return { id, name: s.name }; } catch (e) { toastErr(e); return false; } }); });
         } catch (e) { res.innerHTML = `<div class="faint small">${esc(e.message)}</div>`; }
       }, 300);
       $('#ct-q', box).oninput = search;
+      const drawSrc = () => $$('#ct-src [data-src]', box).forEach((b) => b.classList.toggle('on', b.dataset.src === (this.contentSrc || 'modrinth')));
+      $$('#ct-src [data-src]', box).forEach((b) => (b.onclick = () => { this.contentSrc = b.dataset.src; try { localStorage.setItem('host.contentSrc', b.dataset.src); } catch {} drawSrc(); search(); }));
+      if (!this.contentSrc) { try { this.contentSrc = localStorage.getItem('host.contentSrc') || 'modrinth'; } catch { this.contentSrc = 'modrinth'; } }
+      drawSrc();
       bindSub();
       search(); drawInst();
     },

@@ -10,7 +10,7 @@ const instances = require('./instances');
 
 const API = 'https://api.curseforge.com/v1';
 const GAME = 432; // Minecraft
-const CLASS = { mod: 6, modpack: 4471, resourcepack: 12, shader: 6552, datapack: 6945, world: 17, customization: 4546 }; // world = maps (Astra Discover)
+const CLASS = { mod: 6, modpack: 4471, resourcepack: 12, shader: 6552, datapack: 6945, world: 17, customization: 4546, plugin: 5 }; // plugin = Bukkit plugins (hosted Paper/Purpur servers) // world = maps (Astra Discover)
 const CLASS_DIR = { 6: 'mods', 12: 'resourcepacks', 6552: 'shaderpacks' };
 const LOADER = { forge: 1, fabric: 4, quilt: 5, neoforge: 6 };
 const SORT = { relevance: 2, downloads: 6, follows: 2, newest: 11, updated: 3 };
@@ -408,4 +408,14 @@ async function installMap(instanceId, { projectId, fileId }) {
   return [{ projectId: String(projectId), file: name, version: f.displayName, world: name }];
 }
 
-module.exports = { installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord };
+// ---------- for hosted servers (src/hostserver.js) ----------
+/** The best file of a CurseForge project for a Minecraft version + loader: releases first, never a server-pack zip. */
+async function serverFile(modId, { mc, loader } = {}) {
+  const q = new URLSearchParams({ pageSize: "50" });
+  if (mc) q.set("gameVersion", mc);
+  if (LOADER[loader]) q.set("modLoaderType", String(LOADER[loader]));
+  const list = ((await cf(`/mods/${modId}/files?${q}`)).data || []).filter((f) => !f.isServerPack);
+  return list.find((f) => f.releaseType === 1) || list[0] || null;
+}
+
+module.exports = { installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };

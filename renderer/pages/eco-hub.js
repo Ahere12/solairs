@@ -2,18 +2,21 @@
 
 /* ---------- Discover ---------- */
 Pages.discover = {
-  state: { kind: 'mod', q: '', sort: 'relevance', inst: null },
+  state: { kind: 'mod', q: '', sort: 'relevance', inst: null, source: (() => { try { return localStorage.getItem('discover.source') || 'all'; } catch { return 'all'; } })() },
   async render(el) {
     const st = this.state;
     const kinds = await api('discover:kinds');
     el.innerHTML = `<div class="page-head"><div><h1>Discover</h1><div class="sub">One search across Modrinth and CurseForge — mods, modpacks, resource packs, shaders, maps and community content.</div></div></div>
       <div class="tabs">${kinds.map((k) => `<button data-k="${k.id}" class="${k.id === st.kind ? 'on' : ''}">${esc(k.name)}</button>`).join('')}</div>
-      <div class="sticky-bar"><div class="search" style="width:300px">${icon('search')}<input type="search" id="dq" placeholder="${T('Search')}…" value="${esc(st.q)}"></div>
+      <div class="sticky-bar"><span class="seg" id="dsrc"><button data-src="all">Both</button><button data-src="modrinth">Modrinth</button><button data-src="curseforge">CurseForge</button></span><div class="search" style="width:300px">${icon('search')}<input type="search" id="dq" placeholder="${T('Search')}…" value="${esc(st.q)}"></div>
         <select id="ds"><option value="relevance">Best match</option><option value="downloads">Most downloaded</option><option value="updated">Recently updated</option></select>
         <select id="di"><option value="">Any version</option>${State.instances.map((i) => `<option value="${esc(i.id)}" ${st.inst === i.id ? 'selected' : ''}>For ${esc(i.name)} (${esc(i.versionId)})</option>`).join('')}</select></div>
       <div id="dprov" class="row wrap" style="margin:8px 0"></div><div id="dres" class="grid cols-wide"></div>
       <div id="dmore" class="row" style="justify-content:center;margin:18px 0 8px;min-height:36px"></div>`;
     $('#ds', el).value = st.sort;
+    const drawSrc = () => $$('#dsrc [data-src]', el).forEach((b) => b.classList.toggle('on', b.dataset.src === st.source));
+    $$('#dsrc [data-src]', el).forEach((b) => (b.onclick = () => { st.source = b.dataset.src; try { localStorage.setItem('discover.source', st.source); } catch {} drawSrc(); run(); }));
+    drawSrc();
     $$('[data-k]', el).forEach((b) => (b.onclick = () => { st.kind = b.dataset.k; $$('[data-k]', el).forEach((x) => x.classList.toggle('on', x === b)); run(); }));
     $('#dq', el).oninput = debounce((e) => { st.q = e.target.value; run(); }, 350);
     $('#ds', el).onchange = (e) => { st.sort = e.target.value; run(); };
@@ -62,7 +65,7 @@ Pages.discover = {
       if (!append) { page = 0; more = false; results = []; seen = new Set(); $('#dres', el).innerHTML = '<div class="faint">Searching…</div>'; }
       loading = true; footer();
       let r;
-      try { r = await api('discover:search', { kind: st.kind, query: st.q, sort: st.sort, gameVersion: inst?.versionId, loader: inst?.loader?.type, limit: 24, page: append ? page + 1 : 0 }); }
+      try { r = await api('discover:search', { kind: st.kind, query: st.q, sort: st.sort, gameVersion: inst?.versionId, loader: inst?.loader?.type, limit: 24, page: append ? page + 1 : 0, source: st.source }); }
       catch (e) {
         if (my !== seq || !el.isConnected) return;
         loading = false;
