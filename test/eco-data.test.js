@@ -38,7 +38,7 @@ test('backup → change → restore only what was chosen, with a safety backup f
   fs.writeFileSync(path.join(inst.gameDir, 'config', 'sodium.json'), '{"a":1}');
   fs.mkdirSync(path.join(inst.gameDir, 'saves', 'World'), { recursive: true });
   settings.set({ theme: 'dawn', curseforgeKey: 'from-the-page' }); // the page can't set keys
-  assert.equal(settings.curseforgeKey(), '', 'keys can’t be set through normal settings');
+  assert.notEqual(settings.curseforgeKey(), 'from-the-page', 'keys can’t be set through normal settings');
   settings.setCurseforgeKey('$2a$10$secret-key-123');
   servers.save({ address: 'keep.example.com', name: 'Keep' });
 

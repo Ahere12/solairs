@@ -87,7 +87,22 @@ function unsealKey(s) {
   } catch {}
   return '';
 }
-/** The CurseForge API key, exactly as pasted (every `$` kept). Main process only. */
+/**
+ * Astra's own CurseForge key, built into the installer from src/builtin.local.json (git-ignored, so it never reaches
+ * the GitHub source). Lightly scrambled so it isn't plain text in the app files. Empty in builds made without it.
+ */
+let builtin = null;
+function builtinCurseforgeKey() {
+  if (builtin !== null) return builtin;
+  builtin = '';
+  try {
+    const j = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'builtin.local.json'), 'utf8'));
+    const pad = Buffer.from('astra-launcher-cf'), x = Buffer.from(String(j.cf || ''), 'base64');
+    builtin = Buffer.from(x.map((b, i) => b ^ pad[i % pad.length])).toString('utf8');
+  } catch {}
+  return builtin;
+}
+/** The CurseForge API key: the player's own (exactly as pasted), else Astra's built-in one. Main process only. */
 function curseforgeKey() {
   const c = get();
   if (c.curseforgeKey) { // older versions kept it as plain text: seal it now
@@ -95,14 +110,16 @@ function curseforgeKey() {
     write({ curseforgeKey: '', curseforgeKeySealed: sealKey(k) });
     return k;
   }
-  return unsealKey(c.curseforgeKeySealed);
+  return unsealKey(c.curseforgeKeySealed) || builtinCurseforgeKey();
 }
 function setCurseforgeKey(k) { k = String(k || '').replace(/^\s+|\s+$/g, ''); write({ curseforgeKey: '', curseforgeKeySealed: k ? sealKey(k) : '' }); }
 /** Settings as the page may see them: no secrets, just whether they're set. */
 function forPage(s = get()) {
   const out = { ...s };
   for (const f of SECRET_FIELDS) delete out[f];
-  out.curseforgeConfigured = !!(s.curseforgeKey || s.curseforgeKeySealed);
+  out.curseforgeOwnKey = !!(s.curseforgeKey || s.curseforgeKeySealed);
+  out.curseforgeBuiltIn = !!builtinCurseforgeKey();
+  out.curseforgeConfigured = out.curseforgeOwnKey || out.curseforgeBuiltIn;
   return out;
 }
 /** Settings changes from the page (and most of Astra): secrets can't be set or wiped this way. */

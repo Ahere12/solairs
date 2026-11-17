@@ -415,6 +415,19 @@ Pages.settings = {
   },
 
   integrations(box) {
+    // Astra's own CurseForge key is built in: CurseForge just works, like Modrinth — nothing to set up.
+    if (State.settings.curseforgeBuiltIn && !State.settings.curseforgeOwnKey) {
+      box.innerHTML = `<h2 style="margin-top:0">Mods & modpacks</h2><div class="card">
+        <div class="setting"><div class="txt"><div class="t">Modrinth</div><div class="d">Mods, modpacks, resource packs, shaders and datapacks from Modrinth's public API.</div></div><div class="ctl"><span class="chip ok">Connected</span></div></div>
+        <div class="setting"><div class="txt"><div class="t">CurseForge</div><div class="d">Mods, modpacks, resource packs, shaders and maps from CurseForge, plus CurseForge modpack .zip imports.</div></div><div class="ctl"><span class="chip ok">Connected</span></div></div>
+      </div>
+      <h2>Other services</h2><div class="card">
+        ${this.toggle('discordRpc', 'Discord Rich Presence', 'Show what you are playing on your Discord profile.')}
+        <div class="setting"><div class="txt"><div class="t">mclo.gs</div><div class="d">Used only when you upload a log or crash report.</div></div><div class="ctl"><span class="chip">On demand</span></div></div>
+      </div>`;
+      this.bind(box);
+      return;
+    }
     const on = !!State.settings.curseforgeConfigured;
     box.innerHTML = `<h2 style="margin-top:0">Mods & modpacks</h2><div class="card">
       <div class="setting"><div class="txt"><div class="t">Modrinth</div><div class="d">Mods, modpacks, resource packs, shaders and datapacks from Modrinth's public API.</div></div><div class="ctl"><span class="chip ok">Connected</span></div></div>

@@ -1,6 +1,23 @@
 [
   {
     "product": "launcher",
+    "version": "1.14.1",
+    "date": "2026-11-17",
+    "title": "CurseForge works out of the box",
+    "groups": [
+      {
+        "area": "CurseForge",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "CurseForge is now built into Astra: search, browse and install CurseForge mods and modpacks, and import CurseForge modpack .zip files, with nothing to set up. Settings → Integrations simply shows CurseForge as Connected."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.14.0",
     "date": "2026-11-17",
     "title": "CurseForge, done properly",

@@ -2,3 +2,6 @@ node_modules/
 dist/
 smoke/
 *.log
+
+# local build secrets (built into the installer, never committed)
+src/*.local.json
