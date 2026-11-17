@@ -554,6 +554,12 @@ function openImport() {
   };
 }
 async function importFile(f) {
+  // A CurseForge modpack export: show what's in it first (no key needed), then install with progress.
+  if (/\.zip$/i.test(f)) {
+    let info = null;
+    try { info = await api('curseforge:inspect', f); } catch (e) { if (!/manifest\.json is missing|isn’t a CurseForge/i.test(e.message)) return toastErr(e); }
+    if (info) return cfImportDialog(f, info);
+  }
   try {
     State.tasks['import'] = { label: 'Importing ' + f.split(/[\\/]/).pop(), progress: null };
     Bus.emit('tasks');
@@ -563,6 +569,90 @@ async function importFile(f) {
     Router.go('library', { spotlight: inst.id });
   } catch (e) { toastErr(e); }
   finally { delete State.tasks['import']; Bus.emit('tasks'); }
+}
+
+/** CurseForge modpack .zip: contents → (connect if needed) → install with progress and cancel → hand-download list. */
+function cfImportDialog(file, info) {
+  const loader = info.loader.type === 'vanilla' ? 'Vanilla' : `${info.loader.type[0].toUpperCase()}${info.loader.type.slice(1)}${info.loader.version ? ' ' + info.loader.version.replace(info.mc + '-', '') : ''}`;
+  const folders = Object.entries(info.folders || {}).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => `<span class="chip">${esc(k)} · ${n}</span>`).join('');
+  const m = modal({
+    title: 'Import CurseForge modpack',
+    body: `<div class="stack">
+      <div class="row" style="gap:12px"><div class="inst-icon">${icon('package')}</div><div class="grow"><b style="font-size:16px">${esc(info.name)}</b>${info.version ? ` <span class="faint">${esc(info.version)}</span>` : ''}<div class="faint small">${info.author ? 'by ' + esc(info.author) + ' · ' : ''}CurseForge modpack</div></div></div>
+      <div class="grid cols-3"><div class="card stat"><span class="v" style="font-size:18px">${esc(info.mc)}</span><span class="l">Minecraft</span></div><div class="card stat"><span class="v" style="font-size:18px">${esc(loader)}</span><span class="l">Mod loader</span></div><div class="card stat"><span class="v" style="font-size:18px">${info.files}</span><span class="l">Mods to download</span></div></div>
+      ${info.overrides ? `<div class="small">Also includes ${info.overrides} file${info.overrides === 1 ? '' : 's'} (settings, configs…): <div class="row wrap" style="gap:4px;margin-top:4px">${folders}</div></div>` : ''}
+      ${info.optional ? `<div class="faint small">${info.optional} optional mod${info.optional === 1 ? ' is' : 's are'} left out, like in the CurseForge app.</div>` : ''}
+      <div id="cfi-key"></div>
+      <div id="cfi-prog" class="hidden"><div class="small" id="cfi-label">Starting…</div><div class="progress" style="margin-top:6px"><div id="cfi-bar" style="width:0%"></div></div><div class="faint small" id="cfi-detail"></div></div>
+    </div>`,
+    footer: `<button class="btn" data-x>${T('Cancel')}</button><button class="btn primary" data-go>${icon('download')}Install</button>`,
+  });
+  const go = m.$('[data-go]'), x = m.$('[data-x]');
+  let running = false;
+  const keyBox = () => {
+    if (State.settings.curseforgeConfigured || !info.files) { m.$('#cfi-key').innerHTML = ''; go.disabled = false; return; }
+    go.disabled = true;
+    m.$('#cfi-key').innerHTML = `<div class="card stack"><b>Connect CurseForge to download the mods</b><div class="faint small">Paste your CurseForge API key once — it’s encrypted on this PC.</div><div class="row" style="gap:8px"><input type="password" id="cfi-k" class="mono grow" placeholder="$2a$10$…" autocomplete="off" spellcheck="false"><button class="btn sm primary" id="cfi-kgo">Connect</button></div></div>`;
+    m.$('#cfi-kgo').onclick = async () => {
+      const b = m.$('#cfi-kgo'); b.disabled = true; b.textContent = 'Checking…';
+      try { State.settings = await api('curseforge:setKey', m.$('#cfi-k').value); Bus.emit('settings', State.settings); toast('CurseForge connected'); keyBox(); }
+      catch (e) { toastErr(e); b.disabled = false; b.textContent = 'Connect'; }
+    };
+  };
+  keyBox();
+  const off = window.solaris.on('task', (t) => {
+    if (t?.id !== 'modpack' || t.done || !running) return;
+    m.$('#cfi-label').textContent = t.label || '';
+    m.$('#cfi-detail').textContent = t.detail || '';
+    m.$('#cfi-bar').style.width = t.progress != null ? Math.round(t.progress * 100) + '%' : '15%';
+  });
+  x.onclick = () => { if (running) { api('curseforge:cancel'); x.disabled = true; x.textContent = 'Cancelling…'; } else { off && off(); m.close(); } };
+  go.onclick = async () => {
+    running = true; go.disabled = true; go.innerHTML = `${icon('refresh', 'spin')}Installing…`;
+    m.$('#cfi-prog').classList.remove('hidden');
+    try {
+      const inst = await api('instances:importFile', file);
+      off && off(); m.close();
+      await refreshInstances();
+      const r = inst.cfResult || {};
+      if (r.manual?.length) cfManualDialog(inst.id, r.manual);
+      else toast(`${inst.name} installed — ${r.installed || 0} mods${r.gone?.length ? ` (${r.gone.length} deleted from CurseForge, left out)` : ''}`);
+      Router.go('library', { spotlight: inst.id });
+    } catch (e) {
+      running = false;
+      m.$('#cfi-prog').classList.add('hidden');
+      go.disabled = false; go.innerHTML = `${icon('refresh')}Try again`; x.disabled = false; x.textContent = T('Cancel');
+      if (e.message.includes('cancelled')) toast('Install cancelled — nothing was kept', 'info'); else toastErr(e);
+      keyBox();
+    }
+  };
+}
+
+/** Files the author only allows on the CurseForge website: open each page, then Astra finds them in Downloads. */
+function cfManualDialog(instanceId, files) {
+  const m = modal({
+    title: `${files.length} file${files.length === 1 ? '' : 's'} to download yourself`,
+    body: `<p class="muted small">Everything else is installed. ${files.length === 1 ? 'This mod’s author only allows' : 'These mods’ authors only allow'} downloads from the CurseForge website. Click <b>Download</b> for each one, save it to your Downloads folder, then click <b>Check Downloads</b> — Astra checks they’re the right files and adds them.</p>
+      <div class="stack" style="gap:4px" id="cfm-list"></div>`,
+    footer: `<button class="btn" data-later>Later</button><button class="btn" data-pick>${icon('folder')}Pick files…</button><button class="btn primary" data-check>${icon('refresh')}Check Downloads</button>`,
+  });
+  const draw = (list) => {
+    m.$('#cfm-list').innerHTML = list.map((f, i) => `<div class="row hs-person" style="gap:8px"><span class="grow ellipsis"><b>${esc(f.name)}</b> <span class="faint small mono">${esc(f.file)}</span></span><button class="btn sm" data-dl="${i}">${icon('external')}Download</button></div>`).join('') || '<div class="ok-text">All files added.</div>';
+    $$('[data-dl]', m.el).forEach((b) => (b.onclick = () => api('shell:open', list[+b.dataset.dl].page)));
+  };
+  draw(files);
+  const apply = async (paths) => {
+    try {
+      const r = await api('curseforge:addManual', instanceId, paths || []);
+      if (r.added.length) toast(`Added ${r.added.length} file${r.added.length === 1 ? '' : 's'}`);
+      if (!r.still.length) { m.close(); toast('Modpack complete — ready to play'); return; }
+      draw(r.still);
+      if (!r.added.length) toast('Not found yet — download the files, then check again', 'info');
+    } catch (e) { toastErr(e); }
+  };
+  m.$('[data-check]').onclick = () => apply();
+  m.$('[data-pick]').onclick = async () => { const p = await api('dialog:open', { title: 'Pick the downloaded files', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Mods & packs', extensions: ['jar', 'zip'] }] }).catch(() => []); if (p?.length) apply(p); };
+  m.$('[data-later]').onclick = () => { m.close(); toast('You can finish this later from the instance page', 'info'); };
 }
 
 /* ---------- choose instance dialog ---------- */

@@ -37,7 +37,9 @@ test('backup → change → restore only what was chosen, with a safety backup f
   fs.mkdirSync(path.join(inst.gameDir, 'config'), { recursive: true });
   fs.writeFileSync(path.join(inst.gameDir, 'config', 'sodium.json'), '{"a":1}');
   fs.mkdirSync(path.join(inst.gameDir, 'saves', 'World'), { recursive: true });
-  settings.set({ theme: 'dawn', curseforgeKey: 'secret-key-123' });
+  settings.set({ theme: 'dawn', curseforgeKey: 'from-the-page' }); // the page can't set keys
+  assert.equal(settings.curseforgeKey(), '', 'keys can’t be set through normal settings');
+  settings.setCurseforgeKey('$2a$10$secret-key-123');
   servers.save({ address: 'keep.example.com', name: 'Keep' });
 
   const b = await bk.create({ note: 'test' });
@@ -49,7 +51,8 @@ test('backup → change → restore only what was chosen, with a safety backup f
   assert.ok(names.includes(`instances/${inst.id}/game/config/sodium.json`));
   assert.ok(!names.some((n) => n.includes('saves/')), 'worlds are not in this backup');
   assert.ok(!names.some((n) => /accounts\.json|connect\.json|playit\.json/.test(n)));
-  assert.ok(!zip.readAsText('data/settings.json').includes('secret-key-123'), 'API keys are stripped');
+  assert.ok(!/secret-key-123|curseforgeKeySealed|enc:|b64:/.test(zip.readAsText('data/settings.json')), 'API keys are stripped');
+  assert.ok(!('curseforgeKeySealed' in settings.forPage()) && settings.forPage().curseforgeConfigured, 'the page only learns it’s set');
 
   fs.writeFileSync(path.join(inst.gameDir, 'options.txt'), 'fov:110\n');
   settings.set({ theme: 'astra' });
@@ -63,7 +66,7 @@ test('backup → change → restore only what was chosen, with a safety backup f
   assert.ok(r.safetyBackup && bk.listBackups().some((x) => x.file === r.safetyBackup && x.kind === 'pre-restore'));
   await bk.restore(b.file, { data: ['settings'] });
   assert.equal(settings.get().theme, 'dawn');
-  assert.equal(settings.get().curseforgeKey, 'secret-key-123', 'this PC’s key is kept');
+  assert.equal(settings.curseforgeKey(), '$2a$10$secret-key-123', 'this PC’s key is kept, every $ intact');
   assert.throws(() => bk.preview('../settings.json'), /doesn’t exist/);
 });
 

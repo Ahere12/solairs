@@ -99,7 +99,7 @@ function sha1File(file) {
   });
 }
 /** Download url → dest. Skips when file exists and matches size/sha1. Returns true if downloaded. */
-async function download(url, dest, { sha1, size, verify } = {}) {
+async function download(url, dest, { sha1, size, verify, signal } = {}) {
   if (fs.existsSync(dest)) {
     if (!sha1 && !size) return false;
     if (size && !verify && fs.statSync(dest).size === size) return false;
@@ -115,14 +115,17 @@ async function download(url, dest, { sha1, size, verify } = {}) {
   for (let i = 0; i < 4; i++) {
     try {
       // Abort when no data arrives for 30 s (a stalled download), however long the whole file takes.
+      if (signal?.aborted) throw new Error('Download cancelled.');
       const ctl = new AbortController();
+      const stop = () => ctl.abort(new Error('Download cancelled.'));
+      signal?.addEventListener('abort', stop, { once: true });
       let idle = setTimeout(() => ctl.abort(new Error('Download stalled: ' + path.basename(dest))), 30000);
       const alive = () => { clearTimeout(idle); idle = setTimeout(() => ctl.abort(new Error('Download stalled: ' + path.basename(dest))), 30000); };
       try {
         const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctl.signal });
         if (!r.ok) throw new Error(`HTTP ${r.status} downloading ${url}`);
         await pipeline(Readable.fromWeb(r.body), new Transform({ transform(c, _e, cb) { alive(); cb(null, c); } }), fs.createWriteStream(tmp), { signal: ctl.signal });
-      } finally { clearTimeout(idle); }
+      } finally { clearTimeout(idle); signal?.removeEventListener('abort', stop); }
       if (sha1) {
         const got = await sha1File(tmp);
         if (got !== sha1) throw new Error(`Checksum mismatch for ${path.basename(dest)}`);
@@ -132,7 +135,7 @@ async function download(url, dest, { sha1, size, verify } = {}) {
     } catch (e) {
       last = e;
       try { fs.unlinkSync(tmp); } catch {}
-      if (/HTTP 404/.test(e.message)) break;
+      if (/HTTP 404/.test(e.message) || signal?.aborted) break;
       await sleep(500 * (i + 1));
     }
   }

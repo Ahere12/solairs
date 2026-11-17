@@ -140,8 +140,19 @@ Pages.browse = {
           if (my !== seq) return;
           $('#count', el).textContent = '';
           $('#more', el).classList.add('hidden');
-          $('#results', el).innerHTML = `<div class="empty" style="grid-column:1/-1">${icon('globe')}<div><b>CurseForge needs an API key</b></div><div class="faint small" style="max-width:460px">CurseForge only lets apps search and download with a key. Get a free key at console.curseforge.com, then paste it in Settings → Integrations.</div><button class="btn primary" id="cf-key">Add API key</button></div>`;
-          $('#cf-key', el).onclick = () => Router.go('settings', { tab: 'integrations' });
+          // connect right here, once — no trip to Settings
+          $('#results', el).innerHTML = `<div class="card stack" style="grid-column:1/-1;max-width:560px;margin:8px auto"><div class="row" style="gap:10px">${icon('globe')}<b class="grow">Connect CurseForge</b></div>
+            <div class="faint small">Paste your CurseForge API key once and every CurseForge mod and modpack shows up here. It’s encrypted on this PC.</div>
+            <div class="row" style="gap:8px"><input type="password" id="cf-key-in" class="mono grow" placeholder="$2a$10$…" autocomplete="off" spellcheck="false"><button class="btn primary" id="cf-key-go">${icon('check')}Connect</button></div></div>`;
+          const go = async () => {
+            const b = $('#cf-key-go', el), v = $('#cf-key-in', el).value;
+            if (!v.trim()) return;
+            b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Checking…`;
+            try { State.settings = await api('curseforge:setKey', v); Bus.emit('settings', State.settings); toast('CurseForge connected'); search(); }
+            catch (er) { toastErr(er); b.disabled = false; b.innerHTML = `${icon('check')}Connect`; }
+          };
+          $('#cf-key-go', el).onclick = go;
+          $('#cf-key-in', el).onkeydown = (e) => { if (e.key === 'Enter') go(); };
           return;
         }
         const r = await api(st.source === 'curseforge' ? 'curseforge:search' : 'modrinth:search', { query: st.query, type: st.type, gameVersion: st.gameVersion, loader: st.loader, categories: [...st.cats], sort: st.sort, offset: st.offset });

@@ -80,7 +80,7 @@ const ERRORS = [
   [/Xbox|XSTS|2148916233|2148916238/i, 'Xbox account problem', 'Microsoft sign-in needs an Xbox profile (create one at xbox.com), and child accounts need permission from a parent in Microsoft Family.'],
   [/doesn.t own|NOT_FOUND.*profile|no Minecraft profile/i, 'Minecraft not owned', 'This Microsoft account doesn’t own Minecraft: Java Edition, or hasn’t chosen a player name yet (minecraft.net).'],
   [/already running/i, 'Already running', 'That instance is already running — check the Console, or stop it first.'],
-  [/CurseForge API key|curseforge/i, 'CurseForge not set up', 'Add your own CurseForge API key in Settings → Integrations (free at console.curseforge.com).'],
+  [/CurseForge API key|curseforge/i, 'CurseForge not set up', 'Connect CurseForge in Settings → Integrations → CurseForge (paste the API key once).'],
 ];
 function explainError(message) {
   const m = String(message || '');

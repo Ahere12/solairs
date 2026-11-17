@@ -48,7 +48,7 @@ function providers(kind, { curseforgeKey = false } = {}) {
   if (!k) throw new Error(`Unknown content kind “${kind}”`);
   return [
     { id: 'modrinth', name: 'Modrinth', ok: !!k.modrinth, why: k.modrinth ? '' : `Modrinth doesn’t host ${k.name.toLowerCase()}.` },
-    { id: 'curseforge', name: 'CurseForge', ok: !!k.curseforge && curseforgeKey, why: !k.curseforge ? `CurseForge doesn’t host ${k.name.toLowerCase()}.` : curseforgeKey ? '' : 'Add a CurseForge API key in Settings → Integrations to include CurseForge.' },
+    { id: 'curseforge', name: 'CurseForge', ok: !!k.curseforge && curseforgeKey, why: !k.curseforge ? `CurseForge doesn’t host ${k.name.toLowerCase()}.` : curseforgeKey ? '' : 'not connected (Settings → Integrations)' },
   ];
 }
 

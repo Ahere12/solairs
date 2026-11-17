@@ -95,6 +95,7 @@ Pages.settings = {
     el.innerHTML = `<div class="page-head"><h1>${T('Settings')}</h1></div>
       <div class="settings"><nav>${TABS.map(([k, l, ic]) => `<button class="nav-item" data-st="${k}">${icon(ic)}${l}</button>`).join('')}</nav><div id="sbody"></div></div>`;
     const show = (t) => {
+      if (!TABS.some(([k]) => k === t)) t = 'general'; // an old or wrong link opens General instead of breaking
       tab = t;
       this.stopKeyCapture();
       $$('[data-st]', el).forEach((b) => b.classList.toggle('active', b.dataset.st === t));
@@ -414,24 +415,54 @@ Pages.settings = {
   },
 
   integrations(box) {
-    const cfKey = State.settings.curseforgeKey || '';
+    const on = !!State.settings.curseforgeConfigured;
     box.innerHTML = `<h2 style="margin-top:0">Mods & modpacks</h2><div class="card">
       <div class="setting"><div class="txt"><div class="t">Modrinth</div><div class="d">Mods, modpacks, resource packs, shaders and datapacks from Modrinth's public API.</div></div><div class="ctl"><span class="chip ok">Connected</span></div></div>
-      <div class="setting"><div class="txt"><div class="t">CurseForge ${cfKey ? '<span class="chip ok">Connected</span>' : '<span class="chip">Needs a key</span>'}</div><div class="d">CurseForge only allows apps with an API key. Create a free key at <a href="#" id="cf-console">console.curseforge.com</a> (sign in → API keys) and paste it here. It is stored only on this computer.</div></div>
-        <div class="ctl"><input type="password" id="cf-key" class="mono" value="${esc(cfKey)}" placeholder="$2a$10$…" style="width:220px" autocomplete="off"><button class="btn sm primary" id="cf-save">${T('Save')}</button>${cfKey ? `<button class="btn sm ghost" id="cf-clear">${icon('close')}</button>` : ''}</div></div>
+      <div class="setting" style="align-items:flex-start"><div class="txt"><div class="t">CurseForge <span id="cf-state">${on ? '<span class="chip">Checking…</span>' : '<span class="chip">Not connected</span>'}</span></div>
+        <div class="d" id="cf-help">${on ? 'Search, browse and install from CurseForge in Browse and Discover, and import CurseForge modpack .zip files.' : 'Connect once to search, browse and install CurseForge mods and modpacks. Paste your CurseForge API key (from <a href="#" id="cf-console">console.curseforge.com</a> → API keys). It’s encrypted on this PC and only ever sent to CurseForge.'}</div>
+        <div class="d small faint" style="margin-top:4px">Importing a CurseForge modpack .zip (Library → Import) works without a key; downloading its mods needs CurseForge connected.</div></div>
+        <div class="ctl" style="flex-wrap:wrap;justify-content:flex-end;gap:6px">
+          ${on && !this.cfReplace ? `<button class="btn sm" id="cf-test">${icon('refresh')}Test connection</button><button class="btn sm" id="cf-replace">Replace key</button><button class="btn sm ghost danger" id="cf-clear">${icon('trash')}Remove</button>`
+            : `<input type="password" id="cf-key" class="mono" placeholder="$2a$10$…" style="width:240px" autocomplete="off" spellcheck="false"><button class="btn sm primary" id="cf-save">${icon('check')}Save &amp; test</button>${on ? '<button class="btn sm ghost" id="cf-cancel">Cancel</button>' : ''}`}
+        </div></div>
     </div>
     <h2>Other services</h2><div class="card">
       ${this.toggle('discordRpc', 'Discord Rich Presence', 'Show what you are playing on your Discord profile.')}
       <div class="setting"><div class="txt"><div class="t">mclo.gs</div><div class="d">Used only when you upload a log or crash report.</div></div><div class="ctl"><span class="chip">On demand</span></div></div>
     </div>`;
     this.bind(box);
-    $('#cf-console', box).onclick = (e) => { e.preventDefault(); api('shell:open', 'https://console.curseforge.com/'); };
-    $('#cf-save', box).onclick = async (e) => {
-      const b = e.currentTarget; b.disabled = true; b.textContent = 'Checking…';
-      try { State.settings = await api('curseforge:setKey', $('#cf-key', box).value.trim()); Bus.emit('settings', State.settings); toast('CurseForge connected'); this.integrations(box); }
-      catch (er) { toastErr(er); b.disabled = false; b.textContent = T('Save'); }
+    const redraw = () => { this.cfReplace = false; this.integrations(box); };
+    const state = (html, help) => { const s = $('#cf-state', box); if (s) s.innerHTML = html; if (help != null && $('#cf-help', box)) $('#cf-help', box).textContent = help; };
+    const check = async () => {
+      if (!on) return;
+      state('<span class="chip">Checking…</span>');
+      const r = await api('curseforge:status').catch((e) => ({ ok: false, configured: true, kind: 'other', error: e.message }));
+      if (!box.isConnected) return;
+      if (r.ok) state('<span class="chip ok">Connected</span>');
+      else if (r.kind === 'auth') state('<span class="chip danger">Key rejected</span>', r.error + ' Use “Replace key” to paste it again.');
+      else state('<span class="chip warn">Can’t check now</span>', r.error);
     };
-    if ($('#cf-clear', box)) $('#cf-clear', box).onclick = async () => { State.settings = await api('curseforge:setKey', ''); Bus.emit('settings', State.settings); this.integrations(box); };
+    if ($('#cf-console', box)) $('#cf-console', box).onclick = (e) => { e.preventDefault(); api('shell:open', 'https://console.curseforge.com/'); };
+    if ($('#cf-save', box)) {
+      const save = async () => {
+        const b = $('#cf-save', box), v = $('#cf-key', box).value;
+        if (!v.trim()) return toast('Paste the key first', 'info');
+        b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Checking…`;
+        try { State.settings = await api('curseforge:setKey', v); Bus.emit('settings', State.settings); toast('CurseForge connected'); redraw(); }
+        catch (er) { toastErr(er); b.disabled = false; b.innerHTML = `${icon('check')}Save &amp; test`; }
+      };
+      $('#cf-save', box).onclick = save;
+      $('#cf-key', box).onkeydown = (e) => { if (e.key === 'Enter') save(); };
+      $('#cf-key', box).focus();
+    }
+    if ($('#cf-cancel', box)) $('#cf-cancel', box).onclick = redraw;
+    if ($('#cf-replace', box)) $('#cf-replace', box).onclick = () => { this.cfReplace = true; this.integrations(box); };
+    if ($('#cf-test', box)) $('#cf-test', box).onclick = check;
+    if ($('#cf-clear', box)) $('#cf-clear', box).onclick = async () => {
+      if (!(await confirmDialog('Remove the CurseForge key from this PC? CurseForge search and downloads stop until you add it again.', { danger: true, ok: 'Remove' }))) return;
+      State.settings = await api('curseforge:setKey', ''); Bus.emit('settings', State.settings); redraw();
+    };
+    check();
   },
 
   async diagnostics(box) {

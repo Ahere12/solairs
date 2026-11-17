@@ -73,7 +73,7 @@ module.exports = (getWin) => ({
   'data:roadmap': () => readJSON(path.join(DATA, 'roadmap.json'), {}),
 
   // ---------- settings ----------
-  'settings:get': () => settings.get(),
+  'settings:get': () => settings.forPage(),
   'discord:page': (name) => discord.setPage(String(name || '')),
   'settings:set': (patch) => {
     const s = settings.set(patch);
@@ -81,9 +81,9 @@ module.exports = (getWin) => ({
     if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Astra to apply the GPU acceleration change.' });
     if ('discordRpc' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
     else if (['discordShowInstance', 'discordShowServer', 'discordShowHead', 'streamerMode'].some((k) => k in patch)) discord.setActivity(); // privacy change: update right away
-    return s;
+    return settings.forPage(s);
   },
-  'settings:reset': () => settings.reset(),
+  'settings:reset': () => settings.forPage(settings.reset()),
   'settings:autoMemory': (modded) => settings.autoMemory(modded),
 
   // ---------- versions & loaders ----------
@@ -305,16 +305,22 @@ module.exports = (getWin) => ({
   'curseforge:files': (id, o) => curseforge.files(id, o),
   'curseforge:install': async (instanceId, o) => { const r = await curseforge.install(instanceId, o); autoScan(instanceId, modsPath(instanceId, r)); return r; },
   'curseforge:installModpack': (o) => curseforge.installModpack(o),
+  // a local CurseForge export .zip: read without a key (only files the player picked in the dialog or dropped)
+  'curseforge:inspect': (file) => { if (!/\.zip$/i.test(String(file || '')) || !require('path').isAbsolute(file)) throw new Error('Pick a CurseForge modpack .zip'); return curseforge.inspectModpack(file); },
+  'curseforge:addManual': (id, files) => curseforge.addManualFiles(id, (Array.isArray(files) ? files : []).filter((f) => typeof f === 'string' && require('path').isAbsolute(f))),
+  'curseforge:cancel': () => curseforge.cancelModpack(),
+  // The key goes in once, is checked against the real API, then sealed; the page only ever learns connected / not.
   'curseforge:setKey': async (k) => {
-    const prev = settings.get().curseforgeKey;
-    settings.set({ curseforgeKey: String(k || '').trim() });
-    if (!k) return settings.get();
-    try { await curseforge.search({ query: 'jei', limit: 1 }); return settings.get(); }
-    catch (e) {
-      settings.set({ curseforgeKey: prev });
-      throw new Error(/HTTP 40[13]/.test(e.message) ? 'CurseForge didn’t accept that key — check that you copied the whole key from console.curseforge.com.' : 'Couldn’t reach CurseForge to check the key: ' + e.message.slice(0, 80));
-    }
+    k = String(k || '').replace(/^\s+|\s+$/g, '');
+    if (!k) { settings.setCurseforgeKey(''); return settings.forPage(); }
+    const t = await curseforge.test(k);
+    if (!t.ok && (t.kind === 'auth' || t.kind === 'other')) throw new Error(t.kind === 'auth' ? 'CurseForge didn’t accept that key. Copy the whole key from console.curseforge.com → API keys (it starts with $2a$10$) and paste it again.' : t.error);
+    settings.setCurseforgeKey(k);
+    if (!t.ok) push('toast', { type: 'warn', text: 'Key saved, but it couldn’t be checked right now: ' + t.error });
+    return settings.forPage();
   },
+  'curseforge:status': () => curseforge.test(),
+
 
   // ---------- friends ----------
   'friends:list': () => friends.list(),

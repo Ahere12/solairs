@@ -73,14 +73,52 @@ function get() {
   }
   return cache;
 }
+// ---------- API keys (CurseForge): sealed with the OS key store, never sent to the page ----------
+// settings.json keeps only curseforgeKeySealed ("enc:<base64>", Electron safeStorage / Windows DPAPI). The page sees
+// curseforgeConfigured: true/false and never the key. A plain-text key from older versions is sealed on first read.
+const SECRET_FIELDS = ['curseforgeKey', 'curseforgeKeySealed'];
+function safe() { try { const { safeStorage } = require('electron'); return safeStorage && safeStorage.isEncryptionAvailable() ? safeStorage : null; } catch { return null; } }
+function sealKey(k) { const ss = safe(); return ss ? 'enc:' + ss.encryptString(k).toString('base64') : 'b64:' + Buffer.from(k).toString('base64'); }
+function unsealKey(s) {
+  try {
+    if (!s) return '';
+    if (s.startsWith('enc:')) { const ss = safe(); return ss ? ss.decryptString(Buffer.from(s.slice(4), 'base64')) : ''; }
+    if (s.startsWith('b64:')) return Buffer.from(s.slice(4), 'base64').toString();
+  } catch {}
+  return '';
+}
+/** The CurseForge API key, exactly as pasted (every `$` kept). Main process only. */
+function curseforgeKey() {
+  const c = get();
+  if (c.curseforgeKey) { // older versions kept it as plain text: seal it now
+    const k = String(c.curseforgeKey);
+    write({ curseforgeKey: '', curseforgeKeySealed: sealKey(k) });
+    return k;
+  }
+  return unsealKey(c.curseforgeKeySealed);
+}
+function setCurseforgeKey(k) { k = String(k || '').replace(/^\s+|\s+$/g, ''); write({ curseforgeKey: '', curseforgeKeySealed: k ? sealKey(k) : '' }); }
+/** Settings as the page may see them: no secrets, just whether they're set. */
+function forPage(s = get()) {
+  const out = { ...s };
+  for (const f of SECRET_FIELDS) delete out[f];
+  out.curseforgeConfigured = !!(s.curseforgeKey || s.curseforgeKeySealed);
+  return out;
+}
+/** Settings changes from the page (and most of Astra): secrets can't be set or wiped this way. */
 function set(patch) {
+  patch = { ...(patch || {}) };
+  for (const f of SECRET_FIELDS) delete patch[f];
+  return write(patch);
+}
+function write(patch) {
   cache = { ...get(), ...patch };
   if ('discordRpc' in patch) cache.discordRpcChosen = true;
   if (patch.keybinds) cache.keybinds = { ...DEFAULTS.keybinds, ...patch.keybinds };
   writeJSON(file(), cache);
   return cache;
 }
-function reset() { cache = structuredClone(DEFAULTS); writeJSON(file(), cache); return cache; }
+function reset() { const keep = { curseforgeKeySealed: get().curseforgeKeySealed || '' }; cache = { ...structuredClone(DEFAULTS), ...keep }; writeJSON(file(), cache); return cache; } // a settings reset keeps the API key
 
 /** Auto-size memory (MB) based on system RAM, a bit more for modded instances. */
 function autoMemory(modded) {
@@ -90,4 +128,4 @@ function autoMemory(modded) {
   return mb;
 }
 
-module.exports = { get, set, reset, DEFAULTS, autoMemory };
+module.exports = { get, set, reset, DEFAULTS, autoMemory, curseforgeKey, setCurseforgeKey, forPage };

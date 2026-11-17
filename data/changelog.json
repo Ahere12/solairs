@@ -1,6 +1,52 @@
 [
   {
     "product": "launcher",
+    "version": "1.14.0",
+    "date": "2026-11-17",
+    "title": "CurseForge, done properly",
+    "groups": [
+      {
+        "area": "CurseForge",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Import a CurseForge modpack .zip (Library → Import, or drag it onto Astra): Astra shows what’s inside — Minecraft version, mod loader, how many mods, configs — before installing. Reading the .zip needs no CurseForge key."
+          },
+          {
+            "type": "feature",
+            "text": "Installing downloads every mod CurseForge allows, checks each one, copies the pack’s configs and settings, and shows progress with a Cancel button. If something fails, nothing half-installed is left behind."
+          },
+          {
+            "type": "feature",
+            "text": "Some mod authors only allow downloads from the CurseForge website. Astra lists those files with a Download button for each, then finds them in your Downloads folder, checks they’re the right files and adds them. You can finish this later from the instance page."
+          },
+          {
+            "type": "feature",
+            "text": "Settings → Integrations → CurseForge: connect once with your API key, test the connection, replace or remove the key. The key is encrypted on this PC (Windows key store), never shown to the app’s pages, never put in backups or logs."
+          },
+          {
+            "type": "improvement",
+            "text": "No more “CurseForge needs a key” screen: connect right inside Browse or the import window. Clear messages for a rejected key, rate limits, CurseForge being down, deleted projects and files, and no internet."
+          }
+        ]
+      },
+      {
+        "area": "Fixes",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "CurseForge files whose authors block app downloads are no longer fetched around that choice."
+          },
+          {
+            "type": "fix",
+            "text": "Opening Settings with an old link no longer shows an error."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.13.1",
     "date": "2026-11-16",
     "title": "Endless scrolling, and server settings without restarting",
