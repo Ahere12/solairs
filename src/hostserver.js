@@ -1143,10 +1143,30 @@ async function makeInstance(id, onStep) {
 
 async function setTunnel(id, tunnel) {
   const m = meta(id);
-  if (running.has(id)) throw new Error('Stop the server first.');
   const t = tunnelAllowed(m.software, tunnel);
+  if (running.has(id)) {
+    if (t === m.tunnel) return get(id);
+    // playit.gg runs beside the server, so switching between it and "home only" works while the server runs.
+    // e4mc is a mod inside the server: that switch is saved and used from the next start.
+    if (t === 'e4mc' || m.tunnel === 'e4mc') {
+      if (t === 'e4mc') { if (!(await addE4mc(m))) throw new Error(`e4mc isn’t available for ${m.softwareName || m.software} ${m.mc}. Use playit.gg instead.`); }
+      else m.e4mcRemove = true; // the running server has the jar open (Windows locks it): taken out at the next start
+      if (t === 'e4mc') delete m.e4mcRemove;
+      m.tunnel = t; delete m.playitStopped; save(m);
+      if (t === 'playit') startTunnel(id).catch(() => {}); // the old e4mc address lasts until the restart; playit.gg works now
+      log(id, `[Astra] Public address set to ${t === 'none' ? 'home only' : t}. e4mc changes when the server restarts.`);
+      emit(id);
+      return { ...get(id), needsRestart: true };
+    }
+    m.tunnel = t; delete m.playitStopped; save(m);
+    if (t === 'playit') { log(id, '[Astra] Making the server public with playit.gg…'); startTunnel(id).catch(() => {}); }
+    else { require('./playit').releaseServer(id); log(id, '[Astra] playit.gg tunnel closed — the server is only reachable on your network now.'); }
+    emit(id);
+    return get(id);
+  }
   if (t === 'e4mc') { if (!(await addE4mc(m))) throw new Error(`e4mc isn’t available for ${m.softwareName || m.software} ${m.mc}. Use playit.gg instead.`); }
   else removeE4mc(m);
+  delete m.e4mcRemove;
   m.tunnel = t;
   return save(m);
 }
@@ -1156,6 +1176,7 @@ async function start(id, resolveJava) {
   if (resolveJava) javaResolver = resolveJava;
   if (running.has(id)) return get(id);
   const m = meta(id);
+  if (m.e4mcRemove) { try { if (m.tunnel !== 'e4mc') removeE4mc(m); delete m.e4mcRemove; save(m); } catch {} }
   const r = { proc: null, state: 'starting', address: null, players: new Set(), lines: [], stopping: false, started: Date.now(), stats: null, listeners: new Set() };
   running.set(id, r); emit(id);
   const bds = isBds(m);
@@ -1345,6 +1366,7 @@ function onOnline(id, r) {
   try { const mm = meta(id), v = view(mm); if (!r.notifiedOnline) { r.notifiedOnline = true; notifyDiscord(id, 'online', `🟢 **${mm.name}** is online${v.address || v.knownAddress ? ` — join at \`${v.address || v.knownAddress}\`` : ''} (${isBds(mm) ? 'Bedrock' : 'Java'} ${mm.mc}).`); } } catch {}
   if (r.voiceRestart && !r.players.size) { r.voiceRestart = false; log(id, '[Astra] Restarting once so voice chat uses its new address.'); setTimeout(() => { if (running.get(id) === r && !r.players.size) restart(id); }, 1500); }
   runTasks(id, 'start');
+  applyRules(id).catch(() => {});
 }
 /**
  * Everyone who ever joined (Players → All): first seen, last seen and play time, kept in solaris-players.json.
@@ -1510,7 +1532,8 @@ setInterval(async () => {
 function getSettings(id) {
   const m = meta(id);
   return {
-    props: readProps(id), memory: m.memory, tunnel: m.tunnel, name: m.name, tunnelName: m.tunnelName || '', voice: m.voice || null, bedrock: m.bedrock || null,
+    // servers that made PvP/monsters/Nether game rules show them like the other switches (Astra keeps their values)
+    props: usesRules(id) ? { ...readProps(id), pvp: 'true', 'spawn-monsters': 'true', 'allow-nether': 'true', ...(m.gamerules || {}) } : readProps(id), live: running.get(id)?.state === 'online', memory: m.memory, tunnel: m.tunnel, name: m.name, tunnelName: m.tunnelName || '', voice: m.voice || null, bedrock: m.bedrock || null,
     discord: m.discord ? { url: m.discord.url, events: m.discord.events } : null, playInstance: m.playInstance || null, schedule: m.schedule || null, autoStart: !!m.autoStart,
     port: m.port, software: m.software, mc: m.mc, dir: m.dir, javaPath: m.javaPath || '', jvmArgs: m.jvmArgs || '', aikar: !!m.aikar, restartOnCrash: !!m.restartOnCrash,
     pack: m.pack ? { type: m.pack.type, name: m.pack.name, url: m.pack.type === 'url' ? m.pack.url : packUrl(m), size: m.pack.size, required: !!m.pack.required, prompt: m.pack.prompt || '', error: m.pack.error || null } : null,
@@ -1706,6 +1729,84 @@ async function copyServer(id, onStep) {
   try { writeVoiceConfig(copy); } catch {}
   try { writeBedrockConfig(copy); } catch {}
   return get(nid);
+}
+// ---------- settings that change on a running server (no restart) ----------
+// Minecraft 1.21.9 moved PvP, monsters and the Nether from server.properties to game rules (camelCase names);
+// 26.x renamed them to snake_case. Both names are tried; the one the server knows wins.
+const RULES = {
+  pvp: ['pvp'],
+  'spawn-monsters': ['spawn_monsters', 'spawnMonsters'],
+  'allow-nether': ['allow_entering_nether_using_portals', 'allowEnteringNetherUsingPortals'],
+};
+/** true: this server keeps PvP/monsters/Nether as game rules; false: in server.properties; null: never started, can't tell yet. */
+function usesRules(id) {
+  try { const m = meta(id); if (isBds(m)) return false; } catch { return null; }
+  const P = readProps(id);
+  if (Object.keys(P).length <= 3) return null;
+  return !('pvp' in P);
+}
+const refused = (lines) => lines.some((l) => /Incorrect argument|Unknown or incomplete command|Unknown command|Unknown game ?rule|<--\[HERE\]/i.test(l));
+/** Set a game rule on a running server, trying each name the versions use. true when the server took it. */
+async function setRule(id, prop, value) {
+  for (const name of RULES[prop] || []) {
+    const wait = waitForLines(id, (l, got) => refused(got) || new RegExp(`Game ?rule ${name} is now set|Gamerule ${name} is now set`, 'i').test(l), 2500);
+    command(id, `gamerule ${name} ${value === 'true' ? 'true' : 'false'}`);
+    if (!refused(await wait)) return true;
+  }
+  return false;
+}
+/** Game rules picked in Astra for servers that use them: applied when the server is online (every start). */
+async function applyRules(id) {
+  let m; try { m = meta(id); } catch { return; }
+  if (!m.gamerules || usesRules(id) === false) return;
+  for (const [prop, v] of Object.entries(m.gamerules)) await setRule(id, prop, v).catch(() => {});
+}
+/**
+ * Changes the running server picks up straight away, by command. Returns what applied live and what still needs a restart.
+ * `changed` = the server.properties keys whose value really changed.
+ */
+async function applyLive(id, changed) {
+  const r = running.get(id), m = meta(id);
+  const live = [], restart = [];
+  if (!r?.proc || r.state !== 'online') return { live, restart: [], offline: true };
+  const bds = isBds(m);
+  for (const [k, v] of Object.entries(changed)) {
+    try {
+      if (k === 'difficulty') { command(id, `difficulty ${v}`); live.push(k); }
+      else if (k === 'gamemode' && !bds) { command(id, `defaultgamemode ${v}`); live.push(k); }
+      else if ((k === 'white-list' || k === 'allow-list') && !bds) { command(id, `whitelist ${v === 'true' ? 'on' : 'off'}`); live.push(k); }
+      else if (k === 'enforce-whitelist') { /* goes with the whitelist switch */ }
+      else if (k === 'player-idle-timeout' && !bds) { command(id, `setidletimeout ${Number(v) || 0}`); live.push(k); }
+      else if (k === 'pvp' && bds) { command(id, `gamerule pvp ${v === 'true'}`); live.push(k); }
+      else if (RULES[k] && usesRules(id) !== false && (await setRule(id, k, v))) live.push(k);
+      else restart.push(k);
+    } catch { restart.push(k); }
+  }
+  return { live, restart };
+}
+/** Save settings, and change on the running server whatever can change without a restart. */
+async function saveSettings(id, patch) {
+  const before = readProps(id);
+  const m = meta(id);
+  // PvP / monsters / Nether on servers that made them game rules: remembered by Astra, set by command
+  const ruleChanges = {};
+  if (patch.props) {
+    const rules = usesRules(id);
+    for (const k of Object.keys(RULES)) {
+      if (!(k in patch.props) || rules === false) continue;
+      const v = String(patch.props[k]), old = m.gamerules?.[k] ?? 'true';
+      m.gamerules = { ...(m.gamerules || {}), [k]: v };
+      if (rules === true && before[k] === undefined) { delete patch.props[k]; if (v !== old) ruleChanges[k] = v; }
+    }
+    if (m.gamerules) save(m);
+  }
+  const settings = setSettings(id, patch);
+  const changed = { ...ruleChanges };
+  for (const [k, v] of Object.entries(patch.props || {})) if (String(before[k] ?? '') !== String(v)) changed[k] = String(v);
+  if (patch.memory && patch.memory !== m.memory) changed.memory = String(patch.memory);
+  const res = await applyLive(id, changed);
+  if (!res.offline && res.live.length) log(id, `[Astra] Changed now, no restart needed: ${res.live.join(', ')}.`);
+  return { ...settings, applied: res };
 }
 function setSettings(id, patch) {
   const m = meta(id);
@@ -2178,7 +2279,7 @@ async function modpackVersions(projectId, software, mc) {
 }
 
 module.exports = {
-  SOFTWARE, list, get, create, start, stop, restart, stopAll, anyRunning, command, logs, getSettings, setSettings, setTunnel, remove, openFolder,
+  SOFTWARE, list, get, create, start, stop, restart, stopAll, anyRunning, command, logs, getSettings, setSettings, saveSettings, applyLive, setTunnel, remove, openFolder,
   softwareVersions, worlds, setActiveWorld, deleteWorld, people, addPerson, removePerson, backups, backup, restore, deleteBackup,
   logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, modSources, instanceMods, copyFromInstance, addContentFiles, modpackVersions,
   tunnelStop, tunnelStart, tunnelRestart,

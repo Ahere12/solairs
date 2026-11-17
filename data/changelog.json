@@ -1,6 +1,44 @@
 [
   {
     "product": "launcher",
+    "version": "1.13.1",
+    "date": "2026-11-16",
+    "title": "Endless scrolling, and server settings without restarting",
+    "groups": [
+      {
+        "area": "Discover & Browse",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "Discover stopped after the first 24 results. Now it keeps loading as you scroll — mods, modpacks, shaders, everything — until there’s nothing left."
+          },
+          {
+            "type": "improvement",
+            "text": "Browse loads the next page by itself when you scroll down (no more clicking “Load more”)."
+          }
+        ]
+      },
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Change settings while the server runs: difficulty, game mode, PvP, monsters, the Nether, the whitelist and the idle kick switch on straight away — no restart. If something does need a restart (like max players), Astra says which and gives you a “Restart now” button."
+          },
+          {
+            "type": "fix",
+            "text": "On Minecraft 26.x the PvP, Monsters and Nether switches were missing from Settings (Minecraft made them game rules). They’re back, and they work."
+          },
+          {
+            "type": "feature",
+            "text": "Switch between playit.gg and “Home only” while the server runs — the tunnel opens or closes right away."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.13.0",
     "date": "2026-11-16",
     "title": "Astra grows up: mod health, server tools, backups and more",

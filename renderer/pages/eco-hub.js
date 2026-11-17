@@ -11,27 +11,23 @@ Pages.discover = {
       <div class="sticky-bar"><div class="search" style="width:300px">${icon('search')}<input type="search" id="dq" placeholder="${T('Search')}…" value="${esc(st.q)}"></div>
         <select id="ds"><option value="relevance">Best match</option><option value="downloads">Most downloaded</option><option value="updated">Recently updated</option></select>
         <select id="di"><option value="">Any version</option>${State.instances.map((i) => `<option value="${esc(i.id)}" ${st.inst === i.id ? 'selected' : ''}>For ${esc(i.name)} (${esc(i.versionId)})</option>`).join('')}</select></div>
-      <div id="dprov" class="row wrap" style="margin:8px 0"></div><div id="dres" class="grid cols-wide"></div>`;
+      <div id="dprov" class="row wrap" style="margin:8px 0"></div><div id="dres" class="grid cols-wide"></div>
+      <div id="dmore" class="row" style="justify-content:center;margin:18px 0 8px;min-height:36px"></div>`;
     $('#ds', el).value = st.sort;
     $$('[data-k]', el).forEach((b) => (b.onclick = () => { st.kind = b.dataset.k; $$('[data-k]', el).forEach((x) => x.classList.toggle('on', x === b)); run(); }));
     $('#dq', el).oninput = debounce((e) => { st.q = e.target.value; run(); }, 350);
     $('#ds', el).onchange = (e) => { st.sort = e.target.value; run(); };
     $('#di', el).onchange = (e) => { st.inst = e.target.value || null; run(); };
-    let seq = 0;
-    const run = async () => {
-      const my = ++seq;
-      const inst = State.instances.find((i) => i.id === st.inst);
-      $('#dres', el).innerHTML = '<div class="faint">Searching…</div>';
-      let r; try { r = await api('discover:search', { kind: st.kind, query: st.q, sort: st.sort, gameVersion: inst?.versionId, loader: inst?.loader?.type, limit: 24 }); } catch (e) { $('#dres', el).innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; return; }
-      if (my !== seq || !el.isConnected) return;
-      $('#dprov', el).innerHTML = r.providers.map((p) => `<span class="chip ${p.ok ? 'ok' : ''}" title="${esc(p.why || '')}">${esc(p.name)}${p.ok ? ` · ${fmtNum(p.total)}` : ` · ${esc(p.why)}`}</span>`).join('');
-      $('#dres', el).innerHTML = r.results.length ? r.results.map((h, i) => `<div class="card eco-hit"><div class="row">${h.icon ? `<img src="${esc(h.icon)}" alt="">` : `<div class="inst-icon sm">${icon('box')}</div>`}<div class="grow" style="min-width:0"><b class="ellipsis">${esc(h.title)}</b><div class="faint small">${esc(h.author || '')} · ${fmtNum(h.downloads)} downloads</div></div></div>
+    let seq = 0, page = 0, more = false, loading = false, results = [], seen = new Set();
+    const key = (h) => String(h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + h.type;
+    const card = (h, i) => `<div class="card eco-hit"><div class="row">${h.icon ? `<img src="${esc(h.icon)}" alt="" loading="lazy">` : `<div class="inst-icon sm">${icon('box')}</div>`}<div class="grow" style="min-width:0"><b class="ellipsis">${esc(h.title)}</b><div class="faint small">${esc(h.author || '')} · ${fmtNum(h.downloads)} downloads</div></div></div>
           <div class="muted small eco-clamp">${esc(h.description)}</div>
-          <div class="row"><span class="chip">${h.provider === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>${(h.alsoOn || []).map((a) => `<span class="chip">${a.provider === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>`).join('')}<span class="grow"></span>${h.url ? `<button class="icon-btn" data-open="${i}" title="Open page">${icon('external')}</button>` : ''}<button class="btn sm primary" data-inst="${i}">${icon('download')}${st.kind === 'modpack' ? 'Install pack' : 'Install'}</button></div></div>`).join('')
-        : `<div class="empty">${icon('search')}<div>${r.providers.every((p) => !p.ok) ? esc(r.providers.map((p) => p.why).join(' ')) : 'Nothing found.'}</div></div>`;
-      $$('[data-open]', el).forEach((b) => (b.onclick = () => api('shell:open', r.results[+b.dataset.open].url)));
-      $$('[data-inst]', el).forEach((b) => (b.onclick = async () => {
-        const h = r.results[+b.dataset.inst];
+          <div class="row"><span class="chip">${h.provider === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>${(h.alsoOn || []).map((a) => `<span class="chip">${a.provider === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>`).join('')}<span class="grow"></span>${h.url ? `<button class="icon-btn" data-open="${i}" title="Open page">${icon('external')}</button>` : ''}<button class="btn sm primary" data-inst="${i}">${icon('download')}${st.kind === 'modpack' ? 'Install pack' : 'Install'}</button></div></div>`;
+    const bind = (root) => {
+      $$('[data-open]', root).forEach((b) => (b.onclick = () => api('shell:open', results[+b.dataset.open].url)));
+      $$('[data-inst]', root).forEach((b) => (b.onclick = async () => {
+        const h = results[+b.dataset.inst];
+        const inst = State.instances.find((i) => i.id === st.inst);
         let instanceId = null, world = null;
         if (st.kind !== 'modpack') {
           const pick = inst || await chooseInstance({ title: `Install ${h.title} into…`, filter: (x) => st.kind !== 'mod' || x.loader?.type !== 'vanilla' });
@@ -48,7 +44,50 @@ Pages.discover = {
         catch (e) { toastErr(e); b.disabled = false; b.innerHTML = html; }
       }));
     };
+    const footer = (text, retry) => {
+      const f = $('#dmore', el); if (!f) return;
+      f.innerHTML = loading ? `<span class="faint">${icon('refresh', 'spin')} Loading more…</span>`
+        : retry ? `<span class="faint small">${esc(text)}</span><button class="btn sm" id="dretry">Try again</button>`
+        : more ? '<button class="btn" id="dload">Load more</button>'
+        : results.length ? `<span class="faint small">That’s everything — ${fmtNum(results.length)} results.</span>` : '';
+      if ($('#dload', f)) $('#dload', f).onclick = () => run(true);
+      if ($('#dretry', f)) $('#dretry', f).onclick = () => { more = true; run(true); };
+    };
+    const near = () => { const f = $('#dmore', el); return !!f && f.getBoundingClientRect().top < window.innerHeight + 600; };
+    // One page at a time: a new search starts at page 0; scrolling near the bottom loads the next page.
+    const run = async (append = false) => {
+      if (append && (loading || !more)) return;
+      const my = append ? seq : ++seq;
+      const inst = State.instances.find((i) => i.id === st.inst);
+      if (!append) { page = 0; more = false; results = []; seen = new Set(); $('#dres', el).innerHTML = '<div class="faint">Searching…</div>'; }
+      loading = true; footer();
+      let r;
+      try { r = await api('discover:search', { kind: st.kind, query: st.q, sort: st.sort, gameVersion: inst?.versionId, loader: inst?.loader?.type, limit: 24, page: append ? page + 1 : 0 }); }
+      catch (e) {
+        if (my !== seq || !el.isConnected) return;
+        loading = false;
+        if (append) { more = false; footer(e.message, true); } else { $('#dres', el).innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; footer(); }
+        return;
+      }
+      if (my !== seq || !el.isConnected) return;
+      loading = false;
+      if (append) page += 1;
+      more = !!r.more;
+      $('#dprov', el).innerHTML = r.providers.map((p) => `<span class="chip ${p.ok ? 'ok' : ''}" title="${esc(p.why || '')}">${esc(p.name)}${p.ok ? ` · ${fmtNum(p.total)}` : ` · ${esc(p.why)}`}</span>`).join('');
+      const fresh = r.results.filter((h) => !seen.has(key(h)) && seen.add(key(h)));
+      const from = results.length; results.push(...fresh);
+      if (!append) $('#dres', el).innerHTML = fresh.length ? '' : `<div class="empty">${icon('search')}<div>${r.providers.every((p) => !p.ok) ? esc(r.providers.map((p) => p.why).join(' ')) : 'Nothing found.'}</div></div>`;
+      const tmp = document.createElement('div'); tmp.innerHTML = fresh.map((h, i) => card(h, from + i)).join('');
+      bind(tmp);
+      $('#dres', el).append(...tmp.children);
+      footer();
+      // a page that was mostly duplicates, or a tall window: keep filling until the list can scroll
+      if (more && near()) setTimeout(() => run(true), 50);
+    };
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) run(true); }, { rootMargin: '0px 0px 600px 0px' });
+    io.observe($('#dmore', el));
     run();
+    return () => io.disconnect();
   },
 };
 

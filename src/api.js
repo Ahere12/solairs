@@ -163,7 +163,7 @@ module.exports = (getWin) => ({
   'hosted:command': (id, cmd) => require('./hostserver').command(id, cmd),
   'hosted:logs': (id) => require('./hostserver').logs(id),
   'hosted:settings': (id) => require('./hostserver').getSettings(id),
-  'hosted:setSettings': (id, patch) => require('./hostserver').setSettings(id, patch || {}),
+  'hosted:setSettings': (id, patch) => require('./hostserver').saveSettings(id, patch || {}),
   'hosted:setTunnel': (id, t) => require('./hostserver').setTunnel(id, t),
   'hosted:tunnelStop': (id) => require('./hostserver').tunnelStop(id),
   'hosted:tunnelStart': (id) => require('./hostserver').tunnelStart(id),

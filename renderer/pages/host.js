@@ -15,6 +15,15 @@ const HOST_TYPES = [
   ['forge', 'Forge', 'Moderate', false, true, 'Classic Forge mods and modpacks.'],
   ['bedrock', 'Bedrock', 'High', false, false, 'Mojang’s Bedrock server — phones, consoles, Windows.'],
 ];
+// After a settings save: say what changed straight away, and offer a restart only for what really needs one.
+const HOST_SET_NAMES = { 'max-players': 'max players', 'view-distance': 'view distance', 'simulation-distance': 'simulation distance', 'tick-distance': 'simulation distance', motd: 'message of the day', 'server-port': 'port', 'online-mode': 'account check', hardcore: 'hardcore', 'allow-flight': 'flight', 'generate-structures': 'structures', 'enable-command-block': 'command blocks', 'spawn-protection': 'spawn protection', 'force-gamemode': 'forced game mode', memory: 'memory', pvp: 'PvP', 'spawn-monsters': 'monsters', 'allow-nether': 'Nether', 'spawn-animals': 'animals' };
+function hostSaved(id, res) {
+  const a = res?.applied;
+  if (!a || a.offline) return toast('Saved');
+  const later = [...new Set(a.restart.map((k) => HOST_SET_NAMES[k] || k.replace(/-/g, ' ')))];
+  if (!later.length) return toast(a.live.length ? 'Changed now — no restart needed' : 'Saved');
+  toast(`${a.live.length ? 'The rest changed now. ' : 'Saved. '}${later.join(', ')} ${later.length > 1 ? 'change' : 'changes'} when the server restarts.`, 'info', 9000, { label: 'Restart now', run: () => api('hosted:restart', id).catch(toastErr) });
+}
 const fmtUp = (ms) => { if (!ms) return '—'; const s = Math.floor(ms / 1000); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
 Pages.host = {
@@ -912,7 +921,7 @@ Pages.host = {
       $('#pp-q', box).oninput = (e) => { const q = e.target.value.toLowerCase(); $$('[data-k]', box).forEach((r) => (r.style.display = r.dataset.k.includes(q) ? '' : 'none')); };
       $('#pp-save', box).onclick = async () => {
         const props = {}; $$('[data-pk]', box).forEach((i) => (props[i.dataset.pk] = i.type === 'checkbox' ? String(i.checked) : i.value));
-        try { await api('hosted:setSettings', id, { props }); toast('Saved — restart the server to apply'); } catch (e) { toastErr(e); }
+        try { hostSaved(id, await api('hosted:setSettings', id, { props })); } catch (e) { toastErr(e); }
       };
     },
 
@@ -1131,7 +1140,7 @@ Pages.host = {
         if ('white-list' in props) props['enforce-whitelist'] = props['white-list'];
         const patch = { props };
         if (b.dataset.save === 'performance' && $('#st-mem', box)) patch.memory = +$('#st-mem', box).value;
-        try { await api('hosted:setSettings', id, patch); toast(s.state === 'offline' ? 'Saved' : 'Saved — restart the server to apply'); if (s.state !== 'offline' && 'white-list' in props) api('hosted:command', id, `whitelist ${props['white-list'] === 'true' ? 'on' : 'off'}`).catch(() => {}); } catch (e) { toastErr(e); }
+        try { hostSaved(id, await api('hosted:setSettings', id, patch)); } catch (e) { toastErr(e); }
       }));
       const mem = $('#st-mem', box);
       if (mem) {
@@ -1146,8 +1155,7 @@ Pages.host = {
       }
       $('#st-save', box).onclick = async () => {
         try {
-          await api('hosted:setSettings', id, { name: $('#st-name', box).value.trim(), props: { [bds ? 'server-name' : 'motd']: $('#st-motd', box).value, 'server-port': $('#st-port', box).value } });
-          toast('Saved — restart the server to apply');
+          hostSaved(id, await api('hosted:setSettings', id, { name: $('#st-name', box).value.trim(), props: { [bds ? 'server-name' : 'motd']: $('#st-motd', box).value, 'server-port': $('#st-port', box).value } }));
         } catch (e) { toastErr(e); }
       };
       // startup & JVM
@@ -1163,7 +1171,7 @@ Pages.host = {
       if ($('#rp-save', box)) $('#rp-save', box).onclick = (e) => packDo(e.currentTarget, {}, 'Saved');
       if ($('#rp-rm', box)) $('#rp-rm', box).onclick = (e) => packDo(e.currentTarget, { remove: true }, 'Resource pack removed');
       // public address, voice, bedrock
-      $$('#st-tun [data-t]', box).forEach((b) => { b.classList.toggle('on', b.dataset.t === set.tunnel); b.onclick = async () => { try { await api('hosted:setTunnel', id, b.dataset.t); toast('Public address setting saved'); again(); } catch (e) { toastErr(e); } }; });
+      $$('#st-tun [data-t]', box).forEach((b) => { b.classList.toggle('on', b.dataset.t === set.tunnel); b.onclick = async () => { try { const r = await api('hosted:setTunnel', id, b.dataset.t); if (r?.needsRestart) toast('Saved — e4mc changes when the server restarts', 'info', 9000, { label: 'Restart now', run: () => api('hosted:restart', id).catch(toastErr) }); else toast(s.state === 'offline' ? 'Public address setting saved' : b.dataset.t === 'none' ? 'Tunnel closed — home network only now' : 'Making it public now — no restart needed'); again(); } catch (e) { toastErr(e); } }; });
       if ($('#st-tname-save', box)) $('#st-tname-save', box).onclick = async () => { try { await api('hosted:setSettings', id, { tunnelName: $('#st-tname', box).value }); toast('Saved — a new tunnel name shows on playit.gg for new tunnels'); } catch (e) { toastErr(e); } };
       if ($('#st-voice', box)) $('#st-voice', box).onchange = async (e) => {
         const on = e.target.checked; e.target.disabled = true;

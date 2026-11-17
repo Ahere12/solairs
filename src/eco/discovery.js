@@ -56,22 +56,27 @@ function providers(kind, { curseforgeKey = false } = {}) {
  * deps = { modrinth: { search }, curseforge: { search, available } } — passed in for tests.
  * Each provider is asked in parallel; one that fails is reported with its error, the others still show.
  */
-async function search({ kind = 'mod', query = '', gameVersion, loader, sort = 'relevance', limit = 20, offset = 0 } = {}, deps) {
+async function search({ kind = 'mod', query = '', gameVersion, loader, sort = 'relevance', limit = 20, offset = 0, page = null } = {}, deps) {
+  // page n asks every provider/type for its own n-th slice, so scrolling on keeps going until every provider runs out
+  if (page == null) page = Math.floor(offset / Math.max(1, limit));
   const k = KINDS[kind];
   const prov = providers(kind, { curseforgeKey: deps.curseforge.available() });
   const status = [];
   const asks = [];
+  let more = false;
   const mrSort = { relevance: 'relevance', downloads: 'downloads', updated: 'updated', newest: 'newest' }[sort] || 'relevance';
   for (const p of prov) {
     if (!p.ok) { status.push({ provider: p.id, name: p.name, ok: false, why: p.why }); continue; }
     const types = [].concat(k[p.id]);
     asks.push(Promise.all(types.map(async (type) => {
-      const per = Math.max(5, Math.ceil(limit / types.length));
+      const per = Math.max(5, Math.ceil(limit / types.length)), off = page * per;
       if (p.id === 'modrinth') {
-        const r = await deps.modrinth.search({ query, type, gameVersion: kind === 'modpack' ? undefined : gameVersion, loader: kind === 'mod' ? loader : undefined, sort: mrSort, offset, limit: per });
+        const r = await deps.modrinth.search({ query, type, gameVersion: kind === 'modpack' ? undefined : gameVersion, loader: kind === 'mod' ? loader : undefined, sort: mrSort, offset: off, limit: per });
+        if ((r.total_hits || 0) > off + per) more = true;
         return { hits: (r.hits || []).map((h) => normalize('modrinth', h)), total: r.total_hits || 0 };
       }
-      const r = await deps.curseforge.search({ query, type, gameVersion: kind === 'mod' || kind === 'resourcepack' || kind === 'shader' ? gameVersion : undefined, loader: kind === 'mod' ? loader : undefined, sort: sort === 'updated' ? 'updated' : sort, offset, limit: per });
+      const r = await deps.curseforge.search({ query, type, gameVersion: kind === 'mod' || kind === 'resourcepack' || kind === 'shader' ? gameVersion : undefined, loader: kind === 'mod' ? loader : undefined, sort: sort === 'updated' ? 'updated' : sort, offset: off, limit: per });
+      if ((r.total_hits || 0) > off + per && off + 2 * per <= 10000) more = true; // CurseForge stops at 10,000
       return { hits: (r.hits || []).map((h) => normalize('curseforge', h)), total: r.total_hits || 0 };
     })).then((parts) => {
       status.push({ provider: p.id, name: p.name, ok: true, total: parts.reduce((t, x) => t + x.total, 0) });
@@ -79,7 +84,7 @@ async function search({ kind = 'mod', query = '', gameVersion, loader, sort = 'r
     }).catch((e) => { status.push({ provider: p.id, name: p.name, ok: false, failed: true, why: friendly(p.name, e) }); return []; }));
   }
   const lists = await Promise.all(asks);
-  return { kind, kindName: k.name, results: mergeResults(lists, { sort }), providers: status.sort((a, b) => a.provider.localeCompare(b.provider)) };
+  return { kind, kindName: k.name, page, more, results: mergeResults(lists, { sort }), providers: status.sort((a, b) => a.provider.localeCompare(b.provider)) };
 }
 
 /** A provider error in words a player understands. */
@@ -99,7 +104,7 @@ function deps() {
 // The same search within two minutes (switching tabs, typing back) is answered from memory. Failed searches aren't kept.
 const cache = new Map();
 async function run(q = {}) {
-  const k = JSON.stringify([q.kind, q.query, q.sort, q.gameVersion, q.loader, q.limit, q.offset, require('../curseforge').available()]);
+  const k = JSON.stringify([q.kind, q.query, q.sort, q.gameVersion, q.loader, q.limit, q.offset, q.page, require('../curseforge').available()]);
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 120000) return hit.value;
   const value = await search(q, deps());

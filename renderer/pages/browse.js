@@ -129,9 +129,11 @@ Pages.browse = {
       $('#type-title', el).textContent = typeLabel();
       $('#q', el).placeholder = `${T('Search')} ${typeLabel().toLowerCase()}…`;
     };
-    let seq = 0;
+    let seq = 0, loadingMore = false;
     const search = async (append = false) => {
-      const my = ++seq;
+      if (append && loadingMore) return;
+      const my = append ? seq : ++seq;
+      if (append) { loadingMore = true; $('#more', el).innerHTML = `${icon('refresh', 'spin')}Loading more…`; }
       if (!append) { st.offset = 0; $('#results', el).innerHTML = '<div class="faint">Searching…</div>'; }
       try {
         if (st.source === 'curseforge' && !(await api('curseforge:available'))) {
@@ -148,10 +150,22 @@ Pages.browse = {
         $('#count', el).textContent = `(${fmtNum(r.total_hits)} results)`;
         const html = r.hits.map((p) => this.hubCard({ ...p, project_type: st.type === 'datapack' ? 'datapack' : p.project_type || st.type })).join('');
         if (append) $('#results', el).insertAdjacentHTML('beforeend', html); else $('#results', el).innerHTML = html || `<div class="empty" style="grid-column:1/-1">${icon('search')}<div>Nothing found.</div></div>`;
-        $('#more', el).classList.toggle('hidden', st.offset + r.hits.length >= st.total);
+        $('#more', el).classList.toggle('hidden', !r.hits.length || st.offset + r.hits.length >= st.total);
         this.bindHub($('#results', el), st.type, target);
-      } catch (e) { $('#results', el).innerHTML = `<div class="empty" style="grid-column:1/-1">${icon('alert')}<div>${esc(e.message)}</div></div>`; }
+      } catch (e) {
+        if (my !== seq) return;
+        if (append) { st.offset -= 24; toastErr(e); } // keep what's shown; the button lets them try again
+        else $('#results', el).innerHTML = `<div class="empty" style="grid-column:1/-1">${icon('alert')}<div>${esc(e.message)}</div></div>`;
+      } finally {
+        if (append) { loadingMore = false; if (el.isConnected) $('#more', el).textContent = 'Load more'; }
+      }
+      // tall window or short page: keep filling until the list scrolls
+      const mb = $('#more', el);
+      if (el.isConnected && mb && !mb.classList.contains('hidden') && mb.getBoundingClientRect().top < window.innerHeight + 600) setTimeout(() => mb.click(), 50);
     };
+    // scrolling near the end loads the next page by itself
+    const io = new IntersectionObserver((es) => { const mb = $('#more', el); if (es.some((e) => e.isIntersecting) && mb && !mb.classList.contains('hidden') && !loadingMore) mb.click(); }, { rootMargin: '0px 0px 600px 0px' });
+    io.observe($('#more', el));
     $('#f-type', el).onchange = (e) => { st.type = e.target.value; st.cats.clear(); drawCats(); search(); };
     $('#f-cat', el).onchange = (e) => { st.cats.clear(); if (e.target.value) st.cats.add(e.target.value); search(); };
     $$('[data-v]', el).forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('browse.view', view); applyView(); }));
@@ -159,9 +173,10 @@ Pages.browse = {
     $('#sort', el).onchange = (e) => { st.sort = e.target.value; search(); };
     $('#f-ver', el).onchange = (e) => { st.gameVersion = e.target.value; search(); };
     $('#f-loader', el).onchange = (e) => { st.loader = e.target.value; search(); };
-    $('#more', el).onclick = () => { st.offset += 24; search(true); };
+    $('#more', el).onclick = () => { if (loadingMore) return; st.offset += 24; search(true); };
     ctx.on('search-focus', () => $('#q', el).focus());
     drawCats(); search();
+    return () => io.disconnect();
   },
 
   async details(id, type, target) {
