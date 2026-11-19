@@ -1211,6 +1211,7 @@ async function start(id, resolveJava) {
     if (r.cancelled) { running.delete(id); emit(id); return get(id); } // stopped while Geyser was updating
     try { writeBedrockConfig(m); } catch {}
     try { fixDuplicateMods(id); } catch {}
+    try { await disableClientOnly(id); } catch (e) { log(id, '[Astra] Couldn’t check for game-only mods: ' + e.message); }
     if (m.pack) { try { writePackProps(m); } catch {} openPackServer(m); }
     for (const h of hooks.beforeStart) { try { h(m); } catch (e) { log(id, '[Astra] ' + e.message); } }
   }
@@ -2116,6 +2117,8 @@ function jarInfo(file) {
     if (fab) { let env = ''; try { env = JSON.parse(fab.replace(/[\u0000-\u001f]+/g, ' ')).environment || ''; } catch {} return { loader: 'fabric', clientOnly: env === 'client' }; }
     if (txt('quilt.mod.json')) return { loader: 'quilt', clientOnly: false };
     const neo = txt('META-INF/neoforge.mods.toml'), forge = txt('META-INF/mods.toml');
+    // Forge/NeoForge: only the explicit clientSideOnly=true. (displayTest="IGNORE_ALL_VERSION" is NOT proof — server-only
+    // mods and shared libraries use it too; game-only mods are found through Modrinth instead, see clientOnlyJars.)
     if (neo || forge) return { loader: neo ? 'neoforge' : 'forge', clientOnly: /^\s*clientSideOnly\s*=\s*true/m.test(neo || forge) };
     const py = txt('paper-plugin.yml') || txt('plugin.yml');
     if (py) return { loader: 'plugin', clientOnly: false, plugin: ((py.match(/^name:\s*['"]?([^'"\r\n]+)/m) || [])[1] || '').trim().toLowerCase() || null };
@@ -2162,6 +2165,67 @@ function addJars(m, files, srcRecord = {}) {
   return { added, skipped };
 }
 /** Modrinth's record of each jar (looked up by its SHA-1): { [fileName]: { projectId, gameVersions } }. Empty when offline. */
+/**
+ * Which of these jars only work in the game (never on a server)? Evidence, in order: Modrinth's record of the exact
+ * file (looked up by SHA-1; its project says server_side "unsupported"), then the jar's own metadata (wontRun).
+ * CurseForge has no such flag, so packs from there need this. Returns [{ file, why }]. Results are cached per file.
+ */
+async function clientOnlyJars(m, paths) {
+  const cacheFile = path.join(m.dir, 'solaris-sidecheck.json');
+  const cache = readJSON(cacheFile, {}), out = [], ask = [];
+  const keyOf = (p) => { try { const st = fs.statSync(p); return `${path.basename(p)}:${st.size}:${Math.round(st.mtimeMs)}`; } catch { return null; } };
+  for (const p of paths) { const k = keyOf(p); if (k && k in cache) { if (cache[k]) out.push({ file: path.basename(p), why: cache[k] }); } else if (k) ask.push(p); }
+  if (ask.length) {
+    const mr = await modrinthFiles(ask);
+    const pids = [...new Set(Object.values(mr).map((x) => x.projectId).filter(Boolean))], side = {};
+    for (let i = 0; i < pids.length; i += 100) {
+      try { for (const p of await getJSON(`https://api.modrinth.com/v2/projects?ids=${encodeURIComponent(JSON.stringify(pids.slice(i, i + 100)))}`)) side[p.id] = p.server_side; } catch {}
+    }
+    for (const p of ask) {
+      const name = path.basename(p), pid = mr[name]?.projectId;
+      const why = pid && side[pid] === 'unsupported' ? 'it only works in the game (Modrinth lists it as client-side only)' : wontRun(m, p);
+      cache[keyOf(p)] = why || '';
+      if (why) out.push({ file: name, why });
+    }
+    try { writeJSON(cacheFile, cache); } catch {}
+  }
+  return out;
+}
+/** Before a start: game-only mods in a mod server are turned off (renamed .disabled, not deleted) with a note in the console. */
+async function disableClientOnly(id) {
+  const m = meta(id);
+  if (SOFTWARE[m.software]?.kind !== 'mods') return [];
+  const dir = contentDir(m);
+  let jars = []; try { jars = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)).map((f) => path.join(dir, f)); } catch { return []; }
+  const bad = await clientOnlyJars(m, jars);
+  // A mod that REQUIRES a game-only mod can't load on the server either (Forge/NeoForge stop with "requires X"):
+  // turn those off too, following the chain. Read from each jar's mods.toml / fabric.mod.json.
+  const { readModMeta } = require('./instances');
+  const idOf = new Map(jars.map((p) => [path.basename(p), readModMeta(p).modId]));
+  const offIds = new Set(bad.map((b) => idOf.get(b.file)).filter(Boolean));
+  const needs = (p) => {
+    try {
+      const zip = new AdmZip(p), t = (n) => { const e = zip.getEntry(n); return e ? zip.readAsText(e) : null; };
+      const toml = t('META-INF/neoforge.mods.toml') || t('META-INF/mods.toml');
+      if (toml) return [...toml.matchAll(/\[\[dependencies\.[^\]]+\]\]([\s\S]*?)(?=\[\[|$)/g)].filter((b) => /mandatory\s*=\s*true|type\s*=\s*"required"/.test(b[1])).map((b) => (b[1].match(/modId\s*=\s*"([^"]+)"/) || [])[1]).filter(Boolean);
+      const fab = t('fabric.mod.json'); if (fab) return Object.keys(JSON.parse(fab.replace(/[\u0000-\u001f]+/g, ' ')).depends || {});
+    } catch {}
+    return [];
+  };
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const p of jars) {
+      const f = path.basename(p);
+      if (bad.some((b) => b.file === f)) continue;
+      const dep = needs(p).find((d) => offIds.has(d));
+      if (dep) { bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; }
+    }
+  }
+  for (const b of bad) {
+    try { fs.renameSync(path.join(dir, b.file), path.join(dir, b.file + '.disabled')); log(id, `[Astra] Turned off ${b.file}: ${b.why}. Players keep it in their game; the server doesn’t need it.`); } catch {}
+  }
+  return bad;
+}
 async function modrinthFiles(files) {
   const { sha1File } = require('./util');
   const byHash = {};
@@ -2324,6 +2388,13 @@ async function installModpackCf(m, versionId, onStep) {
     await download(x.downloadUrl, dest, { sha1: cfm.sha1Of(x) });
     if (wontRun(m, dest)) { fs.rmSync(dest, { force: true }); clientOnly.push(pm?.name || name); continue; }
     rec['cf:' + x.modId] = { file: name, version: x.displayName || '', title: pm?.name || name, source: 'curseforge', pack: true };
+  }
+  // CurseForge doesn't mark game-only mods: ask Modrinth about each file (and read Forge's own marker)
+  const kept = Object.entries(rec).filter(([k, v]) => k.startsWith('cf:') && v.pack).map(([, v]) => path.join(dir, v.file)).filter((p) => fs.existsSync(p));
+  for (const b of await clientOnlyJars(m, kept).catch(() => [])) {
+    fs.rmSync(path.join(dir, b.file), { force: true });
+    for (const [k, v] of Object.entries(rec)) if (v.file === b.file) delete rec[k];
+    clientOnly.push(b.file);
   }
   writeJSON(recordFile(m), rec);
   cfm.copyOverrides(zip, over, overrides, m.dir);

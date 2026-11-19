@@ -1,6 +1,31 @@
 [
   {
     "product": "launcher",
+    "version": "1.15.2",
+    "date": "2026-11-18",
+    "title": "Modpack servers no longer crash on game-only mods",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "Forge/NeoForge modpack servers (especially from CurseForge) crashed with “Attempting to load a clientside only mod” / “invalid dist DEDICATED_SERVER”, because mods like Oculus, Entity Model Features and Entity Texture Features were put on the server. Astra now checks every server mod against Modrinth’s records before each start and turns game-only mods off (renamed to .disabled, never deleted), with the reason in the console."
+          },
+          {
+            "type": "fix",
+            "text": "Mods that need a game-only mod (for example Legendary Tooltips needs Prism) are turned off too, so the server doesn’t stop on a missing dependency."
+          },
+          {
+            "type": "improvement",
+            "text": "New CurseForge modpack servers leave game-only mods out while installing. Players keep them in their own game."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.15.1",
     "date": "2026-11-18",
     "title": "Pick the Minecraft version for your modpack server",
