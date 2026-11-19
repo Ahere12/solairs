@@ -1,6 +1,27 @@
 [
   {
     "product": "launcher",
+    "version": "1.15.1",
+    "date": "2026-11-18",
+    "title": "Pick the Minecraft version for your modpack server",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New server → Modpack now has its own Minecraft version box: pick the version first, and the modpack search (Modrinth or CurseForge) only shows packs for that version."
+          },
+          {
+            "type": "fix",
+            "text": "The modpack’s Minecraft version can no longer get out of step with the server’s: changing the version clears the modpack (with a message), and the server is always made with the modpack’s own version."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.15.0",
     "date": "2026-11-17",
     "title": "CurseForge in Hosting, and pick your source in Discover",

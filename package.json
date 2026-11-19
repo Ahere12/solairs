@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Astra",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Astra — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",

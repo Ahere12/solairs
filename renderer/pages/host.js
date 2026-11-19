@@ -8,7 +8,7 @@ const HOST_TYPES = [
   ['paper', 'Paper', 'Excellent', true, false, 'The most popular plugin server — fast.'],
   ['purpur', 'Purpur', 'Excellent', true, false, 'Paper with extra options.'],
   ['vanilla', 'Vanilla', 'Good', false, false, 'The official Minecraft server.'],
-  ['modpack', 'Modpack', 'Good', false, true, 'A ready-made modpack from Modrinth.'],
+  ['modpack', 'Modpack', 'Good', false, true, 'A ready-made modpack from Modrinth or CurseForge, for the Minecraft version you pick.'],
   ['fabric', 'Fabric', 'Good', false, true, 'Light mod server, great with performance mods.'],
   ['quilt', 'Quilt', 'Good', false, true, 'Fabric-compatible mod server.'],
   ['neoforge', 'NeoForge', 'Good', false, true, 'Modern Forge mods.'],
@@ -319,7 +319,7 @@ Pages.host = {
           <h3 style="margin:4px 0 0">Server Type Setup</h3><div class="faint small">Select the type of Minecraft server you want to run</div>
           <div class="hc-types">${HOST_TYPES.map(card).join('')}</div>
           <div class="field hidden" id="hc-pack-wrap">Modpack <span class="faint small">(Modrinth or CurseForge)</span>
-            <div class="row" style="gap:8px"><div class="seg" id="hc-pl">${['fabric', 'quilt', 'forge', 'neoforge'].map((l) => `<button data-pl="${l}">${HOST_SW.find((x) => x[0] === l)[1]}</button>`).join('')}</div><span class="grow small" id="hc-pack">None picked</span><button class="btn sm primary" id="hc-pack-pick">${icon('search')}Choose modpack…</button></div></div>
+            <div class="row" style="gap:8px"><div class="seg" id="hc-pl">${['fabric', 'quilt', 'forge', 'neoforge'].map((l) => `<button data-pl="${l}">${HOST_SW.find((x) => x[0] === l)[1]}</button>`).join('')}</div><label class="row small" style="gap:6px">Minecraft<select id="hc-pack-mc"><option>Loading…</option></select></label><span class="grow small" id="hc-pack">None picked</span><button class="btn sm primary" id="hc-pack-pick">${icon('search')}Choose modpack…</button></div></div>
           <div class="faint small" id="hc-sw-note"></div>
         </section>
         <section class="hc-step hidden" data-step="2">
@@ -409,17 +409,28 @@ Pages.host = {
     const closeModal = m.close; m.close = () => { offTask(); offPl(); closeModal(); };
     let versionsFor = null;
     const loadVersions = async () => {
-      const vsel = m.$('#hc-mc'); vsel.innerHTML = '<option>Loading…</option>'; vsel.disabled = true;
+      const vsel = m.$('#hc-mc');
+      // keep the version the player already chose (a modpack's version first) when the list reloads
+      const keep = pack?.mc || (vsel.value && vsel.value !== 'Loading…' ? vsel.value : null);
+      vsel.innerHTML = '<option>Loading…</option>'; vsel.disabled = true;
+      syncPackMc();
       const forSw = sw; versionsFor = sw;
       try {
         const vs = await api('hosted:versions', sw); if (!m.el.isConnected || versionsFor !== forSw) return;
-        const list = vs.slice(0, 80); if (wantMc && !list.includes(wantMc) && vs.includes(wantMc)) list.unshift(wantMc);
-        vsel.innerHTML = list.map((v) => `<option ${v === wantMc ? 'selected' : ''}>${esc(v)}</option>`).join('');
+        const pickV = wantMc || (keep && vs.includes(keep) ? keep : null);
+        const list = vs.slice(0, 80); if (pickV && !list.includes(pickV) && vs.includes(pickV)) list.unshift(pickV);
+        vsel.innerHTML = list.map((v) => `<option ${v === pickV ? 'selected' : ''}>${esc(v)}</option>`).join('');
+        if (pack?.mc && vsel.value !== pack.mc) clearPack(`Modpack cleared — ${HOST_SW.find((x) => x[0] === sw)[1]} has no Minecraft ${pack.mc}.`);
+        syncPackMc();
         if (wantMc && !vs.includes(wantMc)) toast(`${HOST_SW.find((x) => x[0] === sw)[1]} has no Minecraft ${wantMc} — pick another version.`, 'warn');
         wantMc = null;
       } catch (e) { vsel.innerHTML = '<option value="">Couldn’t load versions</option>'; toastErr(e); }
       vsel.disabled = bds(); // Mojang only offers the newest Bedrock server
+      syncPackMc();
     };
+    // the modpack row has its own Minecraft version box (step 1), the same list and value as step 2's
+    const syncPackMc = () => { const a = m.$('#hc-mc'), b = m.$('#hc-pack-mc'); if (!a || !b) return; b.innerHTML = a.innerHTML; b.value = a.value; b.disabled = a.disabled; };
+    const clearPack = (why) => { if (!pack) return; pack = null; m.$('#hc-pack').textContent = 'None picked'; if (why) toast(why, 'info'); };
     // Starter mods/plugins that fit each kind of server, by Modrinth project ID (setup codes store the same IDs).
     const EXTRAS = {
       plugins: [['hXiIvTyT', 'EssentialsX', 'homes, warps, /tpa, kits'], ['Vebnzrzj', 'LuckPerms', 'permissions and ranks'], ['fALzjamp', 'Chunky', 'pre-generate the world, less lag'], ['1u6JkXh5', 'WorldEdit', 'build tools'], ['P1OZGk5p', 'ViaVersion', 'newer game versions can join']],
@@ -506,12 +517,16 @@ Pages.host = {
     m.$('#hc-world-dir').onclick = async () => { const [d] = await api('dialog:open', { title: 'Pick a world folder (it has level.dat inside)', properties: ['openDirectory'] }).catch(() => []); if (d) setWorld(d); };
     m.$('#hc-world-zip').onclick = async () => { const [f] = await api('dialog:open', { title: 'Pick a world file', properties: ['openFile'], filters: [{ name: 'World', extensions: ['zip', 'mcworld'] }] }).catch(() => []); if (f) setWorld(f); };
     m.$('#hc-world-clear').onclick = () => setWorld(null);
+    m.$('#hc-pack-mc').onchange = (e) => { m.$('#hc-mc').value = e.target.value; clearPack(); };
+    m.$('#hc-mc').addEventListener('change', (e) => { const b = m.$('#hc-pack-mc'); if (b) b.value = e.target.value; if (pack?.mc && pack.mc !== e.target.value) clearPack(`Modpack cleared — it was for Minecraft ${pack.mc}. Pick one for ${e.target.value}.`); });
     m.$('#hc-eula').onchange = (e) => (go.disabled = !e.target.checked);
     m.$('#hc-eula-link').onclick = (e) => { e.preventDefault(); api('shell:open', 'https://www.minecraft.net/eula'); };
     m.$('#hc-pack-pick').onclick = async () => {
-      if (!m.$('#hc-mc').value || m.$('#hc-mc').disabled) return toast('Wait for the versions to load', 'info');
-      const p = await this.pickModpack(sw, m.$('#hc-mc').value);
-      if (p) { pack = p; m.$('#hc-pack').textContent = `${p.title} · ${p.versionName}`; if (!m.$('#hc-name').value) m.$('#hc-name').value = p.title.slice(0, 40); }
+      const mc = m.$('#hc-pack-mc').value;
+      if (!mc || m.$('#hc-pack-mc').disabled || mc === 'Loading…') return toast('Wait for the versions to load', 'info');
+      m.$('#hc-mc').value = mc;
+      const p = await this.pickModpack(sw, mc);
+      if (p) { pack = { ...p, mc }; m.$('#hc-pack').textContent = `${p.title} · ${p.versionName} · Minecraft ${mc}`; if (!m.$('#hc-name').value) m.$('#hc-name').value = p.title.slice(0, 40); }
     };
     m.$('[data-x]').onclick = () => m.close();
     go.onclick = async () => {
@@ -528,7 +543,7 @@ Pages.host = {
         if (!bds()) Object.assign(props, { 'simulation-distance': Math.max(3, Math.min(32, +m.$('#hc-sd').value || 8)), pvp: m.$('#hc-pvp').checked, hardcore: m.$('#hc-hc').checked, 'allow-flight': m.$('#hc-fly').checked, 'enable-command-block': m.$('#hc-cb').checked, 'online-mode': !m.$('#hc-off').checked });
         if (m.$('#hc-motd').value.trim()) props.motd = m.$('#hc-motd').value.trim();
         let s = await api('hosted:create', {
-          name: m.$('#hc-name').value.trim() || undefined, software: sw, mc: m.$('#hc-mc').value, memory: +m.$('#hc-mem').value, maxPlayers: +m.$('#hc-max').value,
+          name: m.$('#hc-name').value.trim() || undefined, software: sw, mc: pack?.mc || m.$('#hc-mc').value, memory: +m.$('#hc-mem').value, maxPlayers: +m.$('#hc-max').value,
           port: m.$('#hc-port').value ? +m.$('#hc-port').value : undefined, dir: folder, tunnel: tun, eula: m.$('#hc-eula').checked, modpack: pack ? { versionId: pack.versionId } : null,
           props, tunnelName: tun === 'playit' ? m.$('#hc-tname').value.trim() : '', content, voice: HOST_KIND[sw] !== 'none' && m.$('#hc-voice').checked, bedrock: HOST_BEDROCK.includes(sw) && m.$('#hc-bedrock').checked,
           autoStart: m.$('#hc-auto').checked, schedule: { backupHours: +m.$('#hc-bk').value, restartHours: +m.$('#hc-rs').value, keepBackups: 10 },
