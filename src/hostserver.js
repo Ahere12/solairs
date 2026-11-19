@@ -2110,31 +2110,44 @@ function fixDuplicateMods(id) {
 }
 /** What a jar is for: 'fabric' | 'quilt' | 'forge' | 'neoforge' | 'plugin' | null, and whether it only runs in the game client. */
 function jarInfo(file) {
+  // One jar can carry several loaders (multi-loader mods like FallingTree have fabric.mod.json AND mods.toml):
+  // every loader found is listed, each with its own client-only flag, so a Forge server sees the jar's Forge side.
   try {
     const zip = new AdmZip(file);
     const txt = (n) => { const e = zip.getEntry(n); return e ? zip.readAsText(e) : null; };
+    const loaders = {};
     const fab = txt('fabric.mod.json');
-    if (fab) { let env = ''; try { env = JSON.parse(fab.replace(/[\u0000-\u001f]+/g, ' ')).environment || ''; } catch {} return { loader: 'fabric', clientOnly: env === 'client' }; }
-    if (txt('quilt.mod.json')) return { loader: 'quilt', clientOnly: false };
+    if (fab) { let env = ''; try { env = JSON.parse(fab.replace(/[\u0000-\u001f]+/g, ' ')).environment || ''; } catch {} loaders.fabric = env === 'client'; }
+    if (txt('quilt.mod.json')) loaders.quilt = false;
     const neo = txt('META-INF/neoforge.mods.toml'), forge = txt('META-INF/mods.toml');
     // Forge/NeoForge: only the explicit clientSideOnly=true. (displayTest="IGNORE_ALL_VERSION" is NOT proof — server-only
     // mods and shared libraries use it too; game-only mods are found through Modrinth instead, see clientOnlyJars.)
-    if (neo || forge) return { loader: neo ? 'neoforge' : 'forge', clientOnly: /^\s*clientSideOnly\s*=\s*true/m.test(neo || forge) };
+    if (neo) loaders.neoforge = /^\s*clientSideOnly\s*=\s*true/m.test(neo);
+    if (forge) loaders.forge = /^\s*clientSideOnly\s*=\s*true/m.test(forge);
     const py = txt('paper-plugin.yml') || txt('plugin.yml');
-    if (py) return { loader: 'plugin', clientOnly: false, plugin: ((py.match(/^name:\s*['"]?([^'"\r\n]+)/m) || [])[1] || '').trim().toLowerCase() || null };
+    const plugin = py ? ((py.match(/^name:\s*['"]?([^'"\r\n]+)/m) || [])[1] || '').trim().toLowerCase() || null : null;
+    if (py) loaders.plugin = false;
+    const list = Object.keys(loaders);
+    return { loader: list[0] || null, loaders, clientOnly: list.length > 0 && list.every((l) => loaders[l]), plugin };
   } catch {}
-  return { loader: null, clientOnly: false };
+  return { loader: null, loaders: {}, clientOnly: false };
 }
 /** Why `file` can't go on this server, or null if it can. */
 function wontRun(m, file) {
   const kind = SOFTWARE[m.software].kind, info = jarInfo(file);
   if (/^solaris-client/i.test(path.basename(file))) return 'the Astra client mod only runs in the game';
-  if (info.clientOnly) return 'it only works in the game client, not on servers';
-  if (!info.loader) return null;
-  if (kind === 'plugins') return info.loader === 'plugin' ? null : `it’s a ${info.loader} mod, and this is a plugin server`;
-  if (info.loader === 'plugin') return 'it’s a plugin, and this is a mod server';
-  const ok = { fabric: ['fabric'], quilt: ['quilt', 'fabric'], forge: ['forge'], neoforge: ['neoforge', 'forge'] }[m.software] || [];
-  return ok.includes(info.loader) ? null : `it’s for ${info.loader}, and this server runs ${SOFTWARE[m.software].name}`;
+  const have = Object.keys(info.loaders || {});
+  if (!have.length) return null;
+  const ok = kind === 'plugins' ? ['plugin'] : ({ fabric: ['fabric'], quilt: ['quilt', 'fabric'], forge: ['forge'], neoforge: ['neoforge', 'forge'] }[m.software] || []);
+  const usable = have.filter((l) => ok.includes(l));
+  if (!usable.length) {
+    if (kind === 'plugins') return `it’s a ${have[0]} mod, and this is a plugin server`;
+    if (have.includes('plugin') && have.length === 1) return 'it’s a plugin, and this is a mod server';
+    return `it’s for ${have.join('/')}, and this server runs ${SOFTWARE[m.software].name}`;
+  }
+  // client-only only when the part this server would load says so
+  if (usable.every((l) => info.loaders[l])) return 'it only works in the game client, not on servers';
+  return null;
 }
 /** Copy jars into the server: replaces an older copy of the same mod; skips what can't run here. */
 function addJars(m, files, srcRecord = {}) {
@@ -2196,6 +2209,25 @@ async function disableClientOnly(id) {
   const m = meta(id);
   if (SOFTWARE[m.software]?.kind !== 'mods') return [];
   const dir = contentDir(m);
+  // Which jars did Astra itself turn off? (Only those are ever turned back on — never ones the player turned off.)
+  // Version 1 of this check misread multi-loader jars (FallingTree, Signal Flares…) as Fabric-only on Forge servers:
+  // its verdicts are dropped and those jars re-checked.
+  const cacheFile = path.join(m.dir, 'solaris-sidecheck.json');
+  let cache = readJSON(cacheFile, {});
+  const off = new Set(cache.__off || []);
+  if (cache.__v !== 2) {
+    for (const [k, v] of Object.entries(cache)) if (v && typeof v === 'string' && k.includes(':')) off.add(k.split(':')[0]);
+    cache = { __v: 2, __off: [...off] }; writeJSON(cacheFile, cache);
+  }
+  const revived = [];
+  const back = [...off].filter((f) => fs.existsSync(path.join(dir, f + '.disabled')) && !fs.existsSync(path.join(dir, f)));
+  if (back.length) {
+    const still = new Set((await clientOnlyJars(m, back.map((f) => path.join(dir, f + '.disabled')))).map((b) => b.file.replace(/\.disabled$/, '')));
+    for (const f of back) {
+      if (still.has(f)) continue;
+      try { fs.renameSync(path.join(dir, f + '.disabled'), path.join(dir, f)); off.delete(f); revived.push(f); log(id, `[Astra] Turned ${f} back on — it does run on this server (an earlier check got it wrong).`); } catch {}
+    }
+  }
   let jars = []; try { jars = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)).map((f) => path.join(dir, f)); } catch { return []; }
   const bad = await clientOnlyJars(m, jars);
   // A mod that REQUIRES a game-only mod can't load on the server either (Forge/NeoForge stop with "requires X"):
@@ -2203,27 +2235,52 @@ async function disableClientOnly(id) {
   const { readModMeta } = require('./instances');
   const idOf = new Map(jars.map((p) => [path.basename(p), readModMeta(p).modId]));
   const offIds = new Set(bad.map((b) => idOf.get(b.file)).filter(Boolean));
-  const needs = (p) => {
+  // For Forge/NeoForge: which mod ids each jar provides (its [[mods]] entries + jars bundled inside it, META-INF/jarjar)
+  // and which it requires on a server (mandatory deps, minus those marked side="CLIENT").
+  const tomlOf = (zip) => { const e = zip.getEntry('META-INF/neoforge.mods.toml') || zip.getEntry('META-INF/mods.toml'); return e ? zip.readAsText(e) : null; };
+  const blocks = (toml, head) => [...toml.matchAll(new RegExp(`\\[\\[${head}[^\\]]*\\]\\]([\\s\\S]*?)(?=\\[\\[|$)`, 'g'))].map((b) => b[1]);
+  const scan = new Map();
+  const info = (p) => {
+    if (scan.has(p)) return scan.get(p);
+    const out = { provides: [], needs: [] };
     try {
-      const zip = new AdmZip(p), t = (n) => { const e = zip.getEntry(n); return e ? zip.readAsText(e) : null; };
-      const toml = t('META-INF/neoforge.mods.toml') || t('META-INF/mods.toml');
-      if (toml) return [...toml.matchAll(/\[\[dependencies\.[^\]]+\]\]([\s\S]*?)(?=\[\[|$)/g)].filter((b) => /mandatory\s*=\s*true|type\s*=\s*"required"/.test(b[1])).map((b) => (b[1].match(/modId\s*=\s*"([^"]+)"/) || [])[1]).filter(Boolean);
-      const fab = t('fabric.mod.json'); if (fab) return Object.keys(JSON.parse(fab.replace(/[\u0000-\u001f]+/g, ' ')).depends || {});
+      const zip = new AdmZip(p), toml = tomlOf(zip);
+      const add = (t) => { for (const b of blocks(t, 'mods')) { const id = (b.match(/modId\s*=\s*"([^"]+)"/) || [])[1]; if (id) out.provides.push(id); } };
+      if (toml) {
+        add(toml);
+        out.needs = blocks(toml, 'dependencies\\.').filter((b) => /mandatory\s*=\s*true|type\s*=\s*"required"/.test(b) && !/side\s*=\s*"CLIENT"/.test(b)).map((b) => (b.match(/modId\s*=\s*"([^"]+)"/) || [])[1]).filter(Boolean);
+      } else {
+        const fe = zip.getEntry('fabric.mod.json');
+        if (fe) { const j = JSON.parse(zip.readAsText(fe).replace(/[\u0000-\u001f]+/g, ' ')); out.provides.push(j.id, ...Object.keys(j.provides || {})); out.needs = Object.keys(j.depends || {}); }
+      }
+      for (const e of zip.getEntries()) {
+        if (!/^META-INF\/jarjar\/.+\.jar$/i.test(e.entryName) && !/^META-INF\/jars\/.+\.jar$/i.test(e.entryName)) continue;
+        try { const inner = new AdmZip(e.getData()), t = tomlOf(inner); if (t) add(t); const fe = inner.getEntry('fabric.mod.json'); if (fe) out.provides.push(JSON.parse(inner.readAsText(fe).replace(/[\u0000-\u001f]+/g, ' ')).id); } catch {}
+      }
     } catch {}
-    return [];
+    scan.set(p, out);
+    return out;
   };
+  const BUILTIN = new Set(['minecraft', 'forge', 'neoforge', 'fml', 'javafml', 'lowcodefml', 'mclanguage', 'java', 'fabricloader', 'fabric', 'quilt_loader']);
   for (let changed = true; changed;) {
     changed = false;
+    const offFiles = new Set(bad.map((b) => b.file));
+    const provided = new Set(BUILTIN);
+    for (const p of jars) if (!offFiles.has(path.basename(p))) for (const id of info(p).provides) provided.add(id);
     for (const p of jars) {
       const f = path.basename(p);
-      if (bad.some((b) => b.file === f)) continue;
-      const dep = needs(p).find((d) => offIds.has(d));
-      if (dep) { bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; }
+      if (offFiles.has(f)) continue;
+      const needs = info(p).needs;
+      const dep = needs.find((d) => offIds.has(d));
+      const missing = needs.find((d) => !provided.has(d) && !offIds.has(d));
+      if (dep) { bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break; }
+      if (missing) { bad.push({ file: f, why: `it needs the mod “${missing}”, which isn’t installed on this server` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break; }
     }
   }
   for (const b of bad) {
-    try { fs.renameSync(path.join(dir, b.file), path.join(dir, b.file + '.disabled')); log(id, `[Astra] Turned off ${b.file}: ${b.why}. Players keep it in their game; the server doesn’t need it.`); } catch {}
+    try { fs.renameSync(path.join(dir, b.file), path.join(dir, b.file + '.disabled')); off.add(b.file); log(id, `[Astra] Turned off ${b.file}: ${b.why}. Players keep it in their game; the server doesn’t need it.`); } catch {}
   }
+  const c2 = readJSON(cacheFile, {}); c2.__v = 2; c2.__off = [...off]; try { writeJSON(cacheFile, c2); } catch {}
   return bad;
 }
 async function modrinthFiles(files) {

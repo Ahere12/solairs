@@ -1,6 +1,27 @@
 [
   {
     "product": "launcher",
+    "version": "1.15.3",
+    "date": "2026-11-18",
+    "title": "Fix: modpack servers turned off mods they need",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "1.15.2 turned off some mods that do run on servers — mods that support several loaders in one file (like FallingTree and Signal Flares) were mistaken for Fabric-only on Forge servers, so players got “mismatched mod list” when joining. Astra now reads every loader in a mod file, and turns those mods back on by itself on the next start (only mods Astra turned off — never ones you turned off)."
+          },
+          {
+            "type": "fix",
+            "text": "Before a Forge/NeoForge server starts, Astra checks that every mod’s required mods are installed (including ones bundled inside other mods). A mod whose required mod is missing is turned off with the reason in the console, instead of Forge refusing to start."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.15.2",
     "date": "2026-11-18",
     "title": "Modpack servers no longer crash on game-only mods",
