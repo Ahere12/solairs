@@ -168,6 +168,20 @@ function splitArgs(s) {
 }
 
 /** Downloads/installs the server software into dir; returns the start command (relative to dir). */
+/**
+ * The loader version to install. A modpack (or the instance a server is made from) needs the exact Forge / NeoForge /
+ * Fabric build it was made with — mods built against a newer build don't load on an older one, and players get
+ * "mismatched mod list". m.loaderVersion holds that version; otherwise the recommended/stable one is used.
+ */
+function pinLoader(m, available, fallback, onStep) {
+  const want = m.loaderVersion ? String(m.loaderVersion) : null;
+  if (!want) return fallback;
+  // Forge versions are listed as "<mc>-<forge>"; a pack may give just "<forge>" (and the other way round)
+  const hit = available.find((v) => v === want || v === `${m.mc}-${want}` || v.replace(`${m.mc}-`, '') === want);
+  if (hit) { onStep && onStep(`Using ${SOFTWARE[m.software].name} ${hit} (the version the modpack needs)`); return hit; }
+  onStep && onStep(`${SOFTWARE[m.software].name} ${want} isn’t available any more — using ${fallback} instead`);
+  return fallback;
+}
 async function installSoftware(m, resolveJava, onStep) {
   const dir = m.dir, mc = m.mc;
   const jar = path.join(dir, 'server.jar');
@@ -201,7 +215,7 @@ async function installSoftware(m, resolveJava, onStep) {
     const loaders = await getJSON(`https://meta.fabricmc.net/v2/versions/loader/${encodeURIComponent(mc)}`);
     if (!loaders.length) throw new Error(`Fabric isn’t available for ${mc} yet.`);
     const installers = await getJSON('https://meta.fabricmc.net/v2/versions/installer');
-    const loader = (loaders.find((l) => l.loader.stable) || loaders[0]).loader.version;
+    const loader = pinLoader(m, loaders.map((l) => l.loader.version), (loaders.find((l) => l.loader.stable) || loaders[0]).loader.version, onStep);
     const installer = (installers.find((i) => i.stable) || installers[0]).version;
     await download(`https://meta.fabricmc.net/v2/versions/loader/${mc}/${loader}/${installer}/server/jar`, jar);
     m.softwareBuild = loader;
@@ -212,7 +226,7 @@ async function installSoftware(m, resolveJava, onStep) {
     const inst = (await getJSON('https://meta.quiltmc.org/v3/versions/installer'))[0];
     const loaders = await getJSON(`https://meta.quiltmc.org/v3/versions/loader/${encodeURIComponent(mc)}`);
     if (!loaders.length) throw new Error(`Quilt isn’t available for ${mc} yet.`);
-    const lv = (loaders.find((l) => !/beta|pre/i.test(l.loader.version)) || loaders[0]).loader.version;
+    const lv = pinLoader(m, loaders.map((l) => l.loader.version), (loaders.find((l) => !/beta|pre/i.test(l.loader.version)) || loaders[0]).loader.version, onStep);
     const file = path.join(dir, 'quilt-installer.jar');
     await download(inst.url, file, { sha1: inst.hashes?.sha1 });
     const java = await javaFor(mc, resolveJava, onStep);
@@ -236,7 +250,7 @@ async function installSoftware(m, resolveJava, onStep) {
   if (m.software === 'forge' || m.software === 'neoforge') {
     const list = await require('./loaders').listVersions(m.software, mc);
     if (!list.length) throw new Error(`${SOFTWARE[m.software].name} isn’t available for ${mc}.`);
-    const lv = (list.find((x) => x.recommended) || list.find((x) => x.stable) || list[0]).version;
+    const lv = pinLoader(m, list.map((x) => x.version), (list.find((x) => x.recommended) || list.find((x) => x.stable) || list[0]).version, onStep);
     const url = m.software === 'forge'
       ? `https://maven.minecraftforge.net/net/minecraftforge/forge/${lv}/forge-${lv}-installer.jar`
       : `https://maven.neoforged.net/releases/net/neoforged/neoforge/${lv}/neoforge-${lv}-installer.jar`;
@@ -307,7 +321,20 @@ function bdsProps(props) {
 const worldRoot = (m) => (isBds(m) ? path.join(m.dir, 'worlds') : m.dir);
 
 async function create(opts, resolveJava, onStep) {
-  const { name, mc, software = 'fabric', memory = 3072, maxPlayers = 10, port, dir: chosenDir, tunnel = 'e4mc', eula = false, modpack, props: gameProps, tunnelName, content = [], voice = false, bedrock = false, autoStart = false, schedule } = opts;
+  let { name, mc, software = 'fabric', memory = 3072, maxPlayers = 10, port, dir: chosenDir, tunnel = 'e4mc', eula = false, modpack, props: gameProps, tunnelName, content = [], voice = false, bedrock = false, autoStart = false, schedule, fromInstance } = opts;
+  // "Host this modpack": the server is made from one of the player's instances — same Minecraft version, same
+  // mod loader and loader version, same mods and configs. Players with that instance join without any mismatch.
+  let srcInst = null;
+  if (fromInstance) {
+    srcInst = require('./instances').get(String(fromInstance));
+    const lt = srcInst.loader?.type || 'vanilla';
+    if (!['fabric', 'quilt', 'forge', 'neoforge', 'vanilla'].includes(lt)) throw new Error(`Astra can’t host ${lt} instances.`);
+    software = lt; mc = srcInst.versionId;
+    if (!name) name = srcInst.name;
+    if (srcInst.loader?.version) opts.loaderVersion = srcInst.loader.version;
+    if (srcInst.memory?.max && !opts.memory) memory = Math.max(2048, srcInst.memory.max);
+    modpack = null; // the instance already has the pack's files — nothing to download again
+  }
   if (!eula) throw new Error('You need to accept the Minecraft EULA to run a server.');
   if (!SOFTWARE[software]) throw new Error('Pick the server software.');
   if (!/^[\w.-]+$/.test(mc || '')) throw new Error('Pick a Minecraft version.');
@@ -332,7 +359,15 @@ async function create(opts, resolveJava, onStep) {
   if (tunnelName && String(tunnelName).trim()) m.tunnelName = String(tunnelName).replace(/[^\x20-\x7e]/g, '').trim().slice(0, 40);
   if (autoStart) m.autoStart = true;
   if (schedule) m.schedule = cleanSchedule(schedule);
+  if (opts.loaderVersion) m.loaderVersion = String(opts.loaderVersion);
+  if (srcInst) m.fromInstance = srcInst.id;
   try {
+    // A modpack needs the exact loader version it was made with: read it from the pack before installing the server.
+    if (modpack) {
+      onStep && onStep('Reading the modpack');
+      const pk = await preparePack(m, modpack);
+      if (pk.loaderVersion) m.loaderVersion = pk.loaderVersion;
+    }
     const start = await installSoftware(m, resolveJava, onStep);
     m.start = start;
     if (isBds(m)) {
@@ -344,7 +379,10 @@ async function create(opts, resolveJava, onStep) {
     if (m.tunnel === 'e4mc') { onStep && onStep('Adding e4mc for the public address'); if (!(await addE4mc(m))) m.tunnel = 'none'; }
     // modpack first: Astra's own extras are only added when the pack doesn't already bring them
     if (modpack) { onStep && onStep('Installing the modpack'); await installModpack(m, modpack, onStep); }
-    if (SOFTWARE[software].kind === 'mods') {
+    if (srcInst) await copyInstanceToServer(m, srcInst, onStep);
+    // Astra's performance extras are only added to plain servers: a modpack (or a copied instance) must keep exactly
+    // the pack's mods, or the server's mod list stops matching the players' game.
+    if (SOFTWARE[software].kind === 'mods' && !modpack && !srcInst) {
       // Quilt's loader often lags behind Fabric API's newest requirements: it gets Quilt's own API (QSL) instead
       for (const slug of software === 'fabric' ? ['fabric-api', 'lithium', 'ferrite-core'] : software === 'quilt' ? ['qsl'] : ['ferrite-core']) {
         onStep && onStep(`Adding ${slug}`);
@@ -1211,6 +1249,7 @@ async function start(id, resolveJava) {
     if (r.cancelled) { running.delete(id); emit(id); return get(id); } // stopped while Geyser was updating
     try { writeBedrockConfig(m); } catch {}
     try { fixDuplicateMods(id); } catch {}
+    try { fillMissingPackMods(id); } catch (e) { log(id, '[Astra] Couldn’t look for the modpack’s missing mods: ' + e.message); }
     try { await disableClientOnly(id); } catch (e) { log(id, '[Astra] Couldn’t check for game-only mods: ' + e.message); }
     if (m.pack) { try { writePackProps(m); } catch {} openPackServer(m); }
     for (const h of hooks.beforeStart) { try { h(m); } catch (e) { log(id, '[Astra] ' + e.message); } }
@@ -2229,12 +2268,22 @@ async function disableClientOnly(id) {
     }
   }
   let jars = []; try { jars = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)).map((f) => path.join(dir, f)); } catch { return []; }
-  const bad = await clientOnlyJars(m, jars);
+  // Jars proven to be needed on the server (players were refused without them — see healMismatch) are never turned off.
+  const keep = new Set(readJSON(cacheFile, {}).__keep || []);
+  const bad = (await clientOnlyJars(m, jars)).filter((b) => !keep.has(b.file));
   // A mod that REQUIRES a game-only mod can't load on the server either (Forge/NeoForge stop with "requires X"):
   // turn those off too, following the chain. Read from each jar's mods.toml / fabric.mod.json.
   const { readModMeta } = require('./instances');
   const idOf = new Map(jars.map((p) => [path.basename(p), readModMeta(p).modId]));
   const offIds = new Set(bad.map((b) => idOf.get(b.file)).filter(Boolean));
+  // Game-only mods Astra turned off on an EARLIER start count too: a mod that needs one of them (Legendary Tooltips →
+  // Prism) can't load either — Forge stops with "Mod legendarytooltips requires prism". Only Astra's own (never the
+  // player's) — and never one proven needed (keep).
+  for (const f of off) {
+    if (keep.has(f) || !fs.existsSync(path.join(dir, f + '.disabled'))) continue;
+    for (const mid of jarModIds(path.join(dir, f + '.disabled'))) offIds.add(mid);
+  }
+  for (const b of ['minecraft', 'forge', 'neoforge', 'fml', 'javafml', 'java', 'fabricloader', 'fabric', 'fabric-api', 'quilt_loader']) offIds.delete(b);
   // For Forge/NeoForge: which mod ids each jar provides (its [[mods]] entries + jars bundled inside it, META-INF/jarjar)
   // and which it requires on a server (mandatory deps, minus those marked side="CLIENT").
   const tomlOf = (zip) => { const e = zip.getEntry('META-INF/neoforge.mods.toml') || zip.getEntry('META-INF/mods.toml'); return e ? zip.readAsText(e) : null; };
@@ -2271,10 +2320,12 @@ async function disableClientOnly(id) {
       const f = path.basename(p);
       if (offFiles.has(f)) continue;
       const needs = info(p).needs;
+      // Only a dependency that Astra itself turned off (a game-only mod) takes a mod down with it. A dependency that
+      // merely LOOKS missing is not reason enough: the check can't see every way a jar provides a mod id, and turning
+      // a needed mod off makes the server's mod list differ from the players' ("mismatched mod list"). If it's really
+      // missing, the server says so itself when it starts — and the crash helper explains it.
       const dep = needs.find((d) => offIds.has(d));
-      const missing = needs.find((d) => !provided.has(d) && !offIds.has(d));
-      if (dep) { bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break; }
-      if (missing) { bad.push({ file: f, why: `it needs the mod “${missing}”, which isn’t installed on this server` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break; }
+      if (dep && !keep.has(f)) { bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break; }
     }
   }
   for (const b of bad) {
@@ -2425,10 +2476,7 @@ async function modpackVersionsCf(projectId, software, mc) {
 /** CurseForge modpack server install: the pack's server-capable mods + overrides. Files the author keeps website-only are listed. */
 async function installModpackCf(m, versionId, onStep) {
   const cfm = require('./curseforge');
-  const [, modId, fileId] = String(versionId).split(':');
-  const mod = (await cfm.request(`/mods/${modId}`)).data, f = (await cfm.request(`/mods/${modId}/files/${fileId}`)).data;
-  const tmp = path.join(m.dir, '.modpack.zip');
-  await download(cfm.urlOf(f, mod), tmp, { sha1: cfm.sha1Of(f) });
+  const tmp = (await preparePack(m, { versionId })).file;
   const { zip, man, over, overrides, info } = cfm.readPack(tmp);
   const required = (man.files || []).filter((x) => x && x.required !== false).map((x) => ({ projectID: +x.projectID, fileID: +x.fileID }));
   const { meta: files, mods } = required.length ? await cfm.resolveFiles(required) : { meta: [], mods: {} };
@@ -2436,38 +2484,243 @@ async function installModpackCf(m, versionId, onStep) {
   const rec = readJSON(recordFile(m), {});
   const manual = [], clientOnly = [];
   const jars = files.filter((x) => (mods[x.modId]?.classId || 6) === 6); // resource packs / shaders are for the players' game
+  // Some authors turn third-party downloads off on CurseForge (no download link). The same file is often on
+  // Modrinth (found by its SHA-1), or already in one of the player's instances: get it from there, so the server
+  // has EVERY mod of the pack. A server missing one of them refuses players with "mismatched mod list".
+  const blocked = jars.filter((x) => !x.downloadUrl);
+  const mrUrls = blocked.length ? await modrinthUrlsBySha1(blocked.map((x) => cfm.sha1Of(x)).filter(Boolean)) : {};
   let n = 0;
   for (const x of jars) {
     onStep && onStep(`Modpack files ${++n}/${jars.length}`);
     const pm = mods[x.modId];
-    if (!x.downloadUrl) { manual.push({ name: pm?.name || x.fileName, page: cfm.pageOf(x, pm) }); continue; }
-    const name = cfm.safeName(x.fileName), dest = path.join(dir, name);
-    await download(x.downloadUrl, dest, { sha1: cfm.sha1Of(x) });
-    if (wontRun(m, dest)) { fs.rmSync(dest, { force: true }); clientOnly.push(pm?.name || name); continue; }
+    const name = cfm.safeName(x.fileName), dest = path.join(dir, name), sha1 = cfm.sha1Of(x);
+    if (x.downloadUrl) await download(x.downloadUrl, dest, { sha1 });
+    else if (sha1 && mrUrls[sha1]) { await download(mrUrls[sha1], dest, { sha1 }); onStep && onStep(`Got ${pm?.name || name} from Modrinth (CurseForge doesn’t allow downloads of it)`); }
+    else if (copyLocalCopy(sha1, name, dest)) onStep && onStep(`Copied ${pm?.name || name} from your instance (CurseForge doesn’t allow downloads of it)`);
+    else { manual.push({ name: pm?.name || x.fileName, file: name, sha1: sha1 || null, page: cfm.pageOf(x, pm) }); continue; }
     rec['cf:' + x.modId] = { file: name, version: x.displayName || '', title: pm?.name || name, source: 'curseforge', pack: true };
-  }
-  // CurseForge doesn't mark game-only mods: ask Modrinth about each file (and read Forge's own marker)
-  const kept = Object.entries(rec).filter(([k, v]) => k.startsWith('cf:') && v.pack).map(([, v]) => path.join(dir, v.file)).filter((p) => fs.existsSync(p));
-  for (const b of await clientOnlyJars(m, kept).catch(() => [])) {
-    fs.rmSync(path.join(dir, b.file), { force: true });
-    for (const [k, v] of Object.entries(rec)) if (v.file === b.file) delete rec[k];
-    clientOnly.push(b.file);
   }
   writeJSON(recordFile(m), rec);
   cfm.copyOverrides(zip, over, overrides, m.dir);
   fs.rmSync(tmp, { force: true });
   m.modpack = { versionId, name: info.name, version: info.version, source: 'curseforge', ...(manual.length ? { manual } : {}) };
-  if (clientOnly.length) onStep && onStep(`Left out ${clientOnly.length} game-only mod${clientOnly.length === 1 ? '' : 's'} (the server doesn’t need them)`);
-  if (manual.length) onStep && onStep(`${manual.length} mod${manual.length === 1 ? '' : 's'} must be downloaded from the CurseForge website: ${manual.map((x) => x.name).join(', ')}`);
+  // Game-only mods are turned OFF (renamed .disabled), never deleted: if a check is wrong they're turned back on.
+  for (const b of await turnOffClientOnly(m, onStep)) clientOnly.push(b.file);
+  if (clientOnly.length) onStep && onStep(`Turned off ${clientOnly.length} game-only mod${clientOnly.length === 1 ? '' : 's'} (the server doesn’t need them)`);
+  if (manual.length) onStep && onStep(`${manual.length} mod${manual.length === 1 ? '' : 's'} must be added by hand (CurseForge doesn’t allow downloads): ${manual.map((x) => x.name).join(', ')} — install the modpack as an instance first and Astra copies them over`);
+}
+
+/**
+ * Downloads a modpack (once, into the cache) and reads the mod-loader version it needs.
+ * Returns { file, loaderVersion, mc }. Used before the server software is installed (create) and by the installers.
+ */
+async function preparePack(m, { versionId }) {
+  const cacheDir = path.join(paths.cache(), 'server-packs'); fs.mkdirSync(cacheDir, { recursive: true });
+  if (String(versionId).startsWith('cf:')) {
+    const cfm = require('./curseforge');
+    const [, modId, fileId] = String(versionId).split(':');
+    const mod = (await cfm.request(`/mods/${modId}`)).data, f = (await cfm.request(`/mods/${modId}/files/${fileId}`)).data;
+    const file = path.join(cacheDir, `cf-${modId}-${fileId}.zip`);
+    await download(cfm.urlOf(f, mod), file, { sha1: cfm.sha1Of(f) });
+    const { info } = cfm.readPack(file);
+    return { file, loaderVersion: info.loader?.version || null, mc: info.mc };
+  }
+  const v = await getJSON(`https://api.modrinth.com/v2/version/${encodeURIComponent(versionId)}`);
+  const f = v.files.find((x) => x.primary) || v.files[0];
+  const file = path.join(cacheDir, `mr-${String(versionId).replace(/[^\w-]/g, '')}.mrpack`);
+  await download(f.url, file, { sha1: f.hashes?.sha1 });
+  let deps = {}; try { deps = JSON.parse(new AdmZip(file).readAsText('modrinth.index.json')).dependencies || {}; } catch {}
+  const lv = { forge: deps.forge, neoforge: deps.neoforge, fabric: deps['fabric-loader'], quilt: deps['quilt-loader'] }[m.software] || null;
+  return { file, loaderVersion: lv, mc: deps.minecraft || null };
+}
+
+/** Modrinth download links for files, looked up by SHA-1: { [sha1]: url }. Empty when offline. */
+async function modrinthUrlsBySha1(hashes) {
+  if (!hashes.length) return {};
+  try {
+    const res = await getJSON('https://api.modrinth.com/v2/version_files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hashes, algorithm: 'sha1' }) });
+    const out = {};
+    for (const [h, v] of Object.entries(res || {})) { const f = (v.files || []).find((x) => x.hashes?.sha1 === h); if (f) out[h] = f.url; }
+    return out;
+  } catch { return {}; }
+}
+
+/**
+ * Finds a mod jar in the player's instances (same SHA-1, or the same file name when there's no hash) and copies it
+ * to dest. Used for mods CurseForge won't let apps download: the player added them to their instance by hand.
+ */
+function copyLocalCopy(sha1, name, dest) {
+  const crypto = require('crypto');
+  const instances = require('./instances');
+  const hashOf = (p) => crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex');
+  const dirs = [];
+  try { for (const i of instances.list()) dirs.push(path.join(instances.gameDir(i), 'mods')); } catch {}
+  try { dirs.push(require('electron').app.getPath('downloads')); } catch {}
+  for (const d of dirs) {
+    for (const cand of [name, name + '.disabled']) {
+      const p = path.join(d, cand);
+      try {
+        if (!fs.statSync(p).isFile()) continue;
+        if (sha1 && hashOf(p) !== sha1) continue;
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(p, dest);
+        return true;
+      } catch {}
+    }
+  }
+  return false;
+}
+
+/**
+ * Before each start: mods of the pack that couldn't be downloaded are looked for again (the player may have added
+ * them to their instance since). Whatever is still missing is said plainly in the console.
+ */
+function fillMissingPackMods(id) {
+  const m = meta(id);
+  const manual = m.modpack?.manual;
+  if (!manual?.length) return;
+  const dir = contentDir(m), rec = readJSON(recordFile(m), {}), still = [];
+  for (const x of manual) {
+    const file = x.file || x.name;
+    const dest = path.join(dir, file);
+    if (fs.existsSync(dest) || copyLocalCopy(x.sha1 || null, file, dest)) {
+      if (fs.existsSync(dest)) { rec['manual:' + file] = { file, version: '', title: x.name, pack: true }; log(id, `[Astra] Added ${x.name} to the server (copied from your instance).`); continue; }
+    }
+    still.push(x);
+  }
+  writeJSON(recordFile(m), rec);
+  m.modpack.manual = still.length ? still : undefined; save(m);
+  if (still.length) log(id, `[Astra] ⚠ ${still.length} mod${still.length === 1 ? '' : 's'} of the modpack ${still.length === 1 ? 'is' : 'are'} still missing: ${still.map((x) => x.name).join(', ')}. CurseForge doesn’t let apps download ${still.length === 1 ? 'it' : 'them'} — players will see “mismatched mod list” until ${still.length === 1 ? 'it is' : 'they are'} on the server. Install the modpack as an instance (Astra copies them over) or add the .jar files in Content → Add files.`);
+}
+
+/** Every mod id a jar provides (mods.toml / neoforge.mods.toml [[mods]] entries, fabric.mod.json id + provides). */
+function jarModIds(p) {
+  const ids = new Set();
+  try {
+    const zip = new AdmZip(p);
+    for (const n of ['META-INF/neoforge.mods.toml', 'META-INF/mods.toml']) {
+      const e = zip.getEntry(n); if (!e) continue;
+      // only the [[mods]] entries — [[dependencies.x]] entries name OTHER mods (forge, minecraft, libraries…)
+      for (const b of zip.readAsText(e).matchAll(/\[\[mods\]\]([\s\S]*?)(?=\n\s*\[|$)/g)) {
+        const mm = b[1].match(/modId\s*=\s*["']([^"']+)["']/);
+        if (mm) ids.add(mm[1].toLowerCase());
+      }
+    }
+    const fe = zip.getEntry('fabric.mod.json');
+    if (fe) { const j = JSON.parse(zip.readAsText(fe).replace(/[\u0000-\u001f]+/g, ' ')); if (j.id) ids.add(String(j.id).toLowerCase()); for (const k of Object.keys(j.provides || {})) ids.add(k.toLowerCase()); }
+  } catch {}
+  return ids;
+}
+
+/**
+ * The player's game was refused by a server with "mismatched mod list" (Forge/NeoForge name the network channels
+ * that differ). If that server is one the player hosts with Astra, fix it:
+ *   side 'server' — the SERVER lacks these mods: turn them back on if Astra had turned them off, or copy them from
+ *                   the player's instance. They're remembered as needed (never turned off again).
+ *   side 'client' — the GAME lacks these mods: copy them from the server into the player's instance.
+ * Then the server restarts by itself when nobody is on it. Returns a summary, or null if it wasn't our server.
+ */
+async function healMismatch({ host, port, server = [], client = [], instanceId } = {}) {
+  const hostL = String(host || '').toLowerCase().replace(/\.$/, '');
+  const local = ['localhost', '127.0.0.1', '::1', '0.0.0.0', String(lanIp() || '').toLowerCase()].includes(hostL);
+  const mine = index().map((e) => { try { return meta(e.id); } catch { return null; } }).filter((m) => m && SOFTWARE[m.software]?.kind === 'mods');
+  const hostOf = (a) => String(a || '').toLowerCase().replace(/:\d+$/, '');
+  let m = mine.find((x) => {
+    const r = running.get(x.id);
+    const addrs = [x.playitAddress, r?.address, require('./playit').liveAddress?.(x)].filter(Boolean).map(hostOf);
+    return addrs.includes(hostL) || (local && Number(port) === x.port);
+  });
+  if (!m && !hostL) { const run = mine.filter((x) => running.has(x.id)); if (run.length === 1) m = run[0]; }
+  if (!m) return null;
+  const IGNORE = new Set(['minecraft', 'forge', 'neoforge', 'fml', 'c', 'fabric']);
+  const ns = (list) => [...new Set(list.map((c) => String(c).split(':')[0].trim().toLowerCase()).filter((x) => x && !IGNORE.has(x)))];
+  const dir = contentDir(m);
+  const cacheFile = path.join(m.dir, 'solaris-sidecheck.json');
+  const c = readJSON(cacheFile, {});
+  const keep = new Set(c.__keep || []), off = new Set(c.__off || []);
+  const instances = require('./instances');
+  let inst = null; try { inst = instanceId ? instances.get(instanceId) : null; } catch {}
+  const instMods = inst ? path.join(instances.gameDir(inst), 'mods') : null;
+  const listJars = (d, withOff = false) => { try { return fs.readdirSync(d).filter((f) => (withOff ? /\.jar(\.disabled)?$/i : /\.jar$/i).test(f)); } catch { return []; } };
+  const fixed = [], addedToGame = [], notFound = [];
+
+  for (const want of ns(server)) {
+    // 1) a jar Astra (or anyone) turned off on the server
+    const offJar = listJars(dir, true).find((f) => f.endsWith('.disabled') && jarModIds(path.join(dir, f)).has(want));
+    if (offJar) {
+      const on = offJar.slice(0, -9);
+      try { fs.renameSync(path.join(dir, offJar), path.join(dir, on)); keep.add(on); off.delete(on); fixed.push(`${want} (turned back on)`); continue; } catch {}
+    }
+    if (listJars(dir).some((f) => jarModIds(path.join(dir, f)).has(want))) { // on the server already but a different version: use the game's
+      const g = instMods && listJars(instMods).find((f) => jarModIds(path.join(instMods, f)).has(want));
+      if (g) {
+        for (const f of listJars(dir)) if (jarModIds(path.join(dir, f)).has(want)) fs.renameSync(path.join(dir, f), path.join(dir, f + '.disabled'));
+        fs.copyFileSync(path.join(instMods, g), path.join(dir, g)); keep.add(g); fixed.push(`${want} (same version as your game)`); continue;
+      }
+    }
+    // 2) copy it from the player's instance
+    const g = instMods && listJars(instMods).find((f) => jarModIds(path.join(instMods, f)).has(want));
+    if (g && !wontRun(m, path.join(instMods, g))) { fs.copyFileSync(path.join(instMods, g), path.join(dir, g)); keep.add(g); fixed.push(`${want} (copied from your game)`); continue; }
+    notFound.push(want);
+  }
+  for (const want of ns(client)) {
+    if (!instMods) { notFound.push(want); continue; }
+    if (listJars(instMods).some((f) => jarModIds(path.join(instMods, f)).has(want))) { notFound.push(want); continue; } // different version — reported
+    const s = listJars(dir).find((f) => jarModIds(path.join(dir, f)).has(want));
+    if (s) { fs.copyFileSync(path.join(dir, s), path.join(instMods, s)); addedToGame.push(want); } else notFound.push(want);
+  }
+  c.__keep = [...keep]; c.__off = [...off]; c.__v = 2;
+  try { writeJSON(cacheFile, c); } catch {}
+  const summary = { id: m.id, name: m.name, fixed, addedToGame, notFound, restarted: false };
+  if (fixed.length) log(m.id, `[Astra] Your game was refused (“mismatched mod list”). Fixed the server: ${fixed.join(', ')}.`);
+  if (addedToGame.length) log(m.id, `[Astra] Added to your game instance (the server has them): ${addedToGame.join(', ')}.`);
+  if (notFound.length) log(m.id, `[Astra] ⚠ Still different between your game and the server: ${notFound.join(', ')}. Add the same .jar to both (Content → Add files).`);
+  const r = running.get(m.id);
+  if (fixed.length && r && r.state === 'online' && r.players.size === 0) { summary.restarted = true; restart(m.id); }
+  return summary;
+}
+
+/** Copies an instance's enabled mods and its config folders into a new server ("Host this modpack"). */
+async function copyInstanceToServer(m, inst, onStep) {
+  const instances = require('./instances');
+  const gd = instances.gameDir(inst);
+  if (SOFTWARE[m.software].kind === 'mods') {
+    const src = path.join(gd, 'mods');
+    let jars = []; try { jars = fs.readdirSync(src).filter((f) => /\.jar$/i.test(f)).map((f) => path.join(src, f)); } catch {}
+    onStep && onStep(`Copying ${jars.length} mods from ${inst.name}`);
+    const dir = contentDir(m); fs.mkdirSync(dir, { recursive: true });
+    for (const p of jars) { if (!/^solaris-client/i.test(path.basename(p))) fs.copyFileSync(p, path.join(dir, path.basename(p))); }
+  }
+  // Mod configs and pack scripts: the server must use the same settings as the game (recipes, worldgen, KubeJS…).
+  for (const d of ['config', 'defaultconfigs', 'kubejs', 'scripts', 'global_packs', 'datapacks', 'paxi', 'openloader']) {
+    const s = path.join(gd, d);
+    if (!fs.existsSync(s)) continue;
+    onStep && onStep(`Copying ${d}`);
+    try { await fs.promises.cp(s, path.join(m.dir, d), { recursive: true, force: true }); } catch {}
+  }
+  m.modpack = { name: inst.modpack?.name || inst.name, version: inst.modpack?.version || '', source: 'instance', instance: inst.id };
+  if (SOFTWARE[m.software].kind === 'mods') {
+    const off = await turnOffClientOnly(m, onStep);
+    if (off.length) onStep && onStep(`Turned off ${off.length} game-only mod${off.length === 1 ? '' : 's'} (the server doesn’t need them)`);
+  }
+}
+
+/** Runs the game-only check on a server that isn't saved yet (during create). */
+async function turnOffClientOnly(m, onStep) {
+  const dir = contentDir(m);
+  let jars = []; try { jars = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)).map((f) => path.join(dir, f)); } catch { return []; }
+  const bad = await clientOnlyJars(m, jars).catch(() => []);
+  const cacheFile = path.join(m.dir, 'solaris-sidecheck.json');
+  const c = readJSON(cacheFile, {}); c.__v = 2; c.__off = [...new Set([...(c.__off || []), ...bad.map((b) => b.file)])];
+  for (const b of bad) { try { fs.renameSync(path.join(dir, b.file), path.join(dir, b.file + '.disabled')); onStep && onStep(`Turned off ${b.file}: ${b.why}`); } catch {} }
+  try { writeJSON(cacheFile, c); } catch {}
+  return bad;
 }
 
 /** Modrinth modpack (.mrpack) server install: server-side files + overrides + server-overrides. */
 async function installModpack(m, { versionId }, onStep) {
   if (String(versionId).startsWith('cf:')) return installModpackCf(m, versionId, onStep);
-  const v = await getJSON(`https://api.modrinth.com/v2/version/${versionId}`);
-  const f = v.files.find((x) => x.primary) || v.files[0];
-  const tmp = path.join(m.dir, '.modpack.mrpack');
-  await download(f.url, tmp);
+  const tmp = (await preparePack(m, { versionId })).file;
   const zip = new AdmZip(tmp);
   const index = JSON.parse(zip.readAsText('modrinth.index.json'));
   const files = (index.files || []).filter((x) => x.env?.server !== 'unsupported');
@@ -2507,6 +2760,7 @@ module.exports = {
   knownPlayers, tasks, saveTask, deleteTask, runTaskNow: async (id, taskId) => { const t = tasks(id).find((x) => x.id === taskId); if (!t) throw new Error('Task not found'); if (t.action !== 'start' && running.get(id)?.state !== 'online') throw new Error('Start the server first.'); await runTask(id, t); return tasks(id); },
   hooks, patchMeta, setYaml, contentDir: (id) => contentDir(meta(id)), isRunning: (id) => running.get(id)?.state || null, logLine: (id, l) => log(id, l),
   perf, setPack, copyServer, exportServer, importServer, importWorld, clientMods, addClientMod, removeClientMod, searchClientMods, taskDue, cleanTask,
+  healMismatch, jarModIds, fillMissingPackMods, preparePack, pinLoader, disableClientOnly,
 };
 
 // Astra Connect add-ons that hook into hosting (their own files)

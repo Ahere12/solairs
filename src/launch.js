@@ -145,6 +145,36 @@ async function offlineSkin(inst, auth, gameDir) {
  * player uses Open to LAN. Astra picks it up from the game log so the player can copy or share it.
  */
 const hosting = new Map(); // runId -> { address, instanceId, name, since }
+/**
+ * Forge/NeoForge refuse a server whose mods differ ("mismatched mod list") and name the network channels:
+ *   "Channels [mts:main] rejected their server side version number"  → the server lacks (or has another version of) mts
+ *   "Channels [x:y] rejected their client side version number"        → the game lacks x
+ * When the refusing server is one the player hosts with Astra, Astra fixes it (hostserver.healMismatch).
+ */
+function mismatchFromLog(run, line) {
+  let mm;
+  if ((mm = line.match(/Connecting to ([^\s,]+), (\d+)/))) { run.lastServer = { host: mm[1], port: Number(mm[2]) }; return; }
+  if (!(mm = line.match(/Channels \[([^\]]*)\] rejected their (server|client) side version number/))) return;
+  const g = (run.mismatch = run.mismatch || { server: new Set(), client: new Set(), timer: null });
+  for (const ch of mm[1].split(',')) if (ch.trim()) g[mm[2]].add(ch.trim());
+  clearTimeout(g.timer);
+  g.timer = setTimeout(async () => { // the lines come in a burst: handle them together
+    const server = [...g.server], client = [...g.client];
+    run.mismatch = null;
+    try {
+      const r = await require('./hostserver').healMismatch({ ...(run.lastServer || {}), server, client, instanceId: run.instanceId });
+      if (!r) return; // not one of the player's servers
+      const parts = [];
+      if (r.fixed.length) parts.push(`fixed the server (${r.fixed.join(', ')})`);
+      if (r.addedToGame.length) parts.push(`added ${r.addedToGame.join(', ')} to your game`);
+      const what = parts.length ? `Astra ${parts.join(' and ')}.` : '';
+      const tail = r.notFound.length ? ` Still different: ${r.notFound.join(', ')} — put the same .jar in both.` : '';
+      const next = r.restarted ? ' The server is restarting — join again in a minute.' : r.fixed.length ? ' Restart the server, then join again.' : r.addedToGame.length ? ' Restart the game, then join again.' : '';
+      push('toast', { type: r.notFound.length && !parts.length ? 'warn' : 'info', text: `${r.name} refused you: the mods didn’t match. ${what}${next}${tail}` });
+    } catch (e) { console.warn('[Astra] mismatch fix failed:', e.message); }
+  }, 1500);
+}
+
 function hostingFromLog(line, { runId, instanceId, name }) {
   const on = line.match(/Domain assigned: ([A-Za-z0-9.-]+\.[A-Za-z]{2,})/) || (/\[CHAT\]/.test(line) && line.match(/Local game hosted on domain \[([A-Za-z0-9.-]+\.[A-Za-z]{2,})\]/));
   if (on) {
@@ -325,6 +355,7 @@ async function launchInner(instanceId, opts = {}) {
       push('game:log', { runId, instanceId, line });
       hostingFromLog(line, { runId, instanceId, name: inst.name });
       discord.fromGameLog(runId, line);
+      mismatchFromLog(run, line);
     }
   };
   proc.stdout.on('data', onData);

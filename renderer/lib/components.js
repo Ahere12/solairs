@@ -683,9 +683,48 @@ function instanceMenu(e, inst) {
     '-',
     { label: 'Duplicate…', icon: 'copy', action: () => duplicateDialog(inst) },
     { label: 'Share (.solpack)', icon: 'share', action: () => api('instances:export', inst.id).catch(toastErr) },
+    { label: inst.modpack ? 'Host this modpack…' : 'Host as a server…', icon: 'servers', action: () => hostInstanceDialog(inst) },
     '-',
     { label: T('Delete'), icon: 'trash', danger: true, action: () => deleteInstance(inst) },
   ]);
+}
+
+/**
+ * "Host this modpack": makes a server from an installed instance — same Minecraft version, the same Forge/NeoForge/
+ * Fabric build, the same mods and configs — so the server's mod list matches the game exactly.
+ */
+function hostInstanceDialog(inst) {
+  const lt = inst.loader?.type || 'vanilla';
+  if (!['fabric', 'quilt', 'forge', 'neoforge', 'vanilla'].includes(lt)) return toast(`Astra can’t host ${lt} instances.`, 'warn');
+  const ram = Math.max(2048, Math.min(16384, inst.memory?.max || (lt === 'vanilla' ? 2048 : 6144)));
+  const m = modal({
+    title: inst.modpack ? `Host ${inst.name}` : `Host ${inst.name} as a server`,
+    body: `<div class="stack">
+      <p class="muted small" style="margin:0">Makes a server with exactly what this instance has: Minecraft ${esc(inst.versionId)}${lt !== 'vanilla' ? `, ${esc(LOADER_NAMES[lt] || lt)} ${esc(inst.loader?.version || '')}` : ''}, its mods and configs. Game-only mods (shaders, minimaps…) are turned off on the server; friends join with this same modpack.</p>
+      <label class="field">Server name<input type="text" id="hi-name" maxlength="40" value="${esc(inst.name.slice(0, 40))}"></label>
+      <label class="field">Memory: <b id="hi-ram-l">${(ram / 1024).toFixed(1)} GB</b><input type="range" id="hi-ram" min="2048" max="16384" step="512" value="${ram}"></label>
+      <label class="field">Friends join through
+        <select id="hi-tun">${lt !== 'vanilla' ? '<option value="e4mc">e4mc — public address, no account (recommended)</option>' : ''}<option value="playit">playit.gg — fixed address (free account)</option><option value="none">Only my home network (LAN)</option></select></label>
+      <label class="row small"><input type="checkbox" id="hi-eula"> I accept the <a href="#" id="hi-eula-link">Minecraft EULA</a></label>
+      <div class="faint small" id="hi-step"></div>
+    </div>`,
+    footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-go disabled>${icon('servers')}Create server</button>`,
+  });
+  const go = m.$('[data-go]');
+  m.$('#hi-ram').oninput = (e) => (m.$('#hi-ram-l').textContent = `${(+e.target.value / 1024).toFixed(1)} GB`);
+  m.$('#hi-eula').onchange = (e) => (go.disabled = !e.target.checked);
+  m.$('#hi-eula-link').onclick = (e) => { e.preventDefault(); api('shell:open', 'https://www.minecraft.net/eula'); };
+  m.$('[data-x]').onclick = () => m.close();
+  const off = window.solaris.on('task', (t) => { if (t.id === 'hosted-create' && t.detail) { const el = m.$('#hi-step'); if (el) el.textContent = t.detail; } });
+  go.onclick = async () => {
+    go.disabled = true; go.innerHTML = `${icon('refresh', 'spin')}Setting up…`;
+    try {
+      const s = await api('hosted:create', { fromInstance: inst.id, name: m.$('#hi-name').value.trim() || inst.name, memory: +m.$('#hi-ram').value, tunnel: m.$('#hi-tun').value, eula: true });
+      off(); m.close();
+      toast(`${s.name} is ready — press Start. Friends join with the same modpack.`);
+      Router.go('host', { id: s.id });
+    } catch (e) { toastErr(e); go.disabled = false; go.innerHTML = `${icon('refresh')}Try again`; }
+  };
 }
 /* ---------- icon picker: real Minecraft icons (from the player's own game files), emoji, or an image ---------- */
 function pickIcon(current, { allowUpload = false } = {}) {

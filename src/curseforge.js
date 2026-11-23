@@ -209,6 +209,18 @@ async function resolveFiles(list) {
   return { meta, mods, gone: list.filter((f) => !found.has(f.fileID)) };
 }
 
+/** Modrinth download links for files with these SHA-1s: { [sha1]: url }. Empty when offline or none match. */
+async function modrinthMirror(hashes) {
+  if (!hashes.length) return {};
+  try {
+    const { getJSON } = require('./util');
+    const res = await getJSON('https://api.modrinth.com/v2/version_files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hashes, algorithm: 'sha1' }) });
+    const out = {};
+    for (const [h, v] of Object.entries(res || {})) { const f = (v.files || []).find((x) => x.hashes?.sha1 === h); if (f) out[h] = f.url; }
+    return out;
+  } catch { return {}; }
+}
+
 const cancels = new Map(); // task id → AbortController
 function cancelModpack() { for (const c of cancels.values()) c.abort(); return true; }
 
@@ -241,14 +253,18 @@ async function installModpack({ projectId, fileId, file }) {
       extra: { modpack: { name: info.name, version: info.version, source: 'curseforge', projectId: projectId ? String(projectId) : info.projectID, fileId: fileId ? String(fileId) : null } } });
     created = inst;
     const record = {}, tasks = [], manual = [];
+    // Files whose author turned third-party downloads off on CurseForge: the identical file (same SHA-1) is often
+    // on Modrinth too — download it from there instead of asking the player to fetch it by hand.
+    const mirror = await modrinthMirror(meta.filter((f) => !f.downloadUrl).map((f) => sha1Of(f)).filter(Boolean));
     for (const f of meta) {
       const m = mods[f.modId];
       const dir = CLASS_DIR[m?.classId] || 'mods', fname = safeName(f.fileName);
       const entry = { file: fname, fileId: String(f.id), name: m?.name || fname, type: dir === 'mods' ? 'mod' : dir === 'resourcepacks' ? 'resourcepack' : 'shader', pack: true };
       record[String(f.modId)] = entry;
       const target = path.join(inst.gameDir, dir, fname);
-      if (!f.downloadUrl) { manual.push({ modId: f.modId, fileId: f.id, name: m?.name || fname, file: fname, dir, size: f.fileLength, sha1: sha1Of(f), page: pageOf(f, m) }); continue; }
-      tasks.push({ url: f.downloadUrl, path: target, sha1: sha1Of(f), size: f.fileLength, name: entry.name, signal: ctl.signal });
+      const url = f.downloadUrl || mirror[sha1Of(f)];
+      if (!url) { manual.push({ modId: f.modId, fileId: f.id, name: m?.name || fname, file: fname, dir, size: f.fileLength, sha1: sha1Of(f), page: pageOf(f, m) }); continue; }
+      tasks.push({ url, path: target, sha1: sha1Of(f), size: f.fileLength, name: entry.name, signal: ctl.signal });
     }
     // downloads: 8 at a time, each retried by download(); one bad file doesn't stop the others
     const failed = [];

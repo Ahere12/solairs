@@ -1,6 +1,52 @@
 [
   {
     "product": "launcher",
+    "version": "1.16.0",
+    "date": "2026-11-23",
+    "title": "Host your modpacks — and no more “mismatched mod list”",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Host this modpack: on any installed modpack (instance page → Host, or right-click → Host this modpack) Astra makes a server with exactly what your game has — the same Minecraft version, the same Forge/NeoForge/Fabric build, the same mods and configs. Friends with the same modpack join without any mismatch."
+          },
+          {
+            "type": "fix",
+            "text": "Modpack servers now install the exact Forge / NeoForge / Fabric version the modpack was made with (for example Forge 43.5.0 for DREAD 3.1.2) instead of the recommended one — mods built for a newer loader no longer fail on the server."
+          },
+          {
+            "type": "fix",
+            "text": "Mods whose authors don’t allow app downloads on CurseForge used to be left off modpack servers, so players were refused with “mismatched mod list”. Astra now downloads the identical file from Modrinth when it’s there, or copies it from your installed instance — before every start, too."
+          },
+          {
+            "type": "fix",
+            "text": "If your game is refused by one of your own servers with “mismatched mod list”, Astra reads which mods differ, puts the missing ones on the server (or in your game), remembers that they’re needed and restarts the server when nobody is on it."
+          },
+          {
+            "type": "fix",
+            "text": "Mods aren’t turned off any more just because one of their required mods only LOOKS missing (that guess could be wrong and caused mismatches). A mod that needs a game-only mod Astra turned off is turned off too (Legendary Tooltips → Prism), with the real reason in the console."
+          },
+          {
+            "type": "improvement",
+            "text": "Game-only mods in a modpack server are turned off (renamed), never deleted, so they can always come back. Astra’s own extra mods are no longer added to modpack servers — the server keeps exactly the pack’s mod list."
+          }
+        ]
+      },
+      {
+        "area": "Modpacks",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "Installing a CurseForge modpack: files the author only allows from the CurseForge website are downloaded from Modrinth instead when the identical file is there — fewer files to fetch by hand (6 of the 9 in DREAD 3.1.2)."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.15.3",
     "date": "2026-11-18",
     "title": "Fix: modpack servers turned off mods they need",

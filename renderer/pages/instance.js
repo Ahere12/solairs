@@ -16,11 +16,13 @@ Pages.instance = {
           <div class="grow"></div>
           ${inst.modpack?.manual?.length ? `<button class="btn" id="cf-manual" title="Files the authors only allow from the CurseForge website">${icon('download')}${inst.modpack.manual.length} file${inst.modpack.manual.length === 1 ? '' : 's'} to add</button>` : ''}
           ${inst.loader?.type && inst.loader.type !== 'vanilla' ? `<button class="btn" id="health" title="Check mods: dependencies, versions, duplicates, conflicts">${icon('shield')}Health</button>` : ''}
+          ${inst.modpack ? `<button class="btn" id="host-pack" title="Make a server from this modpack — the same mods, configs and loader version">${icon('servers')}Host</button>` : ''}
           <button class="icon-btn" id="fold" title="Open folder">${icon('folder')}</button>
           <button class="icon-btn" id="more" title="More">${icon('more')}</button>
           ${playButton(inst, { size: 'lg' })}
         </div>`;
       $('#fold', el).onclick = () => api('instances:openFolder', inst.id);
+      const hp = $('#host-pack', el); if (hp) hp.onclick = () => hostInstanceDialog(inst);
       const hb = $('#health', el); if (hb) hb.onclick = () => Router.go('modhealth', { id: inst.id });
       const mb = $('#cf-manual', el); if (mb) mb.onclick = () => cfManualDialog(inst.id, inst.modpack.manual);
       $('#more', el).onclick = (e) => instanceMenu(e, inst);
