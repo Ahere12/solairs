@@ -1,6 +1,43 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.2",
+    "date": "2026-11-25",
+    "title": "Server check — is my modpack server ready?",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Check (on every server, and right after you create a modpack server): EULA, server software, missing modpack files, mods for the wrong loader, game-only mods, required mods that are missing or turned off, duplicates and memory — each with a one-click fix, plus Fix all."
+          },
+          {
+            "type": "feature",
+            "text": "Every Start runs the check first and applies the safe fixes, so a modpack server doesn’t crash, restart and crash again before it works."
+          },
+          {
+            "type": "improvement",
+            "text": "Modpack servers install much faster: mods download 8 at a time instead of one by one."
+          },
+          {
+            "type": "bugfix",
+            "text": "Forge crash reports are read directly: the exact mod that uses game-only code (like Dimension Access Manager 3.1.0) is turned off and remembered, and never turned back on by another check."
+          },
+          {
+            "type": "bugfix",
+            "text": "Packs with Mods Optimizer: mods it hides (.jar.client) are understood, and mods a server mod needs are kept unless they really only run in the game."
+          },
+          {
+            "type": "bugfix",
+            "text": "Old crash findings no longer show once the problem is gone."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.17.1",
     "date": "2026-11-25",
     "title": "Safer modpack servers and steadier playit.gg",

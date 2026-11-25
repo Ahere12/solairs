@@ -915,6 +915,14 @@ async function setBedrock(id, on) {
 const lastRun = new Map(); // id -> { lines, code, at }
 const stripAnsi = (l) => String(l).replace(/\x1b\[[0-9;]*m/g, '');
 /** The mod/plugin file in the server for a mod id or plugin name. */
+/** A jar Astra turned off (name.jar.disabled) that provides this mod id, or null. Returns the name without .disabled. */
+function disabledProviding(m, modId) {
+  const dir = contentDir(m);
+  // .client: hidden by Mods Optimizer
+  let files = []; try { files = fs.readdirSync(dir).filter((f) => /\.jar\.(disabled|client)$/i.test(f)); } catch {}
+  for (const f of files) { try { if (jarModIds(path.join(dir, f)).has(String(modId).toLowerCase())) return f.replace(/\.(disabled|client)$/i, ''); } catch {} }
+  return null;
+}
 function fileForMod(m, modId) {
   const dir = contentDir(m), want = String(modId).toLowerCase();
   let files = []; try { files = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)); } catch {}
@@ -956,12 +964,12 @@ async function diagnose(id) {
     if (/^fabric-[\w-]+-v\d+$/i.test(dep) || /^fabric$/i.test(dep)) dep = 'fabric-api';
     if (seen.has('dep:' + dep)) continue;
     const p = await modrinthFor(m, dep);
-    addFinding('dep:' + dep, { text: `${mm[1]} needs ${p?.title || dep}, which isn’t on the server.`, fix: p ? { type: 'install', projectId: p.id, label: `Install ${p.title}` } : null });
+    addFinding('dep:' + dep, { dep: String(dep).toLowerCase(), text: `${mm[1]} needs ${p?.title || dep}, which isn’t on the server.`, fix: p ? { type: 'install', projectId: p.id, label: `Install ${p.title}` } : null });
   }
   // missing dependency (Forge/NeoForge)
   for (const mm of text.matchAll(/Mod ID: '([\w.-]+)', Requested by: '([\w.-]+)'[^\n]*?Actual version: '([^']*)'/g)) {
     if (/^(minecraft|forge|neoforge|java)$/i.test(mm[1])) continue;
-    if (/MISSING/i.test(mm[3])) { const p = await modrinthFor(m, mm[1]); addFinding('dep:' + mm[1], { text: `${mm[2]} needs ${p?.title || mm[1]}, which isn’t on the server.`, fix: p ? { type: 'install', projectId: p.id, label: `Install ${p.title}` } : null }); }
+    if (/MISSING/i.test(mm[3])) { const p = await modrinthFor(m, mm[1]); addFinding('dep:' + mm[1], { dep: String(mm[1]).toLowerCase(), text: `${mm[2]} needs ${p?.title || mm[1]}, which isn’t on the server.`, fix: p ? { type: 'install', projectId: p.id, label: `Install ${p.title}` } : null }); }
     else { const f = fileForMod(m, mm[2]); addFinding('ver:' + mm[2], { text: `${mm[2]} needs a different version of ${mm[1]} (the server has ${mm[3]}).`, fix: f ? { type: 'disable', file: f, label: `Turn off ${mm[2]}` } : null }); }
   }
   // made for another Minecraft version (Fabric)
@@ -969,15 +977,39 @@ async function diagnose(id) {
     const f = fileForMod(m, mm[2]);
     addFinding('mc:' + mm[2], { text: `${mm[1]} is made for another Minecraft version than ${m.mc}.`, fix: f ? { type: 'disable', file: f, label: `Turn off ${mm[1]}` } : null });
   }
+  // Forge's own crash report (crash-reports/*-fml.txt): the exact jar of every mod that failed, and why
+  const lr0 = lastRun.get(id);
+  try {
+    const cdir = path.join(m.dir, 'crash-reports');
+    const newest = fs.readdirSync(cdir).filter((f) => /-fml\.txt$/i.test(f)).map((f) => ({ f, t: fs.statSync(path.join(cdir, f)).mtimeMs })).sort((a, b) => b.t - a.t)[0];
+    if (newest && (!lr0 || newest.t >= lr0.at - 10 * 60 * 1000)) {
+      const rep = fs.readFileSync(path.join(cdir, newest.f), 'utf8');
+      for (const blk of rep.split(/\n(?=\s*Mod File:)/).slice(1)) {
+        const file = path.basename(((blk.match(/Mod File:\s*(\S+)/) || [])[1] || '').replace(/%20/g, ' '));
+        const why = ((blk.match(/Failure message:\s*(.+)/) || [])[1] || '').trim();
+        if (!file || !/\.jar$/i.test(file)) continue;
+        const where = text + '\n' + rep;
+        if (/invalid dist DEDICATED_SERVER|net[\/.]minecraft[\/.]client/i.test(blk) || (/has failed to load correctly/i.test(why) && /invalid dist DEDICATED_SERVER/.test(where) && rep.split('Mod File:').length === 2)) {
+          addFinding('client:' + file, { auto: true, text: `${file.replace(/\.jar$/i, '')} doesn’t work on servers (it uses game-only code).`, fix: { type: 'disable', file, reason: 'client', label: `Turn off ${file}` } });
+        }
+      }
+    }
+  } catch {}
+  // "Mod X requires Y 1.2 or above": Y is a mod Astra turned off as game-only → turn it back on (the server needs it)
+  for (const mm of text.matchAll(/Mod ([\w.-]+) requires ([\w.-]+) (?:[\w.+-]+ or above|any version|[\w.+-]+)/g)) {
+    const dep = mm[2]; if (/^(minecraft|forge|neoforge|java)$/i.test(dep)) continue;
+    const off = disabledProviding(m, dep);
+    if (off) addFinding('need:' + dep, { auto: true, text: `${mm[1]} needs ${dep}, which Astra had turned off as game-only.`, fix: { type: 'enable', file: off, label: `Turn ${off} back on` } });
+  }
   // client-only mods (they crash a server)
   const client = text.match(/(?:Environment type SERVER is invalid|invalid dist DEDICATED_SERVER|Attempted to load class net\/minecraft\/client|ClassNotFoundException: net\.minecraft\.client|NoClassDefFoundError: net\/minecraft\/client)[\s\S]{0,4000}/);
-  if (client) {
+  if (client && ![...seen].some((k) => k.startsWith('client:'))) { // the crash report already named the exact jar
     const BASE = /^(minecraft|forge|neoforge|fml|fmlloader|fabricloader|fabric-api|javafmllanguage|lowcodelanguage|mclanguage|kotlinforforge)$/i;
     const fromStack = [...client[0].matchAll(/(?:TRANSFORMER|MOD|LAYER PLUGIN)\/([\w.-]+)@/g)].map((x) => x[1]).find((x) => !BASE.test(x));
     const who = fromStack || (client[0].match(/(?:for mod|from mod|Mod '?)\s*'?([\w.-]+)'?/i) || text.match(/Mixin apply for mod ([\w.-]+) failed/) || [])[1];
     const f = who ? fileForMod(m, who) : null;
     // auto: Astra turns it off and starts the server again by itself (once per file), see the 'close' handler
-    addFinding('client', { auto: !!f, text: `${who ? who + ' is' : 'A mod is'} made only for the game, not for servers.`, fix: f ? { type: 'disable', file: f, label: `Turn off ${who}` } : null });
+    addFinding('client', { auto: !!f, text: `${who ? who + ' is' : 'A mod is'} made only for the game, not for servers.`, fix: f ? { type: 'disable', file: f, reason: 'client', label: `Turn off ${who}` } : null });
   }
   for (const mm of text.matchAll(/Mixin apply for mod ([\w.-]+) failed/g)) { const f = fileForMod(m, mm[1]); addFinding('mixin:' + mm[1], { text: `${mm[1]} failed to load (it may not match this Minecraft version or another mod).`, fix: f ? { type: 'disable', file: f, label: `Turn off ${mm[1]}` } : null }); }
   if (/Found duplicate mods|is present multiple times|Duplicate mods? found/i.test(text)) addFinding('dupe', { text: 'The same mod is on the server twice.', fix: { type: 'dedupe', label: 'Remove the extra copies' } });
@@ -1007,7 +1039,19 @@ async function applyFix(id, fix) {
   if (fix.type === 'disable') {
     const f = path.basename(String(fix.file || '')); const p = path.join(contentDir(m), f);
     if (!/\.jar$/i.test(f) || !fs.existsSync(p)) throw new Error('That file isn’t on the server any more.');
-    fs.renameSync(p, p + '.disabled'); return `Turned off ${f}`;
+    fs.renameSync(p, p + '.disabled');
+    if (fix.reason === 'client') { const cf = path.join(m.dir, 'solaris-sidecheck.json'); const c = readJSON(cf, {}); c.__noServer = [...new Set([...(c.__noServer || []), f])]; c.__keep = (c.__keep || []).filter((x) => x !== f); try { writeJSON(cf, c); } catch {} }
+    return `Turned off ${f}`;
+  }
+  if (fix.type === 'enable') {
+    const f = path.basename(String(fix.file || '')); const p = path.join(contentDir(m), f);
+    const from = [p + '.disabled', p + '.client'].find((x) => fs.existsSync(x));
+    if (!/\.jar$/i.test(f) || !from) throw new Error('That file isn’t turned off any more.');
+    fs.renameSync(from, p);
+    // remember it's needed: the game-only check never turns it off again
+    const cf = path.join(m.dir, 'solaris-sidecheck.json'); const c = readJSON(cf, {});
+    c.__keep = [...new Set([...(c.__keep || []), f])]; c.__off = (c.__off || []).filter((x) => x !== f); try { writeJSON(cf, c); } catch {}
+    return `Turned ${f} back on`;
   }
   if (fix.type === 'dedupe') { fixDuplicateMods(id); return 'Removed duplicate copies'; }
   if (fix.type === 'memory') { m.memory = clampMem(fix.mb); save(m); return `Memory set to ${(m.memory / 1024).toFixed(1)} GB`; }
@@ -1255,6 +1299,9 @@ async function start(id, resolveJava) {
     try { fixDuplicateMods(id); } catch {}
     try { fillMissingPackMods(id); } catch (e) { log(id, '[Astra] Couldn’t look for the modpack’s missing mods: ' + e.message); }
     try { await disableClientOnly(id); } catch (e) { log(id, '[Astra] Couldn’t check for game-only mods: ' + e.message); }
+    try { await protectFromModsOptimizer(id); } catch (e) { log(id, '[Astra] Couldn’t check Mods Optimizer: ' + e.message); }
+    // readiness check: turn needed mods back on / mods that can't run here off before Java even starts (no crash loop)
+    try { const c = await checkServer(id, { autoFix: true }); const left = c.checks.filter((x) => !x.ok && x.level !== 'warn'); if (left.length) log(id, '[Astra] Check found ' + left.length + ' issue(s): ' + left.map((x) => x.title).join('; ')); } catch (e) { log(id, '[Astra] Couldn’t run the server check: ' + e.message); }
     if (m.pack) { try { writePackProps(m); } catch {} openPackServer(m); }
     for (const h of hooks.beforeStart) { try { h(m); } catch (e) { log(id, '[Astra] ' + e.message); } }
   }
@@ -1289,17 +1336,21 @@ async function start(id, resolveJava) {
       diagnose(id)
         .catch(() => ({ id, name: m.name, findings: [], errors: [], hasLog: true })) // still tell the player it stopped
         .then(async (d) => {
-          const a = d.findings.find((f) => f.auto && f.fix?.type === 'disable');
           const done = autoFixed.get(id) || new Set();
-          if (a && !done.has(a.fix.file) && !running.has(id)) {
-            done.add(a.fix.file); autoFixed.set(id, done);
-            try {
-              await applyFix(id, a.fix);
-              log(id, `[Astra] ${a.text} Turned off ${a.fix.file} and starting the server again…`);
-              push('toast', { type: 'info', text: `${m.name}: turned off ${a.fix.file} (game-only mod) and restarting` });
+          const todo = d.findings.filter((f) => f.auto && ['disable', 'enable'].includes(f.fix?.type) && !done.has(f.fix.type + ':' + f.fix.file));
+          if (todo.length && !running.has(id)) {
+            autoFixed.set(id, done);
+            const did = [];
+            for (const a of todo) {
+              done.add(a.fix.type + ':' + a.fix.file);
+              try { did.push(await applyFix(id, a.fix)); log(id, `[Astra] ${a.text} ${did[did.length - 1]}.`); } catch (e) { log(id, '[Astra] Couldn’t fix it: ' + e.message); }
+            }
+            if (did.length) {
+              log(id, '[Astra] Starting the server again…');
+              push('toast', { type: 'info', text: `${m.name}: ${did.join(', ')} — restarting` });
               setTimeout(() => { if (!running.has(id)) start(id, resolveJava).catch((e) => push('toast', { type: 'error', text: 'Restart failed: ' + e.message })); }, 1500);
               return;
-            } catch (e) { log(id, '[Astra] Couldn’t turn it off: ' + e.message); }
+            }
           }
           push('hosted:crash', d); notifyDiscord(id, 'crash', `⚠️ **${m.name}** stopped unexpectedly${d.findings[0] ? ': ' + d.findings[0].text : '.'}`);
         });
@@ -2274,7 +2325,7 @@ async function disableClientOnly(id) {
   const off = new Set(cache.__off || []);
   if (cache.__v !== 2) {
     for (const [k, v] of Object.entries(cache)) if (v && typeof v === 'string' && k.includes(':')) off.add(k.split(':')[0]);
-    cache = { __v: 2, __off: [...off] }; writeJSON(cacheFile, cache);
+    cache = { __v: 2, __off: [...off], __keep: cache.__keep || [], __cfClient: cache.__cfClient || [] }; writeJSON(cacheFile, cache);
   }
   const revived = [];
   const back = [...off].filter((f) => fs.existsSync(path.join(dir, f + '.disabled')) && !fs.existsSync(path.join(dir, f)));
@@ -2285,9 +2336,15 @@ async function disableClientOnly(id) {
       try { fs.renameSync(path.join(dir, f + '.disabled'), path.join(dir, f)); off.delete(f); revived.push(f); log(id, `[Astra] Turned ${f} back on — it does run on this server (an earlier check got it wrong).`); } catch {}
     }
   }
+  const cfc = new Set(cache.__cfClient || []);
+  for (const f of cfc) if (fs.existsSync(path.join(dir, f + '.disabled'))) off.add(f);
   let jars = []; try { jars = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)).map((f) => path.join(dir, f)); } catch { return []; }
   // Jars proven to be needed on the server (players were refused without them — see healMismatch) are never turned off.
   const keep = new Set(readJSON(cacheFile, {}).__keep || []);
+  const rescued = []; // dependencies kept on because a server mod needs them (saved in __keep)
+  // earlier-off jars that ARE game-only (by Modrinth / CurseForge / the jar): never brought back for a dependent
+  const oldClient = new Set((await clientOnlyJars(m, [...off].map((o) => path.join(dir, o + '.disabled')).filter((p) => fs.existsSync(p))).catch(() => [])).map((b) => b.file.replace(/\.disabled$/i, '')));
+  for (const o of cfc) oldClient.add(o);
   const bad = (await clientOnlyJars(m, jars)).filter((b) => !keep.has(b.file));
   // A mod that REQUIRES a game-only mod can't load on the server either (Forge/NeoForge stop with "requires X"):
   // turn those off too, following the chain. Read from each jar's mods.toml / fabric.mod.json.
@@ -2343,13 +2400,43 @@ async function disableClientOnly(id) {
       // a needed mod off makes the server's mod list differ from the players' ("mismatched mod list"). If it's really
       // missing, the server says so itself when it starts — and the crash helper explains it.
       const dep = needs.find((d) => offIds.has(d));
-      if (dep && !keep.has(f)) { bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break; }
+      if (!dep || keep.has(f)) continue;
+      // Which jar is that dependency? If only Modrinth/CurseForge *call* it game-only (the jar itself doesn't refuse
+      // servers), keep it ON: e.g. Totally Accurate Wither Storm needs Entity Texture/Model Features, which load on a
+      // server and do nothing there. Turning the main mod off instead would break the whole pack.
+      // A dependency that's off only by mistake (nothing calls it game-only) comes back. One that Modrinth, CurseForge
+      // or the jar call game-only stays off — and so does the mod that needs it: e.g. Entity Texture Features really
+      // can't load on a dedicated server (its ResourceLocation mixin loads client classes), so Totally Accurate Wither
+      // Storm Plus, which requires it, can't either.
+      const depOld = !bad.some((b) => idOf.get(b.file) === dep || info(path.join(dir, b.file)).provides.includes(dep))
+        && [...off].find((o) => fs.existsSync(path.join(dir, o + '.disabled')) && jarModIds(path.join(dir, o + '.disabled')).has(String(dep).toLowerCase()) && !oldClient.has(o));
+      const depFile = depOld || null;
+      const depPath = depOld ? path.join(dir, depOld + '.disabled') : null;
+      if (depFile && depPath && !wontRun(m, depPath)) {
+        try { fs.renameSync(depPath, path.join(dir, depOld)); off.delete(depOld); jars.push(path.join(dir, depOld)); } catch {}
+        keep.add(depFile); rescued.push(depFile);
+        offIds.delete(dep);
+        log(id, `[Astra] Kept ${depFile} on: ${f} needs it on the server too.`);
+        changed = true; break;
+      }
+      bad.push({ file: f, why: `it needs ${dep}, which only works in the game` }); if (idOf.get(f)) offIds.add(idOf.get(f)); changed = true; break;
     }
   }
   for (const b of bad) {
     try { fs.renameSync(path.join(dir, b.file), path.join(dir, b.file + '.disabled')); off.add(b.file); log(id, `[Astra] Turned off ${b.file}: ${b.why}. Players keep it in their game; the server doesn’t need it.`); } catch {}
   }
-  const c2 = readJSON(cacheFile, {}); c2.__v = 2; c2.__off = [...off]; try { writeJSON(cacheFile, c2); } catch {}
+  if (rescued.length) {
+    for (const f of [...off]) {
+      const p = path.join(dir, f + '.disabled');
+      if (!fs.existsSync(p) || fs.existsSync(path.join(dir, f)) || bad.some((b) => b.file === f) || wontRun(m, p)) continue;
+      const needs = info(p).needs;
+      if (!needs.length || !needs.every((d) => !offIds.has(d))) continue;
+      const own = (await clientOnlyJars(m, [p]).catch(() => [])).length; // still game-only by itself: leave it off
+      if (own) continue;
+      try { fs.renameSync(p, path.join(dir, f)); off.delete(f); log(id, `[Astra] Turned ${f} back on — what it needs is on the server now.`); } catch {}
+    }
+  }
+  const c2 = readJSON(cacheFile, {}); c2.__v = 2; c2.__off = [...off].filter((f) => !cfc.has(f)); c2.__cfClient = [...cfc].filter((f) => !keep.has(f)); c2.__keep = [...keep]; try { writeJSON(cacheFile, c2); } catch {}
   return bad;
 }
 async function modrinthFiles(files) {
@@ -2510,18 +2597,27 @@ async function installModpackCf(m, versionId, onStep) {
   const blocked = jars.filter((x) => !x.downloadUrl);
   const mrUrls = blocked.length ? await modrinthUrlsBySha1(blocked.map((x) => cfm.sha1Of(x)).filter(Boolean)) : {};
   let n = 0;
-  for (const x of jars) {
-    onStep && onStep(`Modpack files ${++n}/${jars.length}`);
+  const cfClient = [];
+  const one = async (x, slow) => {
     const pm = mods[x.modId];
     const name = cfm.safeName(x.fileName), dest = path.join(dir, name), sha1 = cfm.sha1Of(x);
     if (x.downloadUrl) await download(x.downloadUrl, dest, { sha1 });
     else if (sha1 && mrUrls[sha1]) { await download(mrUrls[sha1], dest, { sha1 }); onStep && onStep(`Got ${pm?.name || name} from Modrinth (CurseForge doesn’t allow downloads of it)`); }
     else if (copyLocalCopy(sha1, name, dest)) onStep && onStep(`Copied ${pm?.name || name} from your instance (CurseForge doesn’t allow downloads of it)`);
+    else if (!slow) return false; // website-only: done after the fast ones, one at a time
     else if (await cfm.getFile(x, pm, dest).then(() => true, () => false)) onStep && onStep(`Got ${pm?.name || name} through the CurseForge website`);
-    else { manual.push({ name: pm?.name || x.fileName, file: name, sha1: sha1 || null, page: cfm.pageOf(x, pm) }); continue; }
+    else { manual.push({ name: pm?.name || x.fileName, file: name, sha1: sha1 || null, page: cfm.pageOf(x, pm) }); return true; }
     rec['cf:' + x.modId] = { file: name, version: x.displayName || '', title: pm?.name || name, source: 'curseforge', pack: true };
-    if (cfClientOnly(x)) { try { fs.renameSync(dest, dest + '.disabled'); clientOnly.push(name); onStep && onStep(`Turned off ${pm?.name || name} — its author marked it game-only on CurseForge`); } catch {} }
-  }
+    if (cfClientOnly(x)) { try { fs.renameSync(dest, dest + '.disabled'); clientOnly.push(name); cfClient.push(name); onStep && onStep(`Turned off ${pm?.name || name} — its author marked it game-only on CurseForge`); } catch {} }
+    return true;
+  };
+  // 8 downloads at a time (one at a time took minutes for big packs like ~240-mod Equinox's Story Mode)
+  const queue = [...jars], later = [];
+  const worker = async () => { while (queue.length) { const x = queue.shift(); if (!(await one(x, false))) later.push(x); onStep && onStep(`Modpack files ${++n}/${jars.length}`); } };
+  await Promise.all(Array.from({ length: Math.min(8, jars.length) }, worker));
+  for (const x of later) await one(x, true);
+  // remembered as Astra's own: the game-only check may turn them back on when a server mod needs them
+  if (cfClient.length) { const cf = path.join(m.dir, 'solaris-sidecheck.json'); const c = readJSON(cf, {}); c.__cfClient = [...new Set([...(c.__cfClient || []), ...cfClient])]; try { writeJSON(cf, c); } catch {} }
   writeJSON(recordFile(m), rec);
   cfm.copyOverrides(zip, over, overrides, m.dir);
   fs.rmSync(tmp, { force: true });
@@ -2773,7 +2869,180 @@ async function modpackVersions(projectId, software, mc) {
   return vs.slice().sort((a, b) => (rank[a.version_type] ?? 3) - (rank[b.version_type] ?? 3)).map((v) => ({ id: v.id, name: v.name, number: v.version_number, type: v.version_type }));
 }
 
+// ---------- readiness check: "is this modpack server ready, with no issues?" ----------
+const depCache = new Map(); // path:size:mtime -> { provides, needs, mcVersions }
+/** What a mod jar provides (mod ids, incl. jars bundled inside it) and requires on a server (mandatory, not CLIENT-side). */
+function jarDeps(p) {
+  let key; try { const st = fs.statSync(p); key = `${p}:${st.size}:${st.mtimeMs}`; } catch { return { provides: [], needs: [] }; }
+  if (depCache.has(key)) return depCache.get(key);
+  const out = { provides: [], needs: [] };
+  const tomlOf = (zip) => { const e = zip.getEntry('META-INF/neoforge.mods.toml') || zip.getEntry('META-INF/mods.toml'); return e ? zip.readAsText(e) : null; };
+  const blocks = (toml, head) => [...toml.matchAll(new RegExp(`\\[\\[${head}[^\\]]*\\]\\]([\\s\\S]*?)(?=\\[\\[|$)`, 'g'))].map((b) => b[1]);
+  try {
+    const zip = new AdmZip(p), toml = tomlOf(zip);
+    const add = (t) => { for (const b of blocks(t, 'mods')) { const id = (b.match(/modId\s*=\s*"([^"]+)"/) || [])[1]; if (id) out.provides.push(id.toLowerCase()); } };
+    if (toml) {
+      add(toml);
+      out.needs = blocks(toml, 'dependencies\\.').filter((b) => /mandatory\s*=\s*true|type\s*=\s*"required"/.test(b) && !/side\s*=\s*"CLIENT"/.test(b))
+        .map((b) => (b.match(/modId\s*=\s*"([^"]+)"/) || [])[1]).filter(Boolean).map((x) => x.toLowerCase());
+    } else {
+      const fe = zip.getEntry('fabric.mod.json');
+      if (fe) { const j = JSON.parse(zip.readAsText(fe).replace(/[\u0000-\u001f]+/g, ' ')); out.provides.push(String(j.id).toLowerCase(), ...Object.keys(j.provides || {}).map((x) => x.toLowerCase())); out.needs = Object.keys(j.depends || {}).map((x) => x.toLowerCase()); }
+    }
+    for (const e of zip.getEntries()) {
+      if (!/^META-INF\/(jarjar|jars)\/.+\.jar$/i.test(e.entryName)) continue;
+      try { const inner = new AdmZip(e.getData()), t = tomlOf(inner); if (t) add(t); const fe = inner.getEntry('fabric.mod.json'); if (fe) out.provides.push(String(JSON.parse(inner.readAsText(fe).replace(/[\u0000-\u001f]+/g, ' ')).id).toLowerCase()); } catch {}
+    }
+  } catch {}
+  depCache.set(key, out);
+  if (depCache.size > 2000) depCache.delete(depCache.keys().next().value);
+  return out;
+}
+const BUILTIN_IDS = new Set(['minecraft', 'forge', 'neoforge', 'fml', 'javafml', 'lowcodefml', 'mclanguage', 'java', 'fabricloader', 'fabric', 'quilt_loader', 'quilted_fabric_api']);
+
+/**
+ * Checks a server before it runs: loader installed, EULA, missing modpack files, mods for another loader, game-only
+ * mods, missing required mods, duplicates, memory, and the last crash. Returns { ready, checks: [{ ok, level, title,
+ * detail, fix }] }. With { autoFix: true } the safe fixes (turn a needed mod back on, turn off a mod that can't run
+ * here, remove duplicates, accept nothing on the player's behalf) are applied right away.
+ */
+/**
+ * Mods Optimizer (in many CurseForge packs) renames "client-side" mods to name.jar.client on every server start —
+ * including ones a server mod REQUIRES (Totally Accurate Wither Storm needs Entity Texture/Model Features), so the
+ * server then can't start. Astra lists every required mod id in Mods Optimizer's own override file (never removed)
+ * and puts back the jars it already hid. Returns the files put back.
+ */
+async function protectFromModsOptimizer(id) {
+  const m = meta(id), dir = contentDir(m);
+  let files = []; try { files = fs.readdirSync(dir); } catch { return []; }
+  if (!files.some((f) => /^mods?[_-]?optimizer.*\.jar$/i.test(f))) return [];
+  const needs = new Set();
+  const addNeeds = (p) => { for (const n of jarDeps(p).needs) if (!BUILTIN_IDS.has(n)) needs.add(n); };
+  for (const f of files.filter((x) => /\.jar$/i.test(x))) addNeeds(path.join(dir, f));
+  const restored = [];
+  for (let again = true; again;) {
+    again = false;
+    for (const f of fs.readdirSync(dir).filter((x) => /\.jar\.client$/i.test(x))) {
+      const p = path.join(dir, f);
+      if (!jarDeps(p).provides.some((x) => needs.has(x))) continue;
+      if (wontRun(m, p) || (await clientOnlyJars(m, [p]).catch(() => [])).length) continue; // really game-only: it stays hidden
+      const back = p.replace(/\.client$/i, '');
+      try { if (!fs.existsSync(back)) { fs.renameSync(p, back); restored.push(path.basename(back)); addNeeds(back); again = true; } } catch {}
+    }
+  }
+  // only ids whose jar isn't game-only are protected (Mods Optimizer is right about the rest)
+  const onJars = fs.readdirSync(dir).filter((x) => /\.jar$/i.test(x)).map((x) => path.join(dir, x));
+  const clientFiles = new Set((await clientOnlyJars(m, onJars).catch(() => [])).map((b) => b.file));
+  for (const p of onJars) if (clientFiles.has(path.basename(p)) || wontRun(m, p)) for (const x of jarDeps(p).provides) needs.delete(x);
+  if (needs.size) {
+    const of = path.join(m.dir, 'config', 'mods_optimizer', 'mods-database-override.json');
+    const o = readJSON(of, { description: 'Override entries from mods-database.json. This file is never modified automatically.', server: [], client: [], both: [] });
+    const both = new Set((o.both || []).filter((x) => !/override-mod-id/.test(x)));
+    let changed = false;
+    for (const n of needs) if (!both.has(n)) { both.add(n); changed = true; }
+    o.both = [...both].sort();
+    o.client = (o.client || []).filter((x) => !needs.has(x));
+    if (changed || restored.length) { try { fs.mkdirSync(path.dirname(of), { recursive: true }); writeJSON(of, o); } catch {} }
+  }
+  for (const f of restored) log(id, `[Astra] Mods Optimizer had hidden ${f}, but a server mod needs it — put it back (and told Mods Optimizer to keep it).`);
+  return restored;
+}
+
+async function checkServer(id, { autoFix = false } = {}) {
+  const m = meta(id);
+  const checks = [];
+  const add = (ok, title, detail = '', fix = null, level = ok ? 'ok' : 'error') => checks.push({ ok, level, title, detail, fix });
+  const kind = SOFTWARE[m.software]?.kind;
+  const providedIds = new Set(BUILTIN_IDS); // mod ids the server has (filled by the mods check)
+  // EULA
+  let eula = false; try { eula = /^\s*eula\s*=\s*true/m.test(fs.readFileSync(path.join(m.dir, 'eula.txt'), 'utf8')); } catch {}
+  add(eula, eula ? 'Minecraft EULA accepted' : 'The Minecraft EULA isn’t accepted', eula ? '' : 'The server won’t start until it is.', eula ? null : { type: 'eula', label: 'Accept the EULA' });
+  // the server itself (jar / Forge libraries)
+  const hasServer = ['run.bat', 'run.sh', 'server.jar'].some((f) => fs.existsSync(path.join(m.dir, f))) || fs.readdirSync(m.dir).some((f) => /\.jar$/i.test(f));
+  add(hasServer, hasServer ? `${SOFTWARE[m.software]?.name || m.software} ${m.mc} installed` : 'The server software isn’t installed yet', hasServer ? '' : 'Astra installs it on the first start.', null, hasServer ? 'ok' : 'warn');
+  if (kind === 'mods') {
+    const dir = contentDir(m);
+    try { await protectFromModsOptimizer(id); } catch {}
+    let all = []; try { all = fs.readdirSync(dir).filter((f) => /\.jar(\.disabled|\.client)?$/i.test(f)); } catch {}
+    const on = all.filter((f) => /\.jar$/i.test(f)), off = all.filter((f) => /\.(disabled|client)$/i.test(f));
+    // modpack files CurseForge wouldn't give
+    const manual = m.modpack?.manual || [];
+    add(!manual.length, manual.length ? `${manual.length} modpack file${manual.length === 1 ? '' : 's'} missing` : 'All modpack files are there', manual.map((x) => x.name).join(', '), manual.length ? { type: 'manual', label: 'Get them' } : null);
+    // mods for another loader / Minecraft version, and game-only mods with hard proof
+    const wrong = [];
+    for (const f of on) { const why = wontRun(m, path.join(dir, f)); if (why) wrong.push({ f, why }); }
+    for (const w of wrong) add(false, `${w.f} can’t run on this server`, w.why, { type: 'disable', file: w.f, label: 'Turn it off' });
+    // required mods: every mandatory dependency of a mod that's on must be provided by a mod that's on
+    const provided = providedIds;
+    const deps = new Map(on.map((f) => [f, jarDeps(path.join(dir, f))]));
+    for (const d of deps.values()) for (const x of d.provides) provided.add(x);
+    const missing = new Map(); // dep id -> [mods that need it]
+    for (const [f, d] of deps) for (const n of d.needs) if (!provided.has(n)) missing.set(n, [...(missing.get(n) || []), (d.provides[0] || f)]);
+    for (const [dep, who] of missing) {
+      const offFile = off.find((f) => jarDeps(path.join(dir, f)).provides.includes(dep));
+      const offClient = offFile && (wontRun(m, path.join(dir, offFile)) || (await clientOnlyJars(m, [path.join(dir, offFile)]).catch(() => [])).length);
+      if (offFile && offClient) {
+        // the needed mod itself refuses servers: then the mods that need it can't run here either
+        for (const w of who) { const wf = [...deps].find(([, d]) => d.provides[0] === w)?.[0]; if (wf) add(false, `${w} needs ${dep}, which can’t run on servers`, 'Players keep it in their game; the server can’t load it.', { type: 'disable', file: wf, label: `Turn off ${w}` }); }
+        continue;
+      }
+      if (offFile) { add(false, `${who.join(', ')} need${who.length === 1 ? 's' : ''} ${dep}, which is turned off`, `${offFile.replace(/\.(disabled|client)$/i, '')} provides it.`, { type: 'enable', file: offFile.replace(/\.(disabled|client)$/i, ''), label: 'Turn it back on' }); continue; }
+      const p = await modrinthFor(m, dep).catch(() => null);
+      add(false, `${who.join(', ')} need${who.length === 1 ? 's' : ''} ${dep}, which isn’t on the server`, p ? `${p.title} on Modrinth provides it.` : 'Add it in the Mods tab.', p ? { type: 'install', projectId: p.id, label: `Install ${p.title}` } : null);
+    }
+    if (!missing.size) add(true, `All required mods are there (${on.length} mods on${off.length ? `, ${off.length} game-only turned off` : ''})`);
+    // modpack mods that are turned off although they run on servers (e.g. turned off after a crash about something
+    // else): players who have the modpack are refused with "mismatched mod list" until they're back on
+    if (m.modpack) {
+      const rec = readJSON(recordFile(m), {});
+      const packOff = Object.values(rec).filter((r) => r?.pack && r.file && off.includes(r.file + '.disabled'));
+      // only mods the game must have on BOTH sides matter: Forge refuses players over those. displayTest
+      // IGNORE_SERVER_VERSION / IGNORE_ALL_VERSION mods don't (and Fabric doesn't compare mod lists at all)
+      const bothSides = (p) => { try { const z = new AdmZip(p), e = z.getEntry('META-INF/mods.toml') || z.getEntry('META-INF/neoforge.mods.toml'); if (!e) return false; const t = z.readAsText(e); return !/displayTests*=s*"IGNORE_(ALL|SERVER)_VERSION"|clientSideOnlys*=s*true/.test(t); } catch { return false; } };
+      const noServer = new Set(readJSON(path.join(m.dir, 'solaris-sidecheck.json'), {}).__noServer || []);
+      const cands = packOff.filter((r) => !noServer.has(r.file)).map((r) => path.join(dir, r.file + '.disabled')).filter((p) => !wontRun(m, p) && bothSides(p) && jarDeps(p).needs.every((n) => providedIds.has(n))); // needs something the server can't have: it must stay off
+      const soft = new Set((await clientOnlyJars(m, cands).catch(() => [])).map((b) => b.file));
+      for (const p of cands) {
+        if (soft.has(path.basename(p))) continue; // game-only by Modrinth / CurseForge: off is right
+        const r = packOff.find((x) => x.file + '.disabled' === path.basename(p));
+        add(false, `${r.title || r.file} is turned off`, 'It’s part of the modpack. If players get “mismatched mod list”, turn it back on.', { type: 'enable', file: r.file, label: 'Turn it back on' }, 'warn');
+        checks[checks.length - 1].fromCrash = true; // the player may have turned it off on purpose: never automatic
+      }
+    }
+    // the same mod twice
+    const seen = new Map(), dupes = [];
+    for (const [f, d] of deps) { const k = d.provides[0]; if (!k) continue; if (seen.has(k)) dupes.push(`${seen.get(k)} / ${f}`); else seen.set(k, f); }
+    add(!dupes.length, dupes.length ? 'The same mod is on the server twice' : 'No duplicate mods', dupes.join('; '), dupes.length ? { type: 'dedupe', label: 'Remove the extra copies' } : null);
+    // memory: big packs need room
+    const want = on.length > 200 ? 8192 : on.length > 120 ? 6144 : on.length > 40 ? 4096 : 2048;
+    const total = Math.floor(require('os').totalmem() / 1048576), give = Math.min(want, Math.floor(total * 0.6));
+    const enough = (m.memory || 0) >= Math.min(want, give);
+    add(enough, enough ? `Memory: ${(m.memory / 1024).toFixed(1)} GB` : `Only ${(m.memory / 1024).toFixed(1)} GB of memory for ${on.length} mods`, enough ? '' : `About ${(want / 1024).toFixed(0)} GB is recommended for a pack this size.`, enough || give <= m.memory ? null : { type: 'memory', mb: give, label: `Give it ${(give / 1024).toFixed(1)} GB` }, enough ? 'ok' : 'warn');
+  }
+  // the last run crashed: its known causes too
+  let lr = lastRun.get(id);
+  if (!lr) { try { if (/Failed to start the minecraft server|Mod Loading has failed|Crash report saved to/i.test(fs.readFileSync(path.join(m.dir, 'logs', 'latest.log'), 'utf8').slice(-200000))) lr = { crashed: true }; } catch {} }
+  if (lr?.crashed) {
+    const d = await diagnose(id).catch(() => null);
+    const stillApplies = (f) => (!f.dep || !providedIds.has(f.dep)) && (!f.fix || !['disable', 'enable'].includes(f.fix.type) || fs.existsSync(path.join(contentDir(m), f.fix.type === 'disable' ? f.fix.file : f.fix.file + '.disabled')));
+    for (const f of (d?.findings || []).filter(stillApplies)) if (!checks.some((c) => c.fix && f.fix && c.fix.type === f.fix.type && c.fix.file === f.fix.file)) { add(false, f.text, 'From the last crash.', f.fix); checks[checks.length - 1].fromCrash = !f.auto; }
+  }
+  // safe fixes on the spot
+  if (autoFix) {
+    for (const c of checks) {
+      if (c.ok || !c.fix || c.fromCrash || !['enable', 'disable', 'dedupe', 'eula'].includes(c.fix.type)) continue; // crash guesses wait for the player
+      if (c.fix.type === 'eula') continue; // the player accepts the EULA, never Astra
+      try { const msg = await applyFix(id, c.fix); log(id, `[Astra] Check: ${c.title} — ${msg}.`); c.ok = true; c.level = 'fixed'; c.detail = msg; } catch {}
+    }
+  }
+  const ready = checks.every((c) => c.ok || c.level === 'warn');
+  return { id, name: m.name, ready, checks };
+}
+
 module.exports = {
+  checkServer,
+  protectFromModsOptimizer,
+  _disableClientOnly: disableClientOnly, // tests
   SOFTWARE, list, get, create, start, stop, restart, stopAll, anyRunning, command, logs, getSettings, setSettings, saveSettings, applyLive, setTunnel, remove, openFolder,
   softwareVersions, worlds, setActiveWorld, deleteWorld, people, addPerson, removePerson, backups, backup, restore, deleteBackup,
   logFiles, readLog, searchContent, installedContent, installContent: (id, pid, vid) => installContent(id, pid, vid), removeContent, toggleContent, searchModpacksCf, modSources, instanceMods, copyFromInstance, addContentFiles, modpackVersions,

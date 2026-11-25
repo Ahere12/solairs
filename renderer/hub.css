@@ -206,3 +206,18 @@ button:disabled svg.i { opacity: 0.5; }
 /* ---------- speed: don't lay out / paint what's off screen ---------- */
 .hub-grid:not(.as-list) .hub-card { content-visibility: auto; contain-intrinsic-size: auto 250px; }
 .hub-grid.as-list .hub-card, .ct-row { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+
+/* ---------- Hosting: server check ---------- */
+.ck-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius); margin-bottom: 12px; border: 1px solid var(--border); }
+.ck-head > svg.i { width: 26px; height: 26px; flex: none; }
+.ck-head.ok { background: color-mix(in srgb, var(--ok) 10%, var(--panel)); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.ck-head.ok > svg.i { color: var(--ok); }
+.ck-head.bad { background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.ck-head.bad > svg.i { color: var(--warn); }
+.ck-list { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow: auto; }
+.ck-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
+.ck-ic svg.i { width: 17px; height: 17px; }
+.ck-row.ok .ck-ic { color: var(--ok); }
+.ck-row.error .ck-ic { color: var(--danger); }
+.ck-row.warn .ck-ic { color: var(--warn); }
+.ck-row.fixed .ck-ic { color: var(--ok); }

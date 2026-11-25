@@ -237,6 +237,7 @@ module.exports = (getWin) => ({
   'hosted:setBedrock': (id, on) => require('./hostserver').setBedrock(id, !!on),
   'hosted:diagnose': (id) => require('./hostserver').diagnose(id),
   'hosted:applyFix': (id, fix) => require('./hostserver').applyFix(id, fix),
+  'hosted:check': (id, o) => require('./hostserver').checkServer(id, o || {}),
   'hosted:pregen': (id, o) => require('./hostserver').pregen(id, o || {}),
   'hosted:lagCheck': (id) => require('./hostserver').lagCheck(id),
   'hosted:setDiscord': (id, o) => require('./hostserver').setDiscord(id, o || {}),

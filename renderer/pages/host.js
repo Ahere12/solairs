@@ -162,6 +162,42 @@ Pages.host = {
     setTimeout(() => m.$('#jc-code')?.focus(), 50);
   },
 
+  /** Readiness check: is this server (modpack) ready to run, with no issues? One-click fixes, Fix all, Start. */
+  async showCheck(id, s) {
+    const m = modal({ title: `Check ${s?.name || 'server'}`, wide: true, body: `<div id="ck-body"><p class="muted">${icon('refresh', 'spin')} Checking the server — mods, required mods, loader, memory, last crash…</p></div>`,
+      footer: `<button class="btn" data-x>${T('Close')}</button><button class="btn" data-all hidden>${icon('zap')}Fix all</button><button class="btn primary" data-start>${icon('play')}Start</button>` });
+    m.$('[data-x]').onclick = () => m.close();
+    m.$('[data-start]').onclick = () => { m.close(); this.start(id); };
+    const run = async () => {
+      const body = m.$('#ck-body'); if (!body) return;
+      let r;
+      try { r = await api('hosted:check', id); } catch (e) { body.innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; return; }
+      if (!body.isConnected) return;
+      const bad = r.checks.filter((c) => !c.ok);
+      body.innerHTML = `<div class="ck-head ${r.ready ? 'ok' : 'bad'}">${icon(r.ready ? 'check' : 'alert')}<div><b>${r.ready ? 'Ready to run — no issues found' : (() => { const n = bad.filter((c) => c.level !== 'warn').length || bad.length; return `${n} issue${n === 1 ? '' : 's'} to fix`; })()}</b><div class="faint small">${r.ready ? (bad.length ? 'A few suggestions below.' : 'Everything Astra checks is fine.') : 'Fix them here, then press Start.'}</div></div></div>
+        <div class="ck-list">${[...bad, ...r.checks.filter((c) => c.ok)].map((c) => `<div class="ck-row ${c.ok ? 'ok' : c.level}"><span class="ck-ic">${icon(c.ok ? 'check' : 'alert')}</span><div class="grow"><b>${esc(c.title)}</b>${c.detail ? `<div class="faint small">${esc(c.detail)}</div>` : ''}</div>${!c.ok && c.fix ? `<button class="btn sm primary" data-fx="${r.checks.indexOf(c)}">${esc(c.fix.label)}</button>` : ''}</div>`).join('')}</div>`;
+      const fixes = r.checks.filter((c) => !c.ok && c.fix && c.fix.type !== 'manual');
+      const all = m.$('[data-all]'); all.hidden = fixes.length < 2; all.disabled = false; all.innerHTML = `${icon('zap')}Fix all`;
+      const apply = async (c, b) => {
+        if (c.fix.type === 'manual') { toast('Install the modpack as an instance once (Content Hub) — Astra copies those files to the server from it.', 'info', 8000); return; }
+        if (b) { b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Fixing…`; }
+        try { toast(await api('hosted:applyFix', id, c.fix)); } catch (e) { toastErr(e); }
+      };
+      $$('[data-fx]', body).forEach((b) => (b.onclick = async () => { await apply(r.checks[+b.dataset.fx], b); run(); }));
+      // Fix all: one fix can reveal the next (turning a mod on shows what it needs), so repeat until nothing's left
+      m.$('[data-all]').onclick = async (e) => {
+        const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Fixing…`;
+        let todo = fixes;
+        for (let pass = 0; pass < 4 && todo.length; pass++) {
+          for (const c of todo) await apply(c);
+          const again = await api('hosted:check', id).catch(() => null);
+          todo = again ? again.checks.filter((c) => !c.ok && c.fix && !['manual', 'install', 'memory'].includes(c.fix.type)) : [];
+        }
+        run();
+      };
+    };
+    run();
+  },
   /** "Why did it stop?": plain-words reasons from the last run's log, each with a one-click fix when there is one. */
   async showDiagnosis(id, pre = null) {
     let d = pre;
@@ -553,8 +589,10 @@ Pages.host = {
           try { const w = await api('hosted:importWorld', s.id, worldSrc); await api('hosted:setWorld', s.id, w.name); } catch (e) { toast(`The server is ready, but the world couldn’t be added: ${e.message} Add it later in the Worlds tab.`, 'warn', 10000); }
         }
         m.close();
-        toast(s.knownAddress ? `${s.name} is ready — public address ${s.knownAddress}. Press Start.` : `${s.name} is ready — press Start`);
+        toast(s.knownAddress ? `${s.name} is installed — public address ${s.knownAddress}.` : `${s.name} is installed`);
         Router.go('host', { id: s.id });
+        // a modpack server: show right away whether it's ready to run, with one-click fixes
+        if (pack) setTimeout(() => this.showCheck(s.id, s), 400);
       } catch (e) { drawProg(e.message); toastErr(e); go.disabled = false; back.disabled = false; go.innerHTML = `${icon('refresh')}Try again`; }
     };
     if (pre) applyPre(pre); else setMode('paper');
@@ -668,10 +706,11 @@ Pages.host = {
     $('#hs-back', el).onclick = (e) => { e.preventDefault(); Router.go('host'); };
     const drawHead = () => {
       $('#hs-chip', el).innerHTML = this.stateChip(s);
-      $('#hs-actions', el).innerHTML = this.popBtn(id).replace('class="btn"', 'class="btn lg"') + (s.state === 'offline' ? `<button class="btn lg" id="a-why" title="Read the last run’s log and explain what went wrong">${icon('bug')}Why did it stop?</button><button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
+      $('#hs-actions', el).innerHTML = this.popBtn(id).replace('class="btn"', 'class="btn lg"') + `<button class="btn lg" id="a-check" title="Is this server ready, with no issues? Checks mods, required mods, loader, memory">${icon('shield')}Check</button>` + (s.state === 'offline' ? `<button class="btn lg" id="a-why" title="Read the last run’s log and explain what went wrong">${icon('bug')}Why did it stop?</button><button class="btn primary lg play" id="a-start">${icon('play')}Start</button>`
         : `${s.bedrockServer ? '' : `<button class="btn lg" id="a-lag" ${s.state !== 'online' ? 'disabled' : ''} title="Measure lag and find what causes it">${icon('chart')}Lag check</button><button class="btn lg" id="a-join" ${s.state !== 'online' ? 'disabled' : ''}>${icon('sun')}Join</button>`}<button class="btn lg" id="a-restart" ${s.state !== 'online' ? 'disabled' : ''}>${icon('refresh')}Restart</button><button class="btn lg danger" id="a-stop" ${/stopping|restarting/.test(s.state) ? 'disabled' : ''}>${icon('power')}Stop</button>`);
       this.bindPop($('#hs-actions', el));
       if ($('#a-why', el)) $('#a-why', el).onclick = () => this.showDiagnosis(id);
+      if ($('#a-check', el)) $('#a-check', el).onclick = () => this.showCheck(id, s);
       if ($('#a-lag', el)) $('#a-lag', el).onclick = () => this.lagCheck(id, s);
       if ($('#a-start', el)) $('#a-start', el).onclick = (e) => this.start(id, e.currentTarget);
       if ($('#a-stop', el)) $('#a-stop', el).onclick = (e) => { e.currentTarget.disabled = true; api('hosted:stop', id).catch(toastErr); };
