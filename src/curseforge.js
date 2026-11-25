@@ -482,4 +482,4 @@ async function serverFile(modId, { mc, loader } = {}) {
   return list.find((f) => f.releaseType === 1) || list[0] || null;
 }
 
-module.exports = { autoManual, categories, installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };
+module.exports = { getFile, autoManual, categories, installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };

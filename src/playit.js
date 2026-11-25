@@ -51,11 +51,23 @@ function keyRejected() {
   emit();
 }
 
+/** One POST to playit.gg's API. Short outages (HTTP 5xx, "cloudflare origin error", timeouts, 429) are retried. */
 async function call(p, body, secret = loadSecret(), probe = false) {
-  const r = await fetch(API + p, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(secret ? { Authorization: 'Agent-Key ' + secret } : {}) }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(15000) });
-  if (r.status === 429) throw new Error('playit.gg is busy (too many requests). Try again in a minute.');
-  const j = await r.json().catch(() => null);
-  if (!j) throw new Error(`playit.gg answered HTTP ${r.status}`);
+  let r, j, lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((res) => setTimeout(res, [0, 1500, 4000, 9000][attempt]));
+    try {
+      r = await fetch(API + p, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(secret ? { Authorization: 'Agent-Key ' + secret } : {}) }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(15000) });
+    } catch (e) { lastErr = new Error('Couldn’t reach playit.gg — check your internet connection.'); continue; }
+    j = await r.json().catch(() => null);
+    if (r.status === 429 || r.status >= 500 || (!j?.status && !(r.status >= 400 && r.status < 500))) {
+      lastErr = new Error(r.status === 429 ? 'playit.gg is busy (too many requests). Try again in a minute.' : `playit.gg is having problems right now (HTTP ${r.status}). Try again in a minute.`);
+      continue;
+    }
+    lastErr = null; break;
+  }
+  if (lastErr) throw lastErr;
+  if (!j || !j.status) throw new Error(`playit.gg answered HTTP ${r.status}`);
   if (j.status === 'success') return j.data;
   // "fail" answers are a bare reason ("RequiresVerifiedAccount"); "error" answers are { type, message } — keep both
   // parts, the message says what was wrong (a bare "validation" told the player nothing)
@@ -245,6 +257,8 @@ function readLog() {
   const before = agent.state;
   for (const line of buf.toString('utf8').split(/\r?\n/)) {
     if (/InvalidAgentKey|configured agent secret is no longer valid/i.test(line)) { keyRejected(); return; }
+    const lo = line.match(/timed out connecting to local (?:TCP|UDP) server[\s\S]*?origin_addr=([\d.:]+)/i);
+    if (lo) { agent.lastError = `Players reached your playit.gg address, but the server on this PC didn’t answer at ${lo[1]}. It may still be starting — if it keeps happening, allow Java through Windows Firewall.`; continue; }
     if (/playit connected|tunnel state updated|New TCP Client/i.test(line)) { agent.state = 'connected'; agent.lastError = null; }
     else if (/timeout waiting for pong|failed to authenticate|failed to reload_control_addr/i.test(line) && agent.state === 'connected') agent.state = 'reconnecting';
     else if (/ERROR/.test(line) && !/failed to (send initial ping|ping tunnel server)|NetworkUnreachable/i.test(line)) {
@@ -259,8 +273,10 @@ const isUdp = (t) => t.port_type === 'udp';
 const isBoth = (t) => t.port_type === 'both';
 const isJava = (t) => !isUdp(t) && !isBoth(t); // the Minecraft Java (TCP) tunnel, never a voice or Bedrock one
 function portOf(t) {
-  const f = (t.agent_config?.fields || []).find((x) => /port/i.test(x.name));
-  return f ? Number(f.value) : null;
+  const f = (t.agent_config?.fields || []).find((x) => /^local_port$/i.test(x.name)) || (t.agent_config?.fields || []).find((x) => /port/i.test(x.name));
+  if (f) return Number(f.value);
+  const v = t.local_port ?? t.origin?.data?.local_port ?? t.origin?.local_port;
+  return v != null ? Number(v) : null;
 }
 async function refresh() {
   if (!linked()) return;
@@ -288,16 +304,8 @@ async function ensureTunnel({ port, name, tunnelId }, onStep) {
   if (!id) {
     onStep && onStep('Creating public tunnel…');
     try {
-      const tname = `Astra ${String(name || 'server')}`.replace(/[^\x20-\x7e]/g, '').slice(0, 40);
-      const config = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
-      let made;
-      try { made = await call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: 'minecraft-java' }, origin: { type: 'agent', data: { agent_id: agentId, config } }, enabled: true, alloc: null, firewall_id: null }); }
-      catch (e) {
-        if (!REQUEST_PROBLEM.test(e.message)) throw e;
-        // the way the playit.gg website asks today (in case the older form stops being accepted)
-        made = await call('/v1/tunnels/create', { name: tname, protocol: { type: 'tunnel-type', details: 'minecraft-java' }, origin: { type: 'agent', data: { agent_id: agentId, config } }, endpoint: { type: 'region', details: { region: 'global', port: null } }, enabled: true });
-      }
-      id = made?.id || made;
+      if (!agentId) await refresh();
+      id = await createPortTunnel(SIDE.java, `Astra ${String(name || 'server')}`, port);
     } catch (e) {
       // e.g. account limits: the player can still add it on playit.gg by hand — Astra picks it up by port.
       push('hosted:playit-manual', { port, name, reason: e.message });
@@ -322,7 +330,7 @@ async function udpAddress(t) {
   if (/:\d{1,5}$/.test(t.display_address || '')) return t.display_address;
   // no port in the display address: read the public port from playit.gg's full tunnel data
   try {
-    const d = await call('/agents/rundata', {});
+    const d = await call('/v1/agents/rundata', {}).catch(() => call('/agents/rundata', {}));
     const v = (d.tunnels || []).find((x) => x.id === t.id);
     if (v?.port?.from) return `${v.custom_domain || v.assigned_domain || String(t.display_address).replace(/:\d+$/, '')}:${v.port.from}`;
   } catch {}
@@ -334,6 +342,8 @@ async function udpAddress(t) {
 //   bedrock — "Minecraft Bedrock (NetherNet)" = nethernet            (what Geyser 2.12+ uses)
 // A tunnel the player made by hand counts too, whether playit.gg lists it as UDP or TCP+UDP.
 const SIDE = {
+  // the main Minecraft Java tunnel of a server
+  java: { label: 'Minecraft', portType: 'tcp', tunnelType: 'minecraft-java', oldType: 'minecraft-java', ports: { type: 'custom-tcp', details: 1 }, is: (t) => isJava(t), kind: 'Minecraft Java' },
   voice: { label: 'voice chat', portType: 'udp', tunnelType: 'mc-simple-voice-chat', oldType: 'minecraft-bedrock', ports: { type: 'custom-udp', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'UDP',
     manual: (port) => `On playit.gg: Add Tunnel → “MC: Simple Voice Chat” (free) → Local Port ${port} → Add. Then press Restart tunnel in Astra — it finds that tunnel and sets voice_host for you.` },
   bedrock: { label: 'Bedrock', portType: 'both', tunnelType: 'nethernet', oldType: 'nethernet', ports: { type: 'custom-both', details: 1 }, is: (t) => isUdp(t) || isBoth(t), kind: 'NetherNet',
@@ -355,11 +365,13 @@ const SIDE = {
  *   3. POST /v1/tunnels/create in the older form (the one that makes the Minecraft Java tunnel)
  *   4. the older form with a custom port
  */
-const REQUEST_PROBLEM = /validation|path-not-found|TunnelTypeRequires|InvalidOrigin|InvalidPortCount|DefaultAgentNotSupported|InvalidTunnelConfig|^playit\.gg: auth\b/i;
+const REQUEST_PROBLEM = /validation|path-not-found|TunnelTypeRequires|InvalidOrigin|InvalidPortCount|DefaultAgentNotSupported|InvalidTunnelConfig|InvalidTunnelType|^playit\.gg: auth\b|answered HTTP 4\d\d|missing field|unknown variant/i;
 async function createPortTunnel(k, name, port) {
   const tname = String(name).replace(/[^\x20-\x7e]/g, '').slice(0, 40);
   const fields = { fields: [{ name: 'local_ip', value: '127.0.0.1' }, { name: 'local_port', value: String(port) }] };
   const tries = [
+    // the official agent's own request (playit-agent api_client: POST /tunnels/create) — the most likely to work
+    ...(k.tunnelType === 'minecraft-java' ? [() => call('/tunnels/create', { name: tname, tunnel_type: 'minecraft-java', port_type: 'tcp', port_count: 1, origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: port } }, enabled: true, alloc: null, firewall_id: null, proxy_protocol: null })] : []),
     () => call('/v1/tunnels/create', { name: tname, protocol: { type: 'tunnel-type', details: k.tunnelType }, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, endpoint: { type: 'region', details: { region: 'global', port: null } }, enabled: true }),
     () => call('/tunnels/create', { name: tname, tunnel_type: null, port_type: k.portType, port_count: 1, origin: { type: 'agent', data: { agent_id: agentId, local_ip: '127.0.0.1', local_port: port } }, enabled: true, alloc: null, firewall_id: null, proxy_protocol: null }),
     () => call('/v1/tunnels/create', { name: tname, ports: { type: 'tunnel-type', details: k.oldType }, origin: { type: 'agent', data: { agent_id: agentId, config: fields } }, enabled: true, alloc: null, firewall_id: null }),
@@ -411,6 +423,7 @@ async function waitConnected(ms = 45000) {
     if (authProblem) throw new Error(authProblem);
     if (agent?.state === 'connected') return;
     if (!agent?.proc && agent?.lastError) throw new Error(agent.lastError);
+    if (agent?.proc && Date.now() - (agent.since || Date.now()) > 20000) { try { await refresh(); agent.state = 'connected'; emit(); return; } catch {} }
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error('The playit.gg agent couldn’t connect. Check your internet connection (or firewall) and use “Restart tunnel”.');
@@ -419,6 +432,7 @@ async function waitConnected(ms = 45000) {
 // ---------- used by hostserver.js ----------
 /** Create Server / Start / Restart tunnel: link (once), start the agent, make the tunnel, get the address. */
 async function setupServer({ id, port, name, tunnelId, voice, bedrock, pack, main = 'java' }, onStep) {
+  clearTimeout(idleTimer);
   users.set(id, { port, name });
   try {
     await waitForLink(onStep);
@@ -436,9 +450,12 @@ async function setupServer({ id, port, name, tunnelId, voice, bedrock, pack, mai
   } finally { emit(); }
 }
 /** The server no longer needs its tunnel (stopped, or "Stop tunnel"): stop the agent when nothing else needs it. */
+let idleTimer = null;
 function releaseServer(id) {
   users.delete(id);
-  if (!users.size) stopAgent();
+  clearTimeout(idleTimer);
+  // kept for 3 minutes: a restart or the next start reuses the running agent instead of reconnecting from scratch
+  if (!users.size) idleTimer = setTimeout(() => { if (!users.size) stopAgent(); }, 3 * 60 * 1000);
   emit();
 }
 /** Tunnel state for a server's dashboard. Never "online" unless the agent is connected and the server runs. */

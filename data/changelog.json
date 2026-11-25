@@ -1,6 +1,56 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.1",
+    "date": "2026-11-25",
+    "title": "Safer modpack servers and steadier playit.gg",
+    "groups": [
+      {
+        "area": "Hosting",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "Game-only mods are kept off modpack servers more reliably: CurseForge’s own “Client” tag is now read, so client-only mods that aren’t on Modrinth are turned off too (on top of Modrinth’s client-side flag, Fabric’s environment and Forge’s clientSideOnly)."
+          },
+          {
+            "type": "feature",
+            "text": "If a server still crashes because of a game-only mod (“invalid dist DEDICATED_SERVER”, net/minecraft/client classes), Astra finds the mod from the crash, turns it off and starts the server again by itself."
+          },
+          {
+            "type": "improvement",
+            "text": "Server mods CurseForge keeps off app downloads are fetched automatically, like for instances."
+          },
+          {
+            "type": "bugfix",
+            "text": "playit.gg: the Minecraft tunnel is now created the way playit.gg’s own agent does it, with the older ways as fallbacks — tunnels that failed to create now work."
+          },
+          {
+            "type": "bugfix",
+            "text": "playit.gg: short outages on playit.gg’s side (HTTP 502 “cloudflare origin error”, timeouts) are retried instead of failing the server start."
+          },
+          {
+            "type": "improvement",
+            "text": "playit.gg: the agent keeps running for 3 minutes after a server stops, so restarts reuse it instead of reconnecting from scratch."
+          },
+          {
+            "type": "improvement",
+            "text": "playit.gg: when players reach your address but the server on this PC doesn’t answer, Astra says so (still starting, or Windows Firewall)."
+          }
+        ]
+      },
+      {
+        "area": "Launcher",
+        "entries": [
+          {
+            "type": "bugfix",
+            "text": "An update no longer restarts Astra while you’re hosting a server — it installs when you close Astra."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.17.0",
     "date": "2026-11-24",
     "title": "Content Hub, a new instance page and Instance Settings",

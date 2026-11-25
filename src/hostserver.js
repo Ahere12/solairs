@@ -39,6 +39,7 @@ async function bdsDownload() {
 const root = () => path.join(paths.getRoot(), 'hosted');
 const indexFile = () => path.join(root(), 'servers.json');
 const crashTimes = new Map(); // id -> recent crash times (auto restart)
+const autoFixed = new Map(); // id -> files Astra already turned off after a game-only crash (never twice)
 // Add-ons in their own files (Astra Connect: BlueMap…) hook in here instead of growing this file.
 const hooks = { beforeStart: new Set(), line: new Set() };
 /** Merges a few fields into a server's saved settings (for add-ons; the keys are theirs). */
@@ -971,9 +972,12 @@ async function diagnose(id) {
   // client-only mods (they crash a server)
   const client = text.match(/(?:Environment type SERVER is invalid|invalid dist DEDICATED_SERVER|Attempted to load class net\/minecraft\/client|ClassNotFoundException: net\.minecraft\.client|NoClassDefFoundError: net\/minecraft\/client)[\s\S]{0,4000}/);
   if (client) {
-    const who = (client[0].match(/(?:for mod|from mod|Mod '?)\s*'?([\w.-]+)'?/i) || text.match(/Mixin apply for mod ([\w.-]+) failed/) || [])[1];
+    const BASE = /^(minecraft|forge|neoforge|fml|fmlloader|fabricloader|fabric-api|javafmllanguage|lowcodelanguage|mclanguage|kotlinforforge)$/i;
+    const fromStack = [...client[0].matchAll(/(?:TRANSFORMER|MOD|LAYER PLUGIN)\/([\w.-]+)@/g)].map((x) => x[1]).find((x) => !BASE.test(x));
+    const who = fromStack || (client[0].match(/(?:for mod|from mod|Mod '?)\s*'?([\w.-]+)'?/i) || text.match(/Mixin apply for mod ([\w.-]+) failed/) || [])[1];
     const f = who ? fileForMod(m, who) : null;
-    addFinding('client', { text: `${who ? who + ' is' : 'A mod is'} made only for the game, not for servers.`, fix: f ? { type: 'disable', file: f, label: `Turn off ${who}` } : null });
+    // auto: Astra turns it off and starts the server again by itself (once per file), see the 'close' handler
+    addFinding('client', { auto: !!f, text: `${who ? who + ' is' : 'A mod is'} made only for the game, not for servers.`, fix: f ? { type: 'disable', file: f, label: `Turn off ${who}` } : null });
   }
   for (const mm of text.matchAll(/Mixin apply for mod ([\w.-]+) failed/g)) { const f = fileForMod(m, mm[1]); addFinding('mixin:' + mm[1], { text: `${mm[1]} failed to load (it may not match this Minecraft version or another mod).`, fix: f ? { type: 'disable', file: f, label: `Turn off ${mm[1]}` } : null }); }
   if (/Found duplicate mods|is present multiple times|Duplicate mods? found/i.test(text)) addFinding('dupe', { text: 'The same mod is on the server twice.', fix: { type: 'dedupe', label: 'Remove the extra copies' } });
@@ -1284,7 +1288,21 @@ async function start(id, resolveJava) {
     if (crashed) {
       diagnose(id)
         .catch(() => ({ id, name: m.name, findings: [], errors: [], hasLog: true })) // still tell the player it stopped
-        .then((d) => { push('hosted:crash', d); notifyDiscord(id, 'crash', `⚠️ **${m.name}** stopped unexpectedly${d.findings[0] ? ': ' + d.findings[0].text : '.'}`); });
+        .then(async (d) => {
+          const a = d.findings.find((f) => f.auto && f.fix?.type === 'disable');
+          const done = autoFixed.get(id) || new Set();
+          if (a && !done.has(a.fix.file) && !running.has(id)) {
+            done.add(a.fix.file); autoFixed.set(id, done);
+            try {
+              await applyFix(id, a.fix);
+              log(id, `[Astra] ${a.text} Turned off ${a.fix.file} and starting the server again…`);
+              push('toast', { type: 'info', text: `${m.name}: turned off ${a.fix.file} (game-only mod) and restarting` });
+              setTimeout(() => { if (!running.has(id)) start(id, resolveJava).catch((e) => push('toast', { type: 'error', text: 'Restart failed: ' + e.message })); }, 1500);
+              return;
+            } catch (e) { log(id, '[Astra] Couldn’t turn it off: ' + e.message); }
+          }
+          push('hosted:crash', d); notifyDiscord(id, 'crash', `⚠️ **${m.name}** stopped unexpectedly${d.findings[0] ? ': ' + d.findings[0].text : '.'}`);
+        });
     } else if (!restart) notifyDiscord(id, 'stop', `🔴 **${m.name}** is offline.`);
     if (restart) start(id, resolveJava).catch((e) => push('toast', { type: 'error', text: 'Restart failed: ' + e.message }));
     // "Restart after a crash" (Settings): try again, but not over and over (at most 3 times in 10 minutes)
@@ -2422,9 +2440,11 @@ function toggleContent(id, file) {
 // ---------- CurseForge for hosted servers ----------
 // CurseForge results carry ids like "cf:238222" (mods/plugins) and modpack versions like "cf:<modId>:<fileId>", so
 // the rest of hosting (installed marks, setup codes, the content list) works the same for both sources.
-// CurseForge doesn't say which mods are client-only, so every jar is checked after download (wontRun) and removed
-// if it can't run on a server.
-const cfLoader = (m) => (m.software === 'quilt' ? 'fabric' : m.software); // Quilt runs Fabric mods; few are tagged Quilt
+// CurseForge files say client/server through their environment tags (cfClientOnly) — when the author set them. Every jar
+// is also checked after download (wontRun) and turned off if it can't run on a server.
+const cfLoader = (m) => (m.software === 'quilt' ? 'fabric' : m.software);
+/** CurseForge's own environment tags: true when the author marked this file for the game client only. */
+const cfClientOnly = (f) => { const v = (f?.gameVersions || []).map((x) => String(x).toLowerCase()); return v.includes('client') && !v.includes('server'); }; // Quilt runs Fabric mods; few are tagged Quilt
 async function searchContentCf(m, query = '', offset = 0) {
   const cfm = require('./curseforge');
   const plugins = SOFTWARE[m.software].kind === 'plugins';
@@ -2442,13 +2462,13 @@ async function installContentCf(m, modId, fileId = null, quiet = false, seen = n
   if (mod.classId === 4471) throw new Error(`${mod.name} is a modpack — pick it when you create a server (Server type → Modpack).`);
   const f = fileId ? (await cfm.request(`/mods/${modId}/files/${fileId}`)).data : await cfm.serverFile(modId, plugins ? {} : { mc: m.mc, loader: cfLoader(m) });
   if (!f) { if (quiet) return []; throw new Error(`${mod.name} has no file for ${SOFTWARE[m.software].name} ${m.mc} on CurseForge.`); }
-  let url; try { url = cfm.urlOf(f, mod); } catch (e) { if (quiet) return []; throw e; }
+  if (!plugins && cfClientOnly(f)) { if (quiet) return []; throw new Error(`${mod.name} only works in the game, not on servers (its author marked it client-side on CurseForge).`); }
   const dir = contentDir(m); fs.mkdirSync(dir, { recursive: true });
   const name = cfm.safeName(f.fileName), dest = path.join(dir, name);
   const rec = readJSON(recordFile(m), {});
   const key = 'cf:' + modId;
   if (rec[key]?.file && rec[key].file !== name) fs.rmSync(path.join(dir, rec[key].file), { force: true });
-  await download(url, dest, { sha1: cfm.sha1Of(f) });
+  try { await cfm.getFile(f, mod, dest); } catch (e) { if (quiet) return []; throw e; }
   const why = wontRun(m, dest);
   if (why) { fs.rmSync(dest, { force: true }); if (quiet) return []; throw new Error(`${mod.name}: ${why}.`); }
   const dupes = sameModFiles(dir, dest);
@@ -2497,8 +2517,10 @@ async function installModpackCf(m, versionId, onStep) {
     if (x.downloadUrl) await download(x.downloadUrl, dest, { sha1 });
     else if (sha1 && mrUrls[sha1]) { await download(mrUrls[sha1], dest, { sha1 }); onStep && onStep(`Got ${pm?.name || name} from Modrinth (CurseForge doesn’t allow downloads of it)`); }
     else if (copyLocalCopy(sha1, name, dest)) onStep && onStep(`Copied ${pm?.name || name} from your instance (CurseForge doesn’t allow downloads of it)`);
+    else if (await cfm.getFile(x, pm, dest).then(() => true, () => false)) onStep && onStep(`Got ${pm?.name || name} through the CurseForge website`);
     else { manual.push({ name: pm?.name || x.fileName, file: name, sha1: sha1 || null, page: cfm.pageOf(x, pm) }); continue; }
     rec['cf:' + x.modId] = { file: name, version: x.displayName || '', title: pm?.name || name, source: 'curseforge', pack: true };
+    if (cfClientOnly(x)) { try { fs.renameSync(dest, dest + '.disabled'); clientOnly.push(name); onStep && onStep(`Turned off ${pm?.name || name} — its author marked it game-only on CurseForge`); } catch {} }
   }
   writeJSON(recordFile(m), rec);
   cfm.copyOverrides(zip, over, overrides, m.dir);

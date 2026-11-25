@@ -11,18 +11,28 @@ const Updater = {
   apply(s) {
     const was = this.state.status;
     this.state = s || { status: 'idle' };
-    if (s.status === 'downloading' && was !== 'downloading') this.dismissed = false;
+    if (s.status === 'downloading' && was !== 'downloading') {
+      this.dismissed = false;
+      // hosting a server: don't cover Astra with the update screen (the sidebar card shows the download instead)
+      api('hosted:list').then((list) => { this.hosting = list.some((x) => x.state && x.state !== 'offline'); if (this.hosting) $('#update-screen')?.remove(); this.render(); }).catch(() => {});
+    }
     // Like SKlauncher: updates install themselves on a full-screen "Updating Astra" screen and Astra restarts.
     // While a game is running nothing is forced: the sidebar card waits, and the update installs when Astra closes.
-    const gameRunning = State.runs && Object.values(State.runs).some((r) => r.running);
+    // ...and the same while a server you host is running: restarting Astra would stop it.
+    const gameRunning = (State.runs && Object.values(State.runs).some((r) => r.running)) || this.hosting;
     if (!gameRunning && ['downloading', 'ready', 'installing'].includes(s.status)) this.screen(s);
     else if (s.status === 'installing') this.screen(s);
     else if ($('#update-screen') && s.status === 'error') this.screen(s);
-    if (s.status === 'ready' && was !== 'ready') {
-      if (!gameRunning) setTimeout(() => api('update:install').catch(() => {}), 1400);
-      else toast(`Astra ${s.version} is ready — it installs when you close Astra`, 'info', 6000);
-    }
+    if (s.status === 'ready' && was !== 'ready') this.autoInstall(s);
     this.render();
+  },
+  /** Ready: restart into the new version — unless a game or a hosted server is running (then: when Astra closes). */
+  async autoInstall(s) {
+    const servers = await api('hosted:list').catch(() => []);
+    this.hosting = servers.some((x) => x.state && x.state !== 'offline');
+    const busy = this.hosting || (State.runs && Object.values(State.runs).some((r) => r.running));
+    if (busy) { $('#update-screen')?.remove(); toast(`Astra ${s.version} is ready — it installs when you close Astra (a game or server is running)`, 'info', 7000); this.render(); return; }
+    setTimeout(() => api('update:install').catch(() => {}), 1400);
   },
 
   /** The full-screen updater: logo, title, progress bar and a status line. */
