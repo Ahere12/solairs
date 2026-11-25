@@ -73,9 +73,9 @@ function instIcon(inst, size = '') {
   const mc = typeof McIcons !== 'undefined' ? (ic ? McIcons.url(ic) : McIcons.defaultFor(inst)) : null;
   let inner;
   if (mc) return `<div class="inst-icon mc ${size}"><img src="${mc}" alt=""></div>`;
-  if (!ic) inner = '🧱';
+  if (!ic) inner = icon('box'); // real block icon shows once the textures are loaded
   else if (ic === 'sun') inner = SUN_SVG;
-  else if (ic.startsWith('mc:')) inner = '🧱';
+  else if (ic.startsWith('mc:')) inner = icon('box');
   else if (/^(data:|https?:)/.test(ic)) inner = `<img src="${esc(ic)}" alt="">`;
   else inner = esc(ic);
   return `<div class="inst-icon ${size}">${inner}</div>`;
@@ -222,6 +222,12 @@ async function play(instanceId, opts = {}) {
   State.launch[instanceId] = { stage: 'Starting', progress: null };
   Bus.emit('launch', instanceId);
   await saveSettings({ selectedInstance: instanceId });
+  // a modpack still missing files CurseForge won't give to apps: get them first, or the game crashes on start
+  const pending = State.instances.find((i) => i.id === instanceId)?.modpack?.manual;
+  if (pending?.length) {
+    State.launch[instanceId] = { stage: `Getting ${pending.length} missing mod${pending.length === 1 ? '' : 's'}`, progress: null }; Bus.emit('launch', instanceId);
+    try { const r = await api('curseforge:autoManual', instanceId); await refreshInstances(); if (r.still.length) toast(`${r.still.length} mod${r.still.length === 1 ? '' : 's'} still missing — the game may not start. Open the instance to retry.`, 'warn', 8000); } catch (e) { toastErr(e); }
+  }
   try { await api('launch:start', instanceId, opts); }
   catch (e) {
     // the main process already pushed the error state (and clears it after a few seconds)
@@ -442,7 +448,7 @@ async function openNewInstance(preset = {}) {
   let loader = preset.loader || 'vanilla';
   // until the player picks one, the icon follows the loader: grass block for vanilla, crafting table for modded
   let iconPicked = !!preset.icon;
-  const autoIcon = () => (McIcons.ready() ? (loader === 'vanilla' ? 'mc:grass_block' : 'mc:crafting_table') : '🧱');
+  const autoIcon = () => (loader === 'vanilla' ? 'mc:grass_block' : 'mc:crafting_table');
   let chosenIcon = preset.icon || autoIcon();
   const drawIcon = () => (m.$('#ni-icon').innerHTML = instIcon({ icon: chosenIcon }, 'lg'));
   drawIcon();
@@ -631,31 +637,41 @@ function cfImportDialog(file, info) {
   };
 }
 
-/** Files the author only allows on the CurseForge website: open each page, then Astra finds them in Downloads. */
+/**
+ * Files CurseForge won't hand to apps. Astra installs them by itself as soon as this opens (Modrinth copy, or
+ * CurseForge's own website download in the background); the list below is only for what's still left after that.
+ */
 function cfManualDialog(instanceId, files) {
   const m = modal({
-    title: `${files.length} file${files.length === 1 ? '' : 's'} to download yourself`,
-    body: `<p class="muted small">Everything else is installed. ${files.length === 1 ? 'This mod’s author only allows' : 'These mods’ authors only allow'} downloads from the CurseForge website. Click <b>Download</b> for each one, save it to your Downloads folder, then click <b>Check Downloads</b> — Astra checks they’re the right files and adds them.</p>
+    title: `Installing ${files.length} more file${files.length === 1 ? '' : 's'}`,
+    body: `<p class="muted small" id="cfm-text">${files.length === 1 ? 'This mod’s author only allows' : 'These mods’ authors only allow'} downloads from the CurseForge website, so Astra is getting ${files.length === 1 ? 'it' : 'them'} through the website for you. If CurseForge shows a “verify you are human” window, tick it once.</p>
       <div class="stack" style="gap:4px" id="cfm-list"></div>`,
-    footer: `<button class="btn" data-later>Later</button><button class="btn" data-pick>${icon('folder')}Pick files…</button><button class="btn primary" data-check>${icon('refresh')}Check Downloads</button>`,
+    footer: `<button class="btn" data-later>Close</button><button class="btn" data-pick>${icon('folder')}Pick files…</button><button class="btn primary" data-check>${icon('download')}Install automatically</button>`,
   });
-  const draw = (list) => {
-    m.$('#cfm-list').innerHTML = list.map((f, i) => `<div class="row hs-person" style="gap:8px"><span class="grow ellipsis"><b>${esc(f.name)}</b> <span class="faint small mono">${esc(f.file)}</span></span><button class="btn sm" data-dl="${i}">${icon('external')}Download</button></div>`).join('') || '<div class="ok-text">All files added.</div>';
+  const draw = (list, busy) => {
+    m.$('#cfm-list').innerHTML = list.map((f, i) => `<div class="row hs-person" style="gap:8px">${busy ? icon('refresh', 'spin') : icon('alert')}<span class="grow ellipsis"><b>${esc(f.name)}</b> <span class="faint small mono">${esc(f.file)}</span></span>${busy ? '' : `<button class="btn sm ghost" data-dl="${i}" title="Open the CurseForge page">${icon('external')}</button>`}</div>`).join('') || `<div class="ok-text">${icon('check')} All files installed.</div>`;
     $$('[data-dl]', m.el).forEach((b) => (b.onclick = () => api('shell:open', list[+b.dataset.dl].page)));
   };
-  draw(files);
-  const apply = async (paths) => {
-    try {
-      const r = await api('curseforge:addManual', instanceId, paths || []);
-      if (r.added.length) toast(`Added ${r.added.length} file${r.added.length === 1 ? '' : 's'}`);
-      if (!r.still.length) { m.close(); toast('Modpack complete — ready to play'); return; }
-      draw(r.still);
-      if (!r.added.length) toast('Not found yet — download the files, then check again', 'info');
-    } catch (e) { toastErr(e); }
+  const done = (r) => {
+    refreshInstances();
+    if (!r.still.length) { m.close(); toast('Modpack complete — ready to play'); return; }
+    draw(r.still);
+    m.$('#cfm-text').textContent = `${r.still.length} file${r.still.length === 1 ? '' : 's'} couldn’t be downloaded automatically (CurseForge may be down or blocked the request). Try again, or pick the files if you already have them.`;
   };
-  m.$('[data-check]').onclick = () => apply();
+  const auto = async () => {
+    const b = m.$('[data-check]'); if (!b || b.disabled) return;
+    b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Installing…`;
+    draw(files, true);
+    try { done(await api('curseforge:autoManual', instanceId)); } catch (e) { toastErr(e); draw(files); }
+    if (b.isConnected) { b.disabled = false; b.innerHTML = `${icon('download')}Try again`; }
+  };
+  const apply = async (paths) => {
+    try { const r = await api('curseforge:addManual', instanceId, paths || []); if (r.added.length) toast(`Added ${r.added.length} file${r.added.length === 1 ? '' : 's'}`); done(r); } catch (e) { toastErr(e); }
+  };
+  auto();
+  m.$('[data-check]').onclick = () => auto();
   m.$('[data-pick]').onclick = async () => { const p = await api('dialog:open', { title: 'Pick the downloaded files', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Mods & packs', extensions: ['jar', 'zip'] }] }).catch(() => []); if (p?.length) apply(p); };
-  m.$('[data-later]').onclick = () => { m.close(); toast('You can finish this later from the instance page', 'info'); };
+  m.$('[data-later]').onclick = () => m.close();
 }
 
 /* ---------- choose instance dialog ---------- */
@@ -735,7 +751,7 @@ function hostInstanceDialog(inst) {
 function pickIcon(current, { allowUpload = false } = {}) {
   return new Promise((resolve) => {
     let done = false, tab = 'mc', q = '';
-    const m = modal({ title: 'Choose an icon', wide: true, body: `<div class="row" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button data-pt="mc" class="on">Minecraft</button><button data-pt="emoji">Emoji</button></div><div class="search grow">${icon('search')}<input type="search" id="pi-q" placeholder="Search icons…"></div>${allowUpload ? `<button class="btn sm" data-up>${icon('upload')}Upload image…</button>` : ''}</div><div id="pi-body"></div>`,
+    const m = modal({ title: 'Choose an icon', wide: true, body: `<div class="row" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button data-pt="mc" class="on">Minecraft</button></div><div class="search grow">${icon('search')}<input type="search" id="pi-q" placeholder="Search icons…"></div>${allowUpload ? `<button class="btn sm" data-up>${icon('upload')}Upload image…</button>` : ''}</div><div id="pi-body"></div>`,
       onClose: () => { if (!done) resolve(null); } });
     const finish = (v) => { done = true; m.close(); resolve(v); };
     const draw = () => {

@@ -134,7 +134,8 @@
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
-    "lucide-static": "^0.577.0"
+    "lucide-static": "^0.577.0",
+    "simple-icons": "^13.21.0"
   },
   "homepage": "https://github.com/Ahere12/solairs",
   "desktopName": "solaris.desktop"

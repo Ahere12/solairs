@@ -71,7 +71,7 @@ async function categories(type = 'mod') {
   const classId = CLASS[type] || 6;
   if (!catCache.has(classId)) {
     catCache.set(classId, cf('/categories?' + new URLSearchParams({ gameId: String(GAME), classId: String(classId) }))
-      .then((r) => (r.data || []).filter((c) => c.parentCategoryId === classId).map((c) => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)))
+      .then((r) => (r.data || []).filter((c) => c.parentCategoryId === classId).map((c) => ({ id: c.id, name: c.name, icon: c.iconUrl || null })).sort((a, b) => a.name.localeCompare(b.name)))
       .catch((e) => { catCache.delete(classId); throw e; }));
   }
   return catCache.get(classId);
@@ -113,6 +113,18 @@ function recordFile(inst) { return path.join(paths.instances(), inst.id, 'cursef
 function readRecord(inst) { try { return JSON.parse(fs.readFileSync(recordFile(inst), 'utf8')); } catch { return {}; } }
 function writeRecord(inst, r) { fs.writeFileSync(recordFile(inst), JSON.stringify(r, null, 2)); }
 
+/**
+ * Downloads a CurseForge file to `target`. Files the author keeps off the API come from Modrinth (same SHA-1) or
+ * through CurseForge's website download instead of failing.
+ */
+async function getFile(f, mod, target) {
+  if (f.downloadUrl) return download(f.downloadUrl, target, { sha1: sha1Of(f) });
+  const sha1 = sha1Of(f);
+  const mirror = sha1 ? (await modrinthMirror([sha1]))[sha1] : null;
+  if (mirror) { try { return await download(mirror, target, { sha1 }); } catch {} }
+  const r = await require('./cfweb').fetchFiles([{ name: mod?.name || f.fileName, file: f.fileName, sha1, modId: f.modId, fileId: f.id, page: pageOf(f, mod), target }], { label: `Getting ${mod?.name || f.fileName} from CurseForge` });
+  if (r.still.length) urlOf(f, mod); // throws the "only on the website" error with the page link
+}
 async function bestFile(modId, inst) {
   const loader = inst.loader?.type;
   const list = (await cf(`/mods/${modId}/files?` + new URLSearchParams({ gameVersion: inst.versionId, pageSize: '50', ...(LOADER[loader] ? { modLoaderType: String(LOADER[loader]) } : {}) }))).data;
@@ -138,7 +150,7 @@ async function install(instanceId, { projectId, fileId, world } = {}, seen = new
   const record = readRecord(inst);
   const prev = record[String(projectId)];
   if (prev?.file && prev.file !== f.fileName) { for (const n of [prev.file, prev.file + '.disabled']) try { fs.rmSync(path.join(dir, n), { force: true }); } catch {} }
-  await download(urlOf(f, mod), path.join(dir, safeName(f.fileName)), { sha1: sha1Of(f) });
+  await getFile(f, mod, path.join(dir, safeName(f.fileName)));
   try { fs.rmSync(path.join(dir, f.fileName + '.disabled'), { force: true }); } catch {}
   record[String(projectId)] = { file: f.fileName, fileId: String(f.id), name: mod.name, type: Object.keys(CLASS).find((k) => CLASS[k] === mod.classId) || 'mod' };
   writeRecord(inst, record);
@@ -300,7 +312,10 @@ async function installModpack({ projectId, fileId, file }) {
     const missing = tasks.filter((t) => !fs.existsSync(t.path));
     if (missing.length) throw new Error(`${missing.length} downloaded file(s) went missing during the install. Try again.`);
     instances.update(inst.id, { modpack: { ...inst.modpack, manual: manual.length ? manual : undefined, gone: gone.length ? gone : undefined } });
-    return { ...instances.get(inst.id), cfResult: { installed: tasks.length, manual, gone, overrides: overrides.length } };
+    // files CurseForge won't give to apps: fetch them through CurseForge's website download, no trip to the browser
+    let left = manual;
+    if (manual.length) { try { left = (await autoManual(inst.id)).still; } catch (e) { console.error('[Astra] CurseForge website downloads:', e.message); } }
+    return { ...instances.get(inst.id), cfResult: { installed: tasks.length + (manual.length - left.length), manual: left, gone, overrides: overrides.length } };
   } catch (e) {
     if (created) { try { await instances.remove(created.id); } catch {} }
     throw e;
@@ -341,6 +356,25 @@ async function addManualFiles(instanceId, extraPaths = []) {
   instances.update(inst.id, { modpack: { ...inst.modpack, manual: still.length ? still : undefined } });
   return { added, still };
 }
+/**
+ * Installs the files a modpack still misses without the player doing anything: the identical file from Modrinth
+ * when it's there, otherwise through CurseForge's own website download (src/cfweb.js). Returns { added, still }.
+ */
+async function autoManual(instanceId) {
+  const inst = instances.get(instanceId);
+  const want = inst.modpack?.manual || [];
+  if (!want.length) return { added: [], still: [] };
+  const items = want.map((w) => ({ ...w, target: path.join(inst.gameDir, w.dir, w.file) }));
+  const mirror = await modrinthMirror(items.map((i) => i.sha1).filter(Boolean));
+  const left = [];
+  for (const it of items) {
+    const u = it.sha1 && mirror[it.sha1];
+    if (u) { try { await download(u, it.target, { sha1: it.sha1 }); continue; } catch {} }
+    left.push(it);
+  }
+  if (left.length) await require('./cfweb').fetchFiles(left, { label: `Finishing ${inst.modpack.name}` });
+  return addManualFiles(instanceId); // checks every file on disk (SHA-1) and updates the list
+}
 async function modpackVersions(instanceId) {
   const inst = instances.get(instanceId);
   const pid = inst.modpack?.projectId;
@@ -357,7 +391,7 @@ async function updateModpack(instanceId, fileId) {
   try {
     const f = (await cf(`/mods/${pid}/files/${fileId}`)).data;
     const zipPath = path.join(paths.cache(), 'modpacks', safeName(f.fileName));
-    await download(urlOf(f), zipPath, { sha1: sha1Of(f) });
+    await getFile(f, null, zipPath);
     const zip = new AdmZip(zipPath);
     const man = JSON.parse(zip.readAsText('manifest.json'));
     const ids = (man.files || []).filter((x) => x.required !== false).map((x) => x.fileID);
@@ -376,9 +410,11 @@ async function updateModpack(instanceId, fileId) {
     const tasks = meta.map((x) => {
       const dir = CLASS_DIR[mods[x.modId]?.classId] || 'mods';
       record[String(x.modId)] = { file: x.fileName, fileId: String(x.id), name: mods[x.modId]?.name, type: 'mod', pack: true };
-      return { url: urlOf(x), path: path.join(root, dir, x.fileName), sha1: sha1Of(x), size: x.fileLength };
+      return { url: x.downloadUrl || null, x, path: path.join(root, dir, x.fileName), sha1: sha1Of(x), size: x.fileLength };
     }).filter((t) => !fs.existsSync(t.path + '.disabled'));
-    await downloadAll(tasks, { concurrency: 8, onProgress: (d, t) => push('task', { id: 'modpack', label: `Updating ${inst.name}`, progress: d / t, detail: `${d}/${t} files` }) });
+    await downloadAll(tasks.filter((t) => t.url), { concurrency: 8, onProgress: (d, t) => push('task', { id: 'modpack', label: `Updating ${inst.name}`, progress: d / t, detail: `${d}/${t} files` }) });
+    // files CurseForge keeps off the API: Modrinth copy or the website download (getFile), not a failed update
+    for (const t of tasks.filter((x) => !x.url)) { if (!fs.existsSync(t.path)) await getFile(t.x, mods[t.x.modId], t.path); }
     const over = (man.overrides || 'overrides').replace(/\/$/, '') + '/';
     const KEEP = /^(options\.txt|optionsof\.txt|servers\.dat|saves\/)/i;
     for (const e of zip.getEntries()) {
@@ -415,7 +451,7 @@ async function installMap(instanceId, { projectId, fileId }) {
   const f = fileId ? (await cf(`/mods/${projectId}/files/${fileId}`)).data : (await cf(`/mods/${projectId}/files?pageSize=20`)).data[0];
   if (!f) throw new Error(`${mod.name} has no files.`);
   const tmp = path.join(paths.cache(), 'maps', `${projectId}-${f.id}.zip`);
-  await download(urlOf(f), tmp, { sha1: sha1Of(f) });
+  await getFile(f, mod, tmp);
   const zip = new AdmZip(tmp);
   const levels = zip.getEntries().filter((e) => /(^|\/)level\.dat$/.test(e.entryName) && !e.isDirectory);
   if (!levels.length) throw new Error(`${mod.name}: the download doesn’t contain a Minecraft world (no level.dat).`);
@@ -446,4 +482,4 @@ async function serverFile(modId, { mc, loader } = {}) {
   return list.find((f) => f.releaseType === 1) || list[0] || null;
 }
 
-module.exports = { categories, installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };
+module.exports = { autoManual, categories, installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };

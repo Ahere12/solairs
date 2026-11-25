@@ -176,6 +176,11 @@ const McIcons = {
           return true;
         } catch (e) { console.warn('mcicons', id, e); }
       }
+      // no game downloaded yet: get the official client jar from Mojang once, so icons are always the real ones
+      if (!this.fetchedJar) {
+        this.fetchedJar = true;
+        try { const id = await api('mcicons:ensureJar'); if (id) { this.loading = null; return this.init({ force: true }); } } catch (e) { console.warn('mcicons jar', e); }
+      }
       return false;
     })();
     try { return await this.loading; } finally { this.loading = null; }

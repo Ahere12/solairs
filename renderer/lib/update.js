@@ -12,9 +12,40 @@ const Updater = {
     const was = this.state.status;
     this.state = s || { status: 'idle' };
     if (s.status === 'downloading' && was !== 'downloading') this.dismissed = false;
-    if (s.status === 'ready' && was !== 'ready') toast(`Astra ${s.version} is ready — restart to update`, 'info', 6000);
-    if (s.status === 'installing') this.showInstalling();
+    // Like SKlauncher: updates install themselves on a full-screen "Updating Astra" screen and Astra restarts.
+    // While a game is running nothing is forced: the sidebar card waits, and the update installs when Astra closes.
+    const gameRunning = State.runs && Object.values(State.runs).some((r) => r.running);
+    if (!gameRunning && ['downloading', 'ready', 'installing'].includes(s.status)) this.screen(s);
+    else if (s.status === 'installing') this.screen(s);
+    else if ($('#update-screen') && s.status === 'error') this.screen(s);
+    if (s.status === 'ready' && was !== 'ready') {
+      if (!gameRunning) setTimeout(() => api('update:install').catch(() => {}), 1400);
+      else toast(`Astra ${s.version} is ready — it installs when you close Astra`, 'info', 6000);
+    }
     this.render();
+  },
+
+  /** The full-screen updater: logo, title, progress bar and a status line. */
+  screen(s) {
+    let el = $('#update-screen');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'update-screen';
+      el.innerHTML = `<div class="us-logo"><i></i><img src="../assets/icon.png" alt=""></div>
+        <div class="us-title"><span class="us-ic">${icon('refresh')}</span><h2>Updating Astra</h2></div>
+        <p class="us-sub">A required update is being installed automatically. Astra will restart when it’s ready.</p>
+        <div class="us-bar"><div></div></div><div class="us-status"></div>
+        <div class="us-foot">Astra <span class="us-ver"></span></div>`;
+      document.body.appendChild(el);
+    }
+    const pct = s.status === 'downloading' ? Math.max(0, Math.min(100, s.percent || 0)) : 100;
+    $('.us-bar > div', el).style.width = pct + '%';
+    $('.us-ver', el).textContent = s.version || '';
+    $('.us-status', el).textContent = s.status === 'downloading' ? `Downloading update… ${Math.floor(pct)}%${s.total ? ` · ${fmtBytes(s.transferred)} / ${fmtBytes(s.total)}` : ''}`
+      : s.status === 'error' ? (s.error || 'The update failed. Astra will try again later.')
+      : 'Update ready, restarting now';
+    el.classList.toggle('err', s.status === 'error');
+    if (s.status === 'error') setTimeout(() => el.remove(), 4000);
   },
 
   render() {
@@ -123,15 +154,6 @@ const Updater = {
     m.$('[data-all]').onclick = () => { m.close(); Router.go('changelog'); };
   },
 
-  showInstalling() {
-    if ($('#update-screen')) return;
-    const el = document.createElement('div');
-    el.id = 'update-screen';
-    el.innerHTML = `<div class="us-sun"><i></i>${icon('sun')}</div>
-      <h2>Installing Astra ${esc(this.state.version || '')}</h2>
-      <p class="muted">Astra will reopen by itself in a moment.</p>
-      <div class="progress indeterminate"><div></div></div>`;
-    document.body.appendChild(el);
-  },
+  showInstalling() { this.screen({ ...this.state, status: 'installing' }); },
 };
 Updater.init();

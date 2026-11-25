@@ -170,3 +170,39 @@
   .ih-act { border-top: 1px solid var(--border); flex-direction: row; }
   .iset-side { width: 200px; }
 }
+
+/* ---------- Content Hub: real logos ---------- */
+.hub-card .src-badge svg.i { width: 15px; height: 15px; }
+.hub-card .src-badge.cf { color: #f16436; }
+.hub-card .src-badge.mr { color: #1bd96a; }
+[data-src='modrinth'] svg.i, [data-hsrc='modrinth'] svg.i { color: #1bd96a; }
+[data-src='curseforge'] svg.i, [data-hsrc='curseforge'] svg.i { color: #f16436; }
+button:disabled svg.i { opacity: 0.5; }
+
+/* ---------- Content Hub: filter panel (Classic layout) ---------- */
+.hub-wrap.side { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.hub-wrap.side .hub-sel:not(.sort), .hub-wrap.side #src { display: none; }
+.hub-wrap.side .hub-filters { display: flex; justify-content: flex-end; margin-top: -52px; margin-bottom: 18px; pointer-events: none; }
+.hub-wrap.side .hub-filters .hub-sel { width: 200px; pointer-events: auto; }
+.hub-wrap.side .hub-bar { padding-right: 216px; }
+.hub-side { position: sticky; top: 0; max-height: calc(100vh - 120px); overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.hs-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.hs-head svg.i { width: 16px; height: 16px; color: var(--muted); }
+.hs-clear { border: 0; background: none; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; }
+.hs-clear svg.i { width: 13px; height: 13px; }
+.hs-clear:hover { color: var(--text); }
+.hs-sec { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.hs-sec:last-child { border-bottom: 0; }
+.hs-sec h5 { margin: 0 0 9px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+.hs-sec select { width: 100%; }
+.hs-src { display: flex; width: 100%; }
+.hs-src button { flex: 1; justify-content: center; }
+.hs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hs-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-2); background: var(--bg-2); color: var(--text); border-radius: 99px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; }
+.hs-chip img { width: 15px; height: 15px; object-fit: contain; }
+.hs-chip:hover { border-color: var(--muted); }
+.hs-chip.on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+/* ---------- speed: don't lay out / paint what's off screen ---------- */
+.hub-grid:not(.as-list) .hub-card { content-visibility: auto; contain-intrinsic-size: auto 250px; }
+.hub-grid.as-list .hub-card, .ct-row { content-visibility: auto; contain-intrinsic-size: auto 64px; }

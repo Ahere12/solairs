@@ -48,6 +48,19 @@ function autoScan(instanceId, jars) {
 const modsPath = (id, list) => list.filter((x) => /\.jar$/i.test(x.file || '')).map((x) => path.join(instances.get(id).gameDir, 'mods', x.file));
 const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Close all running games before ${what}.`); };
 
+// Content Hub searches answered from memory for 2 minutes: switching filters back, going back, or reopening the
+// hub is instant and doesn't hit Modrinth / CurseForge again. Failed searches aren't kept.
+const searchCache = new Map();
+async function cachedSearch(kind, q, run) {
+  const k = kind + JSON.stringify(q || {});
+  const hit = searchCache.get(k);
+  if (hit && Date.now() - hit.at < 120000) return hit.value;
+  const value = await run();
+  searchCache.set(k, { at: Date.now(), value });
+  if (searchCache.size > 80) searchCache.delete(searchCache.keys().next().value);
+  return value;
+}
+
 module.exports = (getWin) => ({
   // ---------- Astra ecosystem: modpack checks, servers 2.0, inbox, backups & sync, Developer Hub, Discover, analytics, assistant ----------
   ...require('./eco').api(getWin),
@@ -89,6 +102,17 @@ module.exports = (getWin) => ({
   // ---------- versions & loaders ----------
   'versions:list': async () => (await versions.getManifest()).versions.map((v) => ({ id: v.id, type: v.type, releaseTime: v.releaseTime })),
   'versions:latest': async () => (await versions.getManifest()).latest,
+  /** Real Minecraft icons need a game jar: download the newest release's client from Mojang when none is on disk yet. */
+  'mcicons:ensureJar': async () => {
+    const id = (await versions.getManifest()).latest.release;
+    const jar = path.join(paths.versions(), id, id + '.jar');
+    if (fs.existsSync(jar)) return id;
+    const v = await versions.getVersionJson(id);
+    const dl = v.downloads?.client;
+    if (!dl) return null;
+    await require('./util').download(dl.url, jar, { sha1: dl.sha1 });
+    return id;
+  },
   'loaders:list': () => loaders.LOADERS,
   'loaders:versions': (type, mc) => loaders.listVersions(type, mc),
 
@@ -300,7 +324,7 @@ module.exports = (getWin) => ({
   'accounts:setActive': (id) => accounts.setActive(id),
 
   // ---------- modrinth ----------
-  'modrinth:search': (q) => modrinth.search(q),
+  'modrinth:search': (q) => cachedSearch('mr', q, () => modrinth.search(q)),
   'modrinth:project': (id) => modrinth.project(id),
   'modrinth:versions': (id, o) => modrinth.versions(id, o),
   'modrinth:tags': () => modrinth.tags(),
@@ -313,7 +337,7 @@ module.exports = (getWin) => ({
 
   // ---------- CurseForge ----------
   'curseforge:available': () => curseforge.available(),
-  'curseforge:search': (q) => curseforge.search(q),
+  'curseforge:search': (q) => cachedSearch('cf', q, () => curseforge.search(q)),
   'curseforge:categories': (type) => curseforge.categories(type),
   'curseforge:project': (id) => curseforge.project(id),
   'curseforge:files': (id, o) => curseforge.files(id, o),
@@ -321,6 +345,7 @@ module.exports = (getWin) => ({
   'curseforge:installModpack': (o) => curseforge.installModpack(o),
   // a local CurseForge export .zip: read without a key (only files the player picked in the dialog or dropped)
   'curseforge:inspect': (file) => { if (!/\.zip$/i.test(String(file || '')) || !require('path').isAbsolute(file)) throw new Error('Pick a CurseForge modpack .zip'); return curseforge.inspectModpack(file); },
+  'curseforge:autoManual': (id) => curseforge.autoManual(id),
   'curseforge:addManual': (id, files) => curseforge.addManualFiles(id, (Array.isArray(files) ? files : []).filter((f) => typeof f === 'string' && require('path').isAbsolute(f))),
   'curseforge:cancel': () => curseforge.cancelModpack(),
   // The key goes in once, is checked against the real API, then sealed; the page only ever learns connected / not.

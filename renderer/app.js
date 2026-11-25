@@ -8,13 +8,11 @@ const NAV = [
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];
 const SIDE_TOOLS = [
-  { id: 'console', label: 'Console', icon: 'console' },
   { id: 'gallery', label: 'Gallery', icon: 'gallery' },
   { id: 'analytics', label: 'Analytics', icon: 'chart' },
   { id: 'assistant', label: 'Assistant', icon: 'zap' },
   { id: 'backups', label: 'Backups & Sync', icon: 'hdd' },
   { id: 'changelog', label: 'Changelog', icon: 'changelog' },
-  { id: 'roadmap', label: 'Roadmap', icon: 'roadmap' },
 ];
 // Friends lives behind the people icon next to the account; Astra Client is opened from Library / New instance.
 const ROUTE_ALIAS = { instance: 'library', modhealth: 'library', solaris: 'library' };

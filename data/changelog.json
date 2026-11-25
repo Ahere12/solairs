@@ -19,6 +19,18 @@
           {
             "type": "feature",
             "text": "Download tray: everything you install from the hub shows at the bottom of the page — click a finished modpack to open it."
+          },
+          {
+            "type": "feature",
+            "text": "Classic layout: filters move to a panel on the right — source, content type, game version, mod loaders and categories as one-click chips."
+          },
+          {
+            "type": "improvement",
+            "text": "Real icons: Modrinth and CurseForge logos, the loaders’ own icons and each category’s icon."
+          },
+          {
+            "type": "improvement",
+            "text": "Searches are remembered for two minutes, so switching filters back and going back is instant."
           }
         ]
       },
@@ -48,6 +60,18 @@
           {
             "type": "feature",
             "text": "Settings → Default options: environment variables and launch hooks for every instance that doesn’t set its own."
+          },
+          {
+            "type": "feature",
+            "text": "Mods whose authors keep them off CurseForge’s app downloads now install by themselves — the identical file from Modrinth, or through CurseForge’s own website download. No more “download these files yourself”, and Play fetches anything still missing so the game doesn’t crash."
+          },
+          {
+            "type": "bugfix",
+            "text": "Updating a CurseForge modpack no longer fails when one of its files is website-only."
+          },
+          {
+            "type": "improvement",
+            "text": "Instance icons are always real Minecraft blocks and items: if no game is downloaded yet, Astra fetches the official game files once to read them. The emoji icons are gone."
           }
         ]
       },
@@ -70,6 +94,18 @@
           {
             "type": "change",
             "text": "Astra Connect was removed."
+          },
+          {
+            "type": "feature",
+            "text": "Updates install on a full-screen “Updating Astra” screen and Astra restarts by itself (never while you’re playing)."
+          },
+          {
+            "type": "change",
+            "text": "Console and Roadmap were removed from the sidebar (each instance still has its Console tab)."
+          },
+          {
+            "type": "improvement",
+            "text": "Faster: long lists only draw what’s on screen, images decode in the background, and the spellchecker is off."
           }
         ]
       }

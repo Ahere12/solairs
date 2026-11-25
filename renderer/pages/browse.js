@@ -66,6 +66,18 @@ function safeHtml(html) {
   return clean(doc.body);
 }
 
+/** An SVG from Modrinth's API as an <img> data URL (no script can run from an image). currentColor gets `color`. */
+function svgImg(svg, color = '#a1a1aa') {
+  const s = String(svg || '').trim();
+  if (!s.startsWith('<svg')) return '';
+  let out = s.replace(/currentColor/g, color);
+  // as an image an SVG needs its namespace; some of Modrinth's icons leave it out (they're meant to be inlined)
+  if (!/^<svg[^>]*\sxmlns=/.test(out)) out = out.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+  // icons drawn with no colour of their own would come out black
+  if (!/(fill|stroke)=/.test(out)) out = out.replace(/^<svg/, `<svg fill="${color}"`);
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out);
+}
+
 /** Installs started from the Content Hub this session — the download tray at the bottom of the page. */
 const HubDownloads = {
   list: [], // { key, title, icon, state: 'busy' | 'ready' | 'failed', where }
@@ -108,7 +120,7 @@ Pages.browse = {
     const banner = p.featured_gallery || (p.gallery && p.gallery[0]) || '';
     const cf = p.source === 'curseforge';
     return `<div class="hub-card" data-pid="${esc(p.project_id)}" data-ptype="${esc(p.project_type || '')}" data-src="${esc(p.source || 'modrinth')}">
-      <div class="banner ${banner ? '' : 'blank'}" ${banner ? `style="background-image:url('${esc(banner)}')"` : ''}>${p.icon_url ? `<img class="pic" src="${esc(p.icon_url)}" loading="lazy" alt="">` : `<div class="pic"></div>`}<span class="src-badge ${cf ? 'cf' : 'mr'}" title="${cf ? 'CurseForge' : 'Modrinth'}">${cf ? 'CF' : 'MR'}</span></div>
+      <div class="banner ${banner ? '' : 'blank'}" ${banner ? `style="background-image:url('${esc(banner)}')"` : ''}>${p.icon_url ? `<img class="pic" src="${esc(p.icon_url)}" loading="lazy" decoding="async" alt="">` : `<div class="pic"></div>`}<span class="src-badge ${cf ? 'cf' : 'mr'}" title="${cf ? 'CurseForge' : 'Modrinth'}">${icon(cf ? 'curseforge' : 'modrinth')}</span></div>
       <div class="body2">
         <div class="info"><div class="t"><b title="${esc(p.title)}">${esc(p.title)}</b><span class="dl">${icon('download')}${fmtNum(p.downloads)}</span></div>
         <div class="d">${esc(p.description)}</div></div>
@@ -148,14 +160,15 @@ Pages.browse = {
     let view = localStorage.getItem('browse.view') || 'grid';
     let hits = [];
     const typeLabel = () => this.TYPES.find(([k]) => k === st.type)[1];
+    const sideMode = document.documentElement.dataset.layout === 'classic';
     const sel = (id, opts, cls = '') => `<label class="hub-sel ${cls}">${cls === 'sort' ? icon('sort') : ''}<select id="${id}">${opts}</select></label>`;
-    el.innerHTML = `
+    el.innerHTML = `<div class="hub-wrap ${sideMode ? 'side' : ''}"><div class="hub-main">
       <div class="page-head"><div><h1>${T('Content Hub')}</h1><div class="sub">${target ? `Installing into <b>${esc(target.name)}</b> · ${esc(target.versionId)} · ${loaderLabel(target)} <a href="#" id="clear-target">(any instance)</a>` : 'Find and install amazing modpacks, mods, and resources'}</div></div></div>
       <div class="search big">${icon('search')}<input type="search" id="q" value="${esc(st.query)}" placeholder="${T('Search')} ${esc(typeLabel().toLowerCase().replace(/s$/, ''))}…"></div>
       <div class="hub-bar">
         <h2 id="type-title">${esc(typeLabel().replace(/s$/, ''))}</h2><span class="cnt" id="count"></span>
         <div class="grow"></div>
-        <div class="seg" id="src"><button data-src="modrinth">${icon('globe')}Modrinth</button><button data-src="curseforge">${icon('flame')}CurseForge</button></div>
+        <div class="seg" id="src"><button data-src="modrinth">${icon('modrinth')}Modrinth</button><button data-src="curseforge">${icon('curseforge')}CurseForge</button></div>
         <div class="seg icons" id="view"><button data-v="grid" title="Grid">${icon('grid')}</button><button data-v="list" title="List">${icon('list')}</button></div>
       </div>
       <div class="hub-filters">
@@ -167,7 +180,7 @@ Pages.browse = {
       </div>
       <div class="hub-grid" id="results"></div>
       <div class="row" style="justify-content:center;margin-top:16px"><button class="btn hidden" id="more">Load more</button></div>
-      <div class="hub-tray" id="tray" hidden></div>`;
+      <div class="hub-tray" id="tray" hidden></div></div>${sideMode ? '<aside class="hub-side" id="hub-side"></aside>' : ''}</div>`;
     if (target) $('#clear-target', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: st.type }, { replace: true }); };
     $('#f-type', el).value = st.type;
     $('#sort', el).value = st.sort;
@@ -189,25 +202,53 @@ Pages.browse = {
     drawSrc();
     let tags = null;
     const catSeq = { n: 0 };
+    let catOpts = []; // [value, label, icon url]
     const drawCats = async () => {
       const my = ++catSeq.n;
       const fc = $('#f-cat', el);
       let opts = [];
       try {
         if (source() === 'curseforge') {
-          if (await api('curseforge:available')) opts = (await api('curseforge:categories', st.type === 'map' ? 'world' : st.type)).map((c) => [String(c.id), c.name]);
+          if (await api('curseforge:available')) opts = (await api('curseforge:categories', st.type === 'map' ? 'world' : st.type)).map((c) => [String(c.id), c.name, /^https:/.test(c.icon || '') ? c.icon : '']);
         } else {
           tags = tags || (await api('modrinth:tags').catch(() => ({ categories: [] })));
           opts = tags.categories.filter((c) => c.project_type === (st.type === 'datapack' ? 'mod' : st.type) && c.header !== 'resolutions')
-            .map((c) => [c.name, c.name.replace(/-/g, ' ').replace(/^\w/, (m) => m.toUpperCase())]);
+            .map((c) => [c.name, c.name.replace(/-/g, ' ').replace(/^\w/, (m) => m.toUpperCase()), svgImg(c.icon, '#a1a1aa')]);
         }
       } catch {}
       if (my !== catSeq.n || !el.isConnected) return;
       fc.innerHTML = `<option value="">All Categories</option>` + opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
       fc.value = st.cat;
+      catOpts = opts;
+      drawSide();
       $('#f-loader', el).disabled = !['mod', 'modpack'].includes(st.type);
       $('#type-title', el).textContent = typeLabel().replace(/s$/, '');
       $('#q', el).placeholder = `${T('Search')} ${typeLabel().toLowerCase().replace(/s$/, '')}…`;
+    };
+    /** Filter panel (Classic layout): chips that drive the same filters as the dropdowns. */
+    const LCOL = { fabric: '#dbb26f', 'legacy-fabric': '#dbb26f', babric: '#dbb26f', ornithe: '#e0c36b', forge: '#6f8fdb', neoforge: '#e3893b', quilt: '#b27de8' };
+    const setSel = (id, v) => { const s = $(id, el); if (!s) return; s.value = v; s.dispatchEvent(new Event('change')); };
+    const drawSide = () => {
+      const side = $('#hub-side', el); if (!side) return;
+      const chip = (attr, on, label, ic = '') => `<button class="hs-chip ${on ? 'on' : ''}" ${attr}>${ic ? `<img src="${esc(ic)}" alt="">` : ''}${esc(label)}</button>`;
+      const lIcon = (k) => svgImg(tags?.loaders?.find((l) => l.name === k)?.icon, LCOL[k] || '#a1a1aa');
+      side.innerHTML = `<div class="hs-head">${icon('sliders')}<b>Filters</b><div class="grow"></div><button class="hs-clear" id="hs-clear">${icon('close')}Clear</button></div>
+        <div class="hs-sec"><h5>Source</h5><div class="seg hs-src">${['modrinth', 'curseforge'].map((s) => `<button data-hsrc="${s}" class="${source() === s ? 'on' : ''}" ${st.type === 'map' && s === 'modrinth' ? 'disabled' : ''}>${icon(s)}${s === 'modrinth' ? 'Modrinth' : 'CurseForge'}</button>`).join('')}</div></div>
+        <div class="hs-sec"><h5>Content type</h5><div class="hs-chips">${this.TYPES.filter(([k]) => !target || k !== 'modpack').map(([k, l]) => chip(`data-htype="${k}"`, st.type === k, l)).join('')}</div></div>
+        <div class="hs-sec"><h5>Game version</h5><select id="hs-ver">${$('#f-ver', el).innerHTML}</select></div>
+        ${['mod', 'modpack'].includes(st.type) ? `<div class="hs-sec"><h5>Mod loaders</h5><div class="hs-chips">${this.LOADERS.map(([k, l]) => chip(`data-hload="${k}"`, st.loader === k, l, lIcon(k))).join('')}</div></div>` : ''}
+        ${catOpts.length ? `<div class="hs-sec"><h5>Categories</h5><div class="hs-chips">${catOpts.map(([v, l, ic]) => chip(`data-hcat="${esc(v)}"`, st.cat === v, l, ic)).join('')}</div></div>` : ''}`;
+      $('#hs-ver', side).value = st.gameVersion;
+      $('#hs-ver', side).onchange = (e) => setSel('#f-ver', e.target.value);
+      $$('[data-hsrc]', side).forEach((b) => (b.onclick = () => $(`#src [data-src="${b.dataset.hsrc}"]`, el).click()));
+      $$('[data-htype]', side).forEach((b) => (b.onclick = () => setSel('#f-type', b.dataset.htype)));
+      $$('[data-hload]', side).forEach((b) => (b.onclick = () => setSel('#f-loader', st.loader === b.dataset.hload ? '' : b.dataset.hload)));
+      $$('[data-hcat]', side).forEach((b) => (b.onclick = () => setSel('#f-cat', st.cat === b.dataset.hcat ? '' : b.dataset.hcat)));
+      $('#hs-clear', side).onclick = () => {
+        st.cat = ''; st.gameVersion = target?.versionId || ''; st.loader = target && target.loader.type !== 'vanilla' ? target.loader.type : '';
+        $('#f-cat', el).value = ''; $('#f-ver', el).value = st.gameVersion; $('#f-loader', el).value = st.loader;
+        search();
+      };
     };
     let seq = 0, loadingMore = false;
     const search = async (append = false) => {
@@ -216,6 +257,7 @@ Pages.browse = {
       if (append) { loadingMore = true; $('#more', el).innerHTML = `${icon('refresh', 'spin')}Loading more…`; }
       if (!append) { st.offset = 0; hits = []; $('#results', el).innerHTML = '<div class="faint">Searching…</div>'; }
       const src = source();
+      if (!append) drawSide();
       try {
         if (src === 'curseforge' && !(await api('curseforge:available'))) {
           if (my !== seq) return;
@@ -271,6 +313,7 @@ Pages.browse = {
     $('#f-loader', el).onchange = (e) => { st.loader = e.target.value; search(); };
     $('#more', el).onclick = () => { if (loadingMore) return; st.offset += 24; search(true); };
     ctx.on('search-focus', () => $('#q', el).focus());
+    if (sideMode && !tags) api('modrinth:tags').then((t) => { tags = tags || t; drawSide(); }).catch(() => {});
     drawCats(); search();
     return () => io.disconnect();
   },

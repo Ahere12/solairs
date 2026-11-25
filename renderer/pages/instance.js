@@ -74,7 +74,7 @@ Pages.instance = {
     const mpSrc = mp ? (mp.source === 'curseforge' ? 'CurseForge' : 'Modrinth') : '';
     body.innerHTML = `
       ${linked ? `<div class="mp-bar">
-        <div class="mp-ic">${instIcon(inst, 'sm')}</div>${icon('link')}<b class="ellipsis">${esc(mp.name)}</b><span class="mono faint small">${esc(mp.version || '')}</span><span class="faint small">${icon(mp.source === 'curseforge' ? 'flame' : 'globe')}${mpSrc}</span>
+        <div class="mp-ic">${instIcon(inst, 'sm')}</div>${icon('link')}<b class="ellipsis">${esc(mp.name)}</b><span class="mono faint small">${esc(mp.version || '')}</span><span class="faint small">${icon(mp.source === 'curseforge' ? 'curseforge' : 'modrinth')}${mpSrc}</span>
         <div class="grow"></div>
         <button class="btn sm ghost" id="mp-open">${icon('external')}Open link</button>
         <button class="btn sm primary" id="mp-upd">${icon('refresh')}Update</button>

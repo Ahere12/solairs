@@ -62,3 +62,10 @@ test('shortcut: --launch argument is read safely, ico wraps the png', () => {
   assert.equal(ico.readUInt32LE(14), png.length);
   assert.ok(ico.subarray(22).equals(png));
 });
+
+test('blocked CurseForge files: website download URLs, API one first, no duplicates', () => {
+  const { websiteUrls } = require('../src/cfweb');
+  assert.deepEqual(websiteUrls({ modId: 12, fileId: 345, page: 'https://www.curseforge.com/minecraft/mc-mods/x/download/345' }),
+    ['https://www.curseforge.com/api/v1/mods/12/files/345/download', 'https://www.curseforge.com/minecraft/mc-mods/x/download/345']);
+  assert.deepEqual(websiteUrls({ page: 'https://www.curseforge.com/api/v1/mods/12/files/345/download', modId: 12, fileId: 345 }), ['https://www.curseforge.com/api/v1/mods/12/files/345/download']);
+});

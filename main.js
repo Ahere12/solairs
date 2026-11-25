@@ -206,7 +206,7 @@ function init() {
     width: 1320, height: 840, minWidth: 1040, minHeight: 660,
     frame: false, backgroundColor: '#05070e', show: false, icon,
     title: 'Astra',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, v8CacheOptions: 'bypassHeatCheck' },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, v8CacheOptions: 'bypassHeatCheck', spellcheck: false },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   const startHidden = s.startMinimized || process.argv.includes('--hidden');
