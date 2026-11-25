@@ -86,10 +86,12 @@ if (!app.requestSingleInstanceLock()) {
   const deeplink = require('./src/deeplink');
   deeplink.register(app);
   { const l = deeplink.fromArgv(process.argv); if (l) deeplink.handle(l, false); } // opened through a solaris:// link
+  launchFromShortcut(process.argv);
   app.on('second-instance', (_e, argv) => {
     showWindow();
     const l = deeplink.fromArgv(argv);
     if (l) deeplink.handle(l, !!(win && !win.webContents.isLoading()));
+    launchFromShortcut(argv); // an instance shortcut on the desktop while Astra is already open
   });
   app.on('open-url', (e, url) => { e.preventDefault(); showWindow(); deeplink.handle(url, !!(win && !win.webContents.isLoading())); }); // macOS
   app.whenReady().then(async () => { if (await recoverDataDir()) init(); });
@@ -116,6 +118,26 @@ async function recoverDataDir() {
       if (r.filePaths[0]) paths.setRoot(r.filePaths[0]);
     } else if (response === 2) paths.setRoot(paths.defaultRoot());
     else if (response === 3) { app.quit(); return false; }
+  }
+}
+
+/** Instance shortcuts (src/shortcut.js) start Astra with --launch=<id>: play that instance once the window is up. */
+function launchFromShortcut(argv) {
+  const id = require('./src/shortcut').fromArgv(argv);
+  if (!id) return;
+  const go = () => {
+    const { events } = require('./src/util');
+    if (!require('./src/instances').list().some((i) => i.id === id)) return events.emit('send', 'toast', { type: 'error', text: 'That shortcut’s instance no longer exists.' });
+    require('./src/launch').launch(id).catch((e) => { showWindow(); events.emit('send', 'toast', { type: 'error', text: e.message }); });
+  };
+  if (win && !win.webContents.isLoading()) go();
+  else {
+    const wait = () => {
+      if (!win) return setTimeout(wait, 200);
+      if (!win.webContents.isLoading()) return setTimeout(go, 1200);
+      win.webContents.once('did-finish-load', () => setTimeout(go, 1200));
+    };
+    app.whenReady().then(wait);
   }
 }
 

@@ -16,6 +16,9 @@ const MAP = {
   calendar: 'calendar', list: 'list', grid: 'layout-grid', sort: 'arrow-up-down', wifi: 'wifi',
   // new in 1.4
   host: 'radio-tower', power: 'power', send: 'send', sliders: 'sliders-horizontal', sparkles: 'sparkles', package: 'package-check',
+  // new in 1.17 (Content Hub, instance settings)
+  flame: 'flame', 'chevron-down': 'chevron-down', 'chevron-up': 'chevron-up', wrench: 'wrench', unlink: 'unlink', keyboard: 'keyboard',
+  monitor: 'monitor', coffee: 'coffee', history: 'history', terminal: 'square-terminal',
 };
 
 const dir = path.join(__dirname, '..', 'node_modules', 'lucide-static', 'icons');

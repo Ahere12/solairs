@@ -7,6 +7,8 @@ const DEFAULTS = {
   accent: '#7c9cff',
   customTheme: { bg: '#0d0b12', panel: '#16131d', text: '#f4efe6' },
   launchBehavior: 'minimize', // keep | minimize | hide
+  envVars: '', // KEY=value lines for every instance without its own
+  hookPre: '', hookWrapper: '', hookPost: '', // launch hook defaults
   startMinimized: false,
   openAtLogin: false,
   minimizeToTray: false,

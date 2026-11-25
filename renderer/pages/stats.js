@@ -8,9 +8,9 @@ Pages.stats = {
 
   async render(el, params) {
     if (params.world) this.sel = { world: params.world, player: params.player || null, name: params.name || null, view: params.view || null };
-    el.innerHTML = `<div class="page-head"><div><a href="#" id="st-back" class="small">← Astra Connect</a><h1>Stats</h1><div class="sub">Play time, deaths, distance, mining, advancements and inventories — read from the save files of your worlds and the servers you host.</div></div></div>
+    el.innerHTML = `<div class="page-head"><div><a href="#" id="st-back" class="small">← Back</a><h1>Stats</h1><div class="sub">Play time, deaths, distance, mining, advancements and inventories — read from the save files of your worlds and the servers you host.</div></div></div>
       <div class="maps-layout"><div class="stack maps-side" id="st-side"><div class="faint">Loading…</div></div><div id="st-main"></div></div>`;
-    $('#st-back', el).onclick = (e) => { e.preventDefault(); Router.go('connect'); };
+    $('#st-back', el).onclick = (e) => { e.preventDefault(); Router.back(); };
     const worlds = await api('stats:worlds').catch((e) => (toastErr(e), []));
     if (!el.isConnected) return;
     const withStats = worlds.filter((w) => w.players);

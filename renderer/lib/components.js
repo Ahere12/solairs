@@ -435,6 +435,7 @@ async function openNewInstance(preset = {}) {
       <label class="field">Mod loader<div class="seg" id="ni-loader"></div></label>
       <label class="field" id="ni-lv-wrap">Loader version<select id="ni-lv"></select></label>
       <div class="faint small" id="ni-note"></div>
+      <div class="ni-start"><span class="faint small">Or start from</span><button class="btn sm" data-pack title="Install a modpack from the Content Hub">${icon('layers')}A modpack</button><button class="btn sm" data-astra title="A ready-made performance &amp; QoL pack">${icon('sun')}Astra Client</button></div>
     </div>`,
     footer: `<button class="btn ghost" data-import>${icon('upload')}${T('Import')}…</button><div class="grow"></div><button class="btn ghost" data-cancel>${T('Cancel')}</button><button class="btn primary" data-create>${icon('plus')}Create</button>`,
   });
@@ -493,6 +494,8 @@ async function openNewInstance(preset = {}) {
   refreshLoaders();
   m.$('[data-cancel]').onclick = () => m.close();
   m.$('[data-import]').onclick = () => { m.close(); openImport(); };
+  m.$('[data-pack]').onclick = () => { m.close(); Router.go('browse', { type: 'modpack' }); };
+  m.$('[data-astra]').onclick = () => { m.close(); Router.go('solaris'); };
   m.$('[data-create]').onclick = async (e) => {
     const btn = e.currentTarget;
     if (btn.disabled) return;
@@ -506,7 +509,7 @@ async function openNewInstance(preset = {}) {
       m.close();
       await refreshInstances();
       toast(`Created ${inst.name}`);
-      Router.go('library', { spotlight: inst.id });
+      Router.go('instance', { id: inst.id }); // straight to its page: content, settings, export…
     } catch (er) { toastErr(er); btn.disabled = false; }
   };
   m.$('#ni-name').onkeydown = (e) => { if (e.key === 'Enter') m.$('[data-create]').click(); };
@@ -680,9 +683,11 @@ function instanceMenu(e, inst) {
     { label: inst.pinned ? 'Unpin' : 'Pin to top', icon: 'star', action: async () => { await api('instances:update', inst.id, { pinned: !inst.pinned }); refreshInstances(); } },
     { label: 'Open folder', icon: 'folder', action: () => api('instances:openFolder', inst.id) },
     { label: 'Change icon…', icon: 'image', action: () => changeInstanceIcon(inst) },
+    { label: 'Instance settings…', icon: 'settings', action: () => instanceSettings(inst) },
     '-',
     { label: 'Duplicate…', icon: 'copy', action: () => duplicateDialog(inst) },
-    { label: 'Share (.solpack)', icon: 'share', action: () => api('instances:export', inst.id).catch(toastErr) },
+    { label: 'Export…', icon: 'share', action: () => exportInstanceDialog(inst) },
+    { label: 'Create shortcut', icon: 'external', action: () => createInstanceShortcut(inst) },
     { label: inst.modpack ? 'Host this modpack…' : 'Host as a server…', icon: 'servers', action: () => hostInstanceDialog(inst) },
     '-',
     { label: T('Delete'), icon: 'trash', danger: true, action: () => deleteInstance(inst) },

@@ -57,12 +57,24 @@ function hit(m) {
   };
 }
 
-async function search({ query = '', type = 'mod', gameVersion, loader, sort = 'relevance', offset = 0, limit = 24 }) {
+async function search({ query = '', type = 'mod', gameVersion, loader, categoryId, sort = 'relevance', offset = 0, limit = 24 }) {
   const q = new URLSearchParams({ gameId: String(GAME), classId: String(CLASS[type] || 6), searchFilter: query, sortField: String(SORT[sort] || 1), sortOrder: 'desc', pageSize: String(limit), index: String(offset) });
   if (gameVersion) q.set('gameVersion', gameVersion);
   if (loader && LOADER[loader] && (type === 'mod' || type === 'modpack')) q.set('modLoaderType', String(LOADER[loader]));
+  if (/^\d{1,9}$/.test(String(categoryId || ''))) q.set('categoryId', String(categoryId));
   const r = await cf('/mods/search?' + q);
   return { hits: r.data.map(hit), total_hits: Math.min(r.pagination?.totalCount || 0, 10000), offset, limit };
+}
+/** Top-level CurseForge categories for a content type (cached for the session): [{ id, name }]. */
+const catCache = new Map();
+async function categories(type = 'mod') {
+  const classId = CLASS[type] || 6;
+  if (!catCache.has(classId)) {
+    catCache.set(classId, cf('/categories?' + new URLSearchParams({ gameId: String(GAME), classId: String(classId) }))
+      .then((r) => (r.data || []).filter((c) => c.parentCategoryId === classId).map((c) => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)))
+      .catch((e) => { catCache.delete(classId); throw e; }));
+  }
+  return catCache.get(classId);
 }
 async function project(id) {
   const [m, desc] = await Promise.all([cf(`/mods/${id}`), cf(`/mods/${id}/description`).catch(() => ({ data: '' }))]);
@@ -434,4 +446,4 @@ async function serverFile(modId, { mc, loader } = {}) {
   return list.find((f) => f.releaseType === 1) || list[0] || null;
 }
 
-module.exports = { installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };
+module.exports = { categories, installMap, available, test, cfError, inspectModpack, readPack, addManualFiles, cancelModpack, urlOf, pageOf, search, project, files, install, installModpack, modpackVersions, updateModpack, isCurseForgePack, readRecord, request: cf, sha1Of, safeName, resolveFiles, copyOverrides, serverFile, LOADER };

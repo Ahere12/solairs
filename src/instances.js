@@ -149,7 +149,7 @@ function sourcesOf(inst) {
   const out = {};
   for (const [src, file] of [['modrinth', 'modrinth.json'], ['curseforge', 'curseforge.json']]) {
     const rec = readJSON(path.join(paths.instances(), inst.id, file), {});
-    for (const r of Object.values(rec)) if (r && r.file) out[String(r.file).replace(/\.disabled$/, '')] = r.pack ? { source: 'modpack', via: src } : { source: src };
+    for (const [pid, r] of Object.entries(rec)) if (r && r.file) out[String(r.file).replace(/\.disabled$/, '')] = r.pack ? { source: 'modpack', via: src, projectId: String(r.projectId || pid) } : { source: src, projectId: String(r.projectId || pid) };
   }
   return out;
 }
@@ -169,6 +169,42 @@ function listContent(id, kind = 'mods') {
       return { file: f.name, path: full, enabled, size: st.size, mtime: st.mtimeMs, dir: f.isDirectory(), ...src, ...meta, name: meta.name || f.name.replace(/\.disabled$/, '').replace(/\.(jar|zip)$/i, '') };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+/** How many files each content tab holds (cheap: no jar reading). */
+function contentCounts(id) {
+  const inst = get(id);
+  const out = {};
+  for (const kind of Object.keys(CONTENT_DIRS)) {
+    let n = 0;
+    try { for (const f of fs.readdirSync(path.join(gameDir(inst), CONTENT_DIRS[kind]), { withFileTypes: true })) if ((f.isFile() && /\.(jar|zip|disabled|litemod)$/i.test(f.name)) || (f.isDirectory() && kind !== 'mods')) n++; } catch {}
+    out[kind] = n;
+  }
+  return out;
+}
+/** Stops following the modpack: the version unlocks and the player can add their own content. Files stay as they are. */
+function unlink(id) {
+  const inst = get(id);
+  if (!inst.modpack) return inst;
+  return save({ ...inst, modpack: null, unlinkedModpack: { ...inst.modpack, at: Date.now() } });
+}
+/** Top level of the game folder with total sizes, for the Export dialog. */
+function exportTree(id) {
+  const root = gameDir(get(id));
+  const SKIP = new Set(['logs', 'crash-reports', '.fabric', '.quilt', 'natives', 'debug']);
+  const sizeOf = (p, depth = 0) => {
+    let st; try { st = fs.statSync(p); } catch { return { size: 0, count: 0 }; }
+    if (!st.isDirectory()) return { size: st.size, count: 1 };
+    let size = 0, count = 0;
+    if (depth > 12) return { size, count };
+    for (const f of fs.readdirSync(p)) { const r = sizeOf(path.join(p, f), depth + 1); size += r.size; count += r.count; }
+    return { size, count };
+  };
+  let names = []; try { names = fs.readdirSync(root, { withFileTypes: true }); } catch {}
+  return names.filter((d) => !SKIP.has(d.name)).map((d) => {
+    const full = path.join(root, d.name);
+    const kids = d.isDirectory() ? (() => { try { return fs.readdirSync(full).length; } catch { return 0; } })() : 0;
+    return { name: d.name, rel: d.name, dir: d.isDirectory(), children: kids, ...sizeOf(full) };
+  }).sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
 }
 function setEnabled(id, kind, files, enabled) {
   const dir = path.join(gameDir(get(id)), CONTENT_DIRS[kind] || kind);
@@ -305,16 +341,23 @@ function screenshots() {
 }
 
 // ---------- share / export ----------
-async function exportPack(id, dest, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'options.txt']) {
+async function exportPack(id, dest, include = ['mods', 'config', 'resourcepacks', 'shaderpacks', 'options.txt'], pack = {}) {
   const inst = get(id);
   const zip = new AdmZip();
   const { gameDir: _g, ...meta } = inst;
-  zip.addFile('solaris.json', Buffer.from(JSON.stringify({ format: 1, instance: { ...meta, playTime: 0, lastPlayed: 0, externalGameDir: undefined } }, null, 2)));
-  for (const item of include) {
-    const full = path.join(gameDir(inst), item);
-    if (!fs.existsSync(full)) continue;
+  const name = String(pack.name || inst.name).trim().slice(0, 64) || inst.name;
+  const version = String(pack.version || '1.0.0').trim().slice(0, 32) || '1.0.0';
+  zip.addFile('solaris.json', Buffer.from(JSON.stringify({ format: 1, pack: { name, version }, instance: { ...meta, name, playTime: 0, lastPlayed: 0, externalGameDir: undefined } }, null, 2)));
+  const root = path.resolve(gameDir(inst));
+  // a folder and something inside it may both be ticked: keep only the outermost
+  const items = [...new Set((include || []).map((x) => String(x).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')).filter(Boolean))];
+  const kept = items.filter((x) => !items.some((y) => y !== x && x.startsWith(y + '/')));
+  for (const item of kept) {
+    const full = path.resolve(root, item);
+    if (!full.startsWith(root + path.sep) || !fs.existsSync(full)) continue; // nothing outside the game folder
+    const parent = path.posix.dirname(item) === '.' ? '' : path.posix.dirname(item) + '/';
     if (fs.statSync(full).isDirectory()) await zip.addLocalFolderPromise(full, { zipPath: 'minecraft/' + item });
-    else zip.addLocalFile(full, 'minecraft/');
+    else zip.addLocalFile(full, 'minecraft/' + parent);
   }
   await zip.writeZipPromise(dest);
   return dest;
@@ -338,4 +381,4 @@ async function importPack(file) {
   return inst;
 }
 
-module.exports = { scanFile, scanAll, CONTENT_DIRS, list, get, save, create, update, remove, duplicate, gameDir, listContent, setEnabled, deleteContent, addFiles, duplicates, scan, worlds, screenshots, exportPack, importPack, readModMeta, sha1File, uniqueId };
+module.exports = { contentCounts, unlink, exportTree, scanFile, scanAll, CONTENT_DIRS, list, get, save, create, update, remove, duplicate, gameDir, listContent, setEnabled, deleteContent, addFiles, duplicates, scan, worlds, screenshots, exportPack, importPack, readModMeta, sha1File, uniqueId };

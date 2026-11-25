@@ -1,7 +1,7 @@
 {
   "name": "solaris-launcher",
   "productName": "Astra",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Astra — a fast, modern Minecraft: Java Edition launcher",
   "main": "main.js",
   "author": "Solaris",
@@ -68,7 +68,7 @@
       "executableName": "solaris",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "synopsis": "A fast, modern Minecraft: Java Edition launcher",
-      "description": "Astra — a fast, modern Minecraft: Java Edition launcher with mods, modpacks, skins, server hosting and Astra Connect.",
+      "description": "Astra — a fast, modern Minecraft: Java Edition launcher with mods, modpacks, skins and server hosting.",
       "maintainer": "Ahere12 <Ahere12@users.noreply.github.com>",
       "vendor": "Astra",
       "desktop": {

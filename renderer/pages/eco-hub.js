@@ -1,98 +1,6 @@
-/* Astra ecosystem pages, part 2: Discover, Cloud & Sync, the notification inbox, Server details. Backend: src/eco/. */
+/* Astra ecosystem pages, part 2: Cloud & Sync, the notification inbox, Server details. Backend: src/eco/. */
 
-/* ---------- Discover ---------- */
-Pages.discover = {
-  state: { kind: 'mod', q: '', sort: 'relevance', inst: null, source: (() => { try { return localStorage.getItem('discover.source') || 'all'; } catch { return 'all'; } })() },
-  async render(el) {
-    const st = this.state;
-    const kinds = await api('discover:kinds');
-    el.innerHTML = `<div class="page-head"><div><h1>Discover</h1><div class="sub">One search across Modrinth and CurseForge — mods, modpacks, resource packs, shaders, maps and community content.</div></div></div>
-      <div class="tabs">${kinds.map((k) => `<button data-k="${k.id}" class="${k.id === st.kind ? 'on' : ''}">${esc(k.name)}</button>`).join('')}</div>
-      <div class="sticky-bar"><span class="seg" id="dsrc"><button data-src="all">Both</button><button data-src="modrinth">Modrinth</button><button data-src="curseforge">CurseForge</button></span><div class="search" style="width:300px">${icon('search')}<input type="search" id="dq" placeholder="${T('Search')}…" value="${esc(st.q)}"></div>
-        <select id="ds"><option value="relevance">Best match</option><option value="downloads">Most downloaded</option><option value="updated">Recently updated</option></select>
-        <select id="di"><option value="">Any version</option>${State.instances.map((i) => `<option value="${esc(i.id)}" ${st.inst === i.id ? 'selected' : ''}>For ${esc(i.name)} (${esc(i.versionId)})</option>`).join('')}</select></div>
-      <div id="dprov" class="row wrap" style="margin:8px 0"></div><div id="dres" class="grid cols-wide"></div>
-      <div id="dmore" class="row" style="justify-content:center;margin:18px 0 8px;min-height:36px"></div>`;
-    $('#ds', el).value = st.sort;
-    const drawSrc = () => $$('#dsrc [data-src]', el).forEach((b) => b.classList.toggle('on', b.dataset.src === st.source));
-    $$('#dsrc [data-src]', el).forEach((b) => (b.onclick = () => { st.source = b.dataset.src; try { localStorage.setItem('discover.source', st.source); } catch {} drawSrc(); run(); }));
-    drawSrc();
-    $$('[data-k]', el).forEach((b) => (b.onclick = () => { st.kind = b.dataset.k; $$('[data-k]', el).forEach((x) => x.classList.toggle('on', x === b)); run(); }));
-    $('#dq', el).oninput = debounce((e) => { st.q = e.target.value; run(); }, 350);
-    $('#ds', el).onchange = (e) => { st.sort = e.target.value; run(); };
-    $('#di', el).onchange = (e) => { st.inst = e.target.value || null; run(); };
-    let seq = 0, page = 0, more = false, loading = false, results = [], seen = new Set();
-    const key = (h) => String(h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '') + '|' + h.type;
-    const card = (h, i) => `<div class="card eco-hit"><div class="row">${h.icon ? `<img src="${esc(h.icon)}" alt="" loading="lazy">` : `<div class="inst-icon sm">${icon('box')}</div>`}<div class="grow" style="min-width:0"><b class="ellipsis">${esc(h.title)}</b><div class="faint small">${esc(h.author || '')} · ${fmtNum(h.downloads)} downloads</div></div></div>
-          <div class="muted small eco-clamp">${esc(h.description)}</div>
-          <div class="row"><span class="chip">${h.provider === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>${(h.alsoOn || []).map((a) => `<span class="chip">${a.provider === 'modrinth' ? 'Modrinth' : 'CurseForge'}</span>`).join('')}<span class="grow"></span>${h.url ? `<button class="icon-btn" data-open="${i}" title="Open page">${icon('external')}</button>` : ''}<button class="btn sm primary" data-inst="${i}">${icon('download')}${st.kind === 'modpack' ? 'Install pack' : 'Install'}</button></div></div>`;
-    const bind = (root) => {
-      $$('[data-open]', root).forEach((b) => (b.onclick = () => api('shell:open', results[+b.dataset.open].url)));
-      $$('[data-inst]', root).forEach((b) => (b.onclick = async () => {
-        const h = results[+b.dataset.inst];
-        const inst = State.instances.find((i) => i.id === st.inst);
-        let instanceId = null, world = null;
-        if (st.kind !== 'modpack') {
-          const pick = inst || await chooseInstance({ title: `Install ${h.title} into…`, filter: (x) => st.kind !== 'mod' || x.loader?.type !== 'vanilla' });
-          if (!pick) return; instanceId = pick.id;
-          if (h.type === 'datapack') {
-            const worlds = await api('instances:worlds', pick.id);
-            if (!worlds.length) return toast('Data packs go into a world — this instance has none yet.', 'info');
-            world = worlds.length === 1 ? worlds[0].name : await promptDialog('Which world? (' + worlds.map((w) => w.name).join(', ') + ')', { value: worlds[0].name });
-            if (!world) return;
-          }
-        }
-        const html = b.innerHTML; b.disabled = true; b.innerHTML = icon('refresh', 'spin');
-        try { await api('discover:install', { provider: h.provider, id: h.id, kind: st.kind === 'community' ? h.type : st.kind, instanceId, world }); b.innerHTML = icon('check') + T('Installed'); toast(`${h.title} installed`); if (st.kind === 'modpack') refreshInstances(); }
-        catch (e) { toastErr(e); b.disabled = false; b.innerHTML = html; }
-      }));
-    };
-    const footer = (text, retry) => {
-      const f = $('#dmore', el); if (!f) return;
-      f.innerHTML = loading ? `<span class="faint">${icon('refresh', 'spin')} Loading more…</span>`
-        : retry ? `<span class="faint small">${esc(text)}</span><button class="btn sm" id="dretry">Try again</button>`
-        : more ? '<button class="btn" id="dload">Load more</button>'
-        : results.length ? `<span class="faint small">That’s everything — ${fmtNum(results.length)} results.</span>` : '';
-      if ($('#dload', f)) $('#dload', f).onclick = () => run(true);
-      if ($('#dretry', f)) $('#dretry', f).onclick = () => { more = true; run(true); };
-    };
-    const near = () => { const f = $('#dmore', el); return !!f && f.getBoundingClientRect().top < window.innerHeight + 600; };
-    // One page at a time: a new search starts at page 0; scrolling near the bottom loads the next page.
-    const run = async (append = false) => {
-      if (append && (loading || !more)) return;
-      const my = append ? seq : ++seq;
-      const inst = State.instances.find((i) => i.id === st.inst);
-      if (!append) { page = 0; more = false; results = []; seen = new Set(); $('#dres', el).innerHTML = '<div class="faint">Searching…</div>'; }
-      loading = true; footer();
-      let r;
-      try { r = await api('discover:search', { kind: st.kind, query: st.q, sort: st.sort, gameVersion: inst?.versionId, loader: inst?.loader?.type, limit: 24, page: append ? page + 1 : 0, source: st.source }); }
-      catch (e) {
-        if (my !== seq || !el.isConnected) return;
-        loading = false;
-        if (append) { more = false; footer(e.message, true); } else { $('#dres', el).innerHTML = `<div class="empty">${icon('alert')}<div>${esc(e.message)}</div></div>`; footer(); }
-        return;
-      }
-      if (my !== seq || !el.isConnected) return;
-      loading = false;
-      if (append) page += 1;
-      more = !!r.more;
-      $('#dprov', el).innerHTML = r.providers.map((p) => `<span class="chip ${p.ok ? 'ok' : ''}" title="${esc(p.why || '')}">${esc(p.name)}${p.ok ? ` · ${fmtNum(p.total)}` : ` · ${esc(p.why)}`}</span>`).join('');
-      const fresh = r.results.filter((h) => !seen.has(key(h)) && seen.add(key(h)));
-      const from = results.length; results.push(...fresh);
-      if (!append) $('#dres', el).innerHTML = fresh.length ? '' : `<div class="empty">${icon('search')}<div>${r.providers.every((p) => !p.ok) ? esc(r.providers.map((p) => p.why).join(' ')) : 'Nothing found.'}</div></div>`;
-      const tmp = document.createElement('div'); tmp.innerHTML = fresh.map((h, i) => card(h, from + i)).join('');
-      bind(tmp);
-      $('#dres', el).append(...tmp.children);
-      footer();
-      // a page that was mostly duplicates, or a tall window: keep filling until the list can scroll
-      if (more && near()) setTimeout(() => run(true), 50);
-    };
-    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) run(true); }, { rootMargin: '0px 0px 600px 0px' });
-    io.observe($('#dmore', el));
-    run();
-    return () => io.disconnect();
-  },
-};
+/* Discover was merged into the Content Hub (pages/browse.js). */
 
 /* ---------- Cloud & Sync ---------- */
 Pages.backups = {
@@ -191,7 +99,7 @@ const Inbox = {
     };
     const prefs = () => {
       box.innerHTML = `<table class="hs-ptable"><tr><th>Category</th><th>In Astra</th><th>Desktop pop-up</th></tr>${Object.entries(p.categories).map(([k, c]) => `<tr><td>${esc(c.name)}</td><td><label class="switch"><input type="checkbox" data-pk="${k}" data-f="enabled" ${p.prefs[k].enabled ? 'checked' : ''}><span></span></label></td><td><label class="switch"><input type="checkbox" data-pk="${k}" data-f="desktop" ${p.prefs[k].desktop ? 'checked' : ''}><span></span></label></td></tr>`).join('')}</table>
-        <p class="faint small">Desktop pop-ups only appear while Astra is in the background and Settings → Notifications is on. Server and friend alerts come from Astra Connect → Server monitoring (and a server’s “Alerts” switch in its details).</p>`;
+        <p class="faint small">Desktop pop-ups only appear while Astra is in the background and Settings → Notifications is on. Server and friend alerts come from server monitoring (a server’s “Alerts” switch in its details).</p>`;
       $$('[data-pk]', box).forEach((c) => (c.onchange = async () => { p.prefs = await api('notify:setPrefs', { [c.dataset.pk]: { [c.dataset.f]: c.checked } }); }));
     };
     $$('[data-v]', m.el).forEach((b) => (b.onclick = () => { $$('[data-v]', m.el).forEach((x) => x.classList.toggle('on', x === b)); b.dataset.v === 'in' ? inbox() : prefs(); }));
@@ -225,7 +133,7 @@ async function openServerDetails(serverId) {
     m.$('#sd-notes').onchange = (e) => api('srv:setProfile', serverId, { notes: e.target.value }).catch(toastErr);
     m.$('#sd-notify').onchange = async (e) => {
       try { await api('srv:setProfile', serverId, { notify: e.target.checked }); } catch (er) { return toastErr(er); }
-      if (e.target.checked) { const w = await api('connect:get', 'server-watch').catch(() => null); if (w && !w.enabled && await confirmDialog('Alerts need Astra Connect’s server monitoring, which is off. Turn it on? (It pings your favourite and alert servers every few minutes.)', { title: 'Server monitoring', ok: 'Turn on' })) { await api('connect:setEnabled', 'server-watch', true); toast('Server monitoring is on'); } }
+      if (e.target.checked) { const w = await api('connect:get', 'server-watch').catch(() => null); if (w && !w.enabled && await confirmDialog('Alerts need server monitoring, which is off. Turn it on? (It pings your favourite and alert servers every few minutes.)', { title: 'Server monitoring', ok: 'Turn on' })) { await api('connect:setEnabled', 'server-watch', true); toast('Server monitoring is on'); } }
     };
   };
   const foot = document.createElement('footer');

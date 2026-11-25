@@ -1,6 +1,82 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.0",
+    "date": "2026-11-24",
+    "title": "Content Hub, a new instance page and Instance Settings",
+    "groups": [
+      {
+        "area": "Content Hub",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Browse and Discover are now one page: the Content Hub. Modpacks, mods, resource packs, shaders, datapacks and maps from Modrinth or CurseForge, with category, version, loader and sort filters in one row."
+          },
+          {
+            "type": "feature",
+            "text": "CurseForge categories, plus Legacy Fabric, Babric and Ornithe loader filters."
+          },
+          {
+            "type": "feature",
+            "text": "Download tray: everything you install from the hub shows at the bottom of the page — click a finished modpack to open it."
+          }
+        ]
+      },
+      {
+        "area": "Instances",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "New instance page: status, last played and playtime at a glance; Content, Worlds, Gallery, Files, Logs and Console tabs; Mods / Resource Packs / Shaders / Data Packs with counts."
+          },
+          {
+            "type": "feature",
+            "text": "Modpack instances stay linked to their modpack (Open link, Update, Unlink). Content is locked while linked — unlink to add your own mods, packs and shaders."
+          },
+          {
+            "type": "feature",
+            "text": "Instance Settings: General (name, icon, linked modpack, repair, delete), Installation (version and loader, locked while linked), Window (resolution presets, launcher visibility, Discord per instance), Controls (edit your key bindings), Java & Memory (memory, Java, JVM arguments, environment variables) and Launch Hooks (pre-launch, wrapper, post-exit)."
+          },
+          {
+            "type": "feature",
+            "text": "Export an instance with a pack name, version number and a file tree to pick exactly what goes in."
+          },
+          {
+            "type": "feature",
+            "text": "Create shortcut: a desktop shortcut that starts Astra and launches the instance."
+          },
+          {
+            "type": "feature",
+            "text": "Settings → Default options: environment variables and launch hooks for every instance that doesn’t set its own."
+          }
+        ]
+      },
+      {
+        "area": "Skins",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Edit skin: switch a wardrobe skin between Slim and Wide arms and pick your cape, with a live 3D preview."
+          }
+        ]
+      },
+      {
+        "area": "Launcher",
+        "entries": [
+          {
+            "type": "change",
+            "text": "Friends moved to the people icon next to your account. Astra Client is in Library and in New instance."
+          },
+          {
+            "type": "change",
+            "text": "Astra Connect was removed."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.16.0",
     "date": "2026-11-23",
     "title": "Host your modpacks — and no more “mismatched mod list”",

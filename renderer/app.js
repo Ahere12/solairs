@@ -1,14 +1,10 @@
 /* Boot: shell chrome, navigation, events from the main process, keybinds, drag & drop. */
 const NAV = [
   { id: 'home', label: 'Home', icon: 'home', key: 'nav.home' },
-  { id: 'browse', label: 'Browse', icon: 'browse', key: 'nav.browse' },
-  { id: 'discover', label: 'Discover', icon: 'globe', key: 'nav.discover' },
+  { id: 'browse', label: 'Content Hub', icon: 'browse', key: 'nav.browse' },
   { id: 'servers', label: 'Servers', icon: 'servers', key: 'nav.servers' },
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
-  { id: 'friends', label: 'Friends', icon: 'users', key: 'nav.friends' },
   { id: 'host', label: 'Hosting', icon: 'host', key: 'nav.host' },
-  { id: 'connect', label: 'Connect', icon: 'link', key: 'nav.connect' },
-  { id: 'solaris', label: 'Astra Client', icon: 'sun', key: 'nav.solaris' },
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];
 const SIDE_TOOLS = [
@@ -20,7 +16,8 @@ const SIDE_TOOLS = [
   { id: 'changelog', label: 'Changelog', icon: 'changelog' },
   { id: 'roadmap', label: 'Roadmap', icon: 'roadmap' },
 ];
-const ROUTE_ALIAS = { instance: 'library', modhealth: 'library', devhub: 'connect' };
+// Friends lives behind the people icon next to the account; Astra Client is opened from Library / New instance.
+const ROUTE_ALIAS = { instance: 'library', modhealth: 'library', solaris: 'library' };
 
 function selectedInstance() {
   const insts = State.instances;
@@ -36,6 +33,7 @@ function renderNav() {
   $$('[data-tool]').forEach((b) => (b.onclick = () => Router.go(b.dataset.tool)));
   renderSideInstances();
   const st = $('#who-settings'); if (st) st.classList.toggle('on', cur === 'settings');
+  const fr = $('#who-friends'); if (fr) fr.classList.toggle('on', cur === 'friends');
 }
 function renderSideInstances() {
   const box = $('#side-insts');
@@ -71,12 +69,13 @@ function renderAccountChip() {
   const chip = $('#account-chip');
   const a = State.accounts.accounts.find((x) => x.id === State.accounts.active);
   chip.innerHTML = `<button class="who" id="who" title="Accounts"><div class="head" id="chip-head"></div><div class="meta"><div class="type">${a ? (a.type === 'msa' ? 'Logged in as' : 'Offline account') : 'Not signed in'}</div><div class="name">${a ? esc(a.name) : T('Add account')}</div></div><svg class="i caret" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
-    <button class="icon-btn" id="who-accts" title="Accounts">${icon('users')}</button>
+    <button class="icon-btn" id="who-friends" title="${esc(T('Friends'))}">${icon('users')}</button>
     <button class="icon-btn" id="who-settings" title="${esc(T('Settings'))}">${icon('settings')}</button>`;
   renderHead($('#chip-head'), a);
   chip.classList.toggle('streamer', !!State.settings?.streamerMode);
   $('#who').onclick = openAccounts;
-  $('#who-accts').onclick = openAccounts;
+  $('#who-friends').onclick = () => Router.go('friends');
+  $('#who-friends').classList.toggle('on', Router.current?.name === 'friends');
   $('#who-settings').onclick = () => Router.go('settings');
   $('#who-settings').classList.toggle('on', Router.current?.name === 'settings');
 }
@@ -159,6 +158,7 @@ Bus.on('tasks', renderTasks);
 Bus.on('runs', renderNav);
 Bus.on('runs', renderSidePlay);
 Bus.on('route', renderNav);
+Bus.on('route', () => $$('.ctx-menu').forEach((m) => m.remove())); // a menu never outlives the page it was opened on
 Bus.on('route', (r) => { if (r?.name) api('discord:page', r.name).catch(() => {}); }); // Discord shows what you're doing in Astra
 Bus.on('instances', renderSideInstances);
 Bus.on('instances', renderSidePlay);

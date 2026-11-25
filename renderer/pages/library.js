@@ -32,6 +32,7 @@ Pages.library = {
       <div class="page-head">
         <div><h1>${T('Library')}</h1><div class="sub">Manage your Minecraft instances</div></div>
         <div class="actions">
+          <button class="btn" id="astra" title="A ready-made performance &amp; QoL pack">${icon('sun')}Astra Client</button>
           <button class="btn" id="imp">${icon('download')}${T('Import')}</button>
           <button class="btn primary" id="new">${icon('plus')}${T('New instance')}</button>
         </div>
@@ -67,6 +68,7 @@ Pages.library = {
     $$('[data-v]', el).forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('lib.view', view); draw(); }));
     $('#new', el).onclick = () => openNewInstance();
     $('#imp', el).onclick = () => openImport();
+    $('#astra', el).onclick = () => Router.go('solaris');
     draw();
     ctx.on('instances', draw);
     ctx.on('launch', draw);

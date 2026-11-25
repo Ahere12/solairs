@@ -180,6 +180,7 @@ const Pages = {};
 const Router = {
   stack: [], index: -1, current: null, cleanup: null,
   go(name, params = {}, { replace = false, record = true } = {}) {
+    if (name === 'discover') name = 'browse'; // Discover was merged into the Content Hub (old links, notifications)
     if (!Pages[name]) name = 'home';
     if (record) {
       if (replace && this.index >= 0) this.stack[this.index] = { name, params };

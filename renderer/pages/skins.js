@@ -7,6 +7,7 @@ Pages.skins = {
     let previewDefault = null; // default skin being previewed ({ name, model })
     let defModel = 'wide';
     let current = null;
+    let accountCapes = []; // Microsoft account capes (for Edit skin)
     el.innerHTML = `
       <div class="page-head"><div><h1>${T('Skins')}</h1><div class="sub">Your wardrobe — preview in 3D, then apply to your Microsoft account</div></div>
         <div class="actions">${acct ? `<button class="btn" id="sk-refresh" title="Reload your current skin from Minecraft">${icon('refresh')}Refresh skin</button>` : ''}<button class="btn" id="from-user">${icon('user')}From username</button><button class="btn primary" id="from-file">${icon('upload')}Upload skin</button></div></div>
@@ -83,18 +84,19 @@ Pages.skins = {
       const curSrc = current?.skin || def?.src;
       const curSlim = current?.skin ? current.variant === 'slim' : def?.model === 'slim';
       box.innerHTML = (curSrc ? tile('data-current', 'Current', current?.skin ? (curSlim ? 'Slim' : 'Classic') : `Default · ${def.name[0].toUpperCase() + def.name.slice(1)}`) : '') +
-        wardrobe.map((s) => tile(`data-skin="${esc(s.id)}"`, s.name, `<span data-variant="${esc(s.id)}" style="cursor:pointer" title="Toggle arm model">${s.variant === 'slim' ? 'Slim arms' : 'Classic arms'}</span>`, `<button class="icon-btn x" data-rm="${esc(s.id)}" title="Remove">${icon('trash')}</button>`,
+        wardrobe.map((s) => tile(`data-skin="${esc(s.id)}"`, s.name, `<span data-variant="${esc(s.id)}" style="cursor:pointer" title="Toggle arm model">${s.variant === 'slim' ? 'Slim arms' : 'Classic arms'}</span>`, `<button class="icon-btn x" data-rm="${esc(s.id)}" title="Remove">${icon('trash')}</button><button class="icon-btn x ed" data-edit="${esc(s.id)}" title="Edit skin: arms and cape">${icon('edit')}</button>`,
           wearing === s.id ? `<span class="sk-wearing">${icon('check')}Wearing</span>` : `<button class="btn sm primary sk-wear" data-wear="${esc(s.id)}" ${acct ? '' : 'disabled'}>${icon('skins')}Wear</button>`)).join('') +
         (!wardrobe.length ? `<div class="empty small" style="grid-column:1/-1;padding:24px">${icon('skins')}<div>Upload a skin PNG or grab one from any player's username.</div></div>` : '');
       const cur = $('[data-current]', box);
       if (cur) { paint(cur, curSrc, curSlim); cur.onclick = () => { staged = null; previewDefault = null; show(current?.skin, current?.variant); stage(); mark(); }; }
       for (const s of wardrobe) { const t = $(`[data-skin="${CSS.escape(s.id)}"]`, box); if (t && s.data) paint(t, s.data, s.variant === 'slim'); }
       $$('[data-skin]', box).forEach((t) => (t.onclick = (e) => {
-        if (e.target.closest('[data-rm],[data-variant],[data-wear]')) return;
+        if (e.target.closest('[data-rm],[data-variant],[data-wear],[data-edit]')) return;
         const s = wardrobe.find((x) => x.id === t.dataset.skin);
         staged = s.id; previewDefault = null; show(s.data, s.variant); stage(); mark();
       }));
       $$('[data-wear]', box).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const s = wardrobe.find((x) => x.id === b.dataset.wear); staged = s.id; previewDefault = null; show(s.data, s.variant); stage(); mark(); wear(b); }));
+      $$('[data-edit]', box).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); editSkin(wardrobe.find((x) => x.id === b.dataset.edit)); }));
       $$('[data-rm]', box).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this skin from your wardrobe?', { danger: true, ok: 'Remove' })) { wardrobe = await api('skins:remove', b.dataset.rm); if (staged === b.dataset.rm) staged = null; stage(); drawWardrobe(); } }));
       $$('[data-variant]', box).forEach((b) => (b.onclick = async () => { const s = wardrobe.find((x) => x.id === b.dataset.variant); wardrobe = await api('skins:update', s.id, { variant: s.variant === 'slim' ? 'classic' : 'slim' }); if (staged === s.id) { const n = wardrobe.find((x) => x.id === s.id); show(n.data, n.variant); } drawWardrobe(); }));
       mark();
@@ -179,6 +181,71 @@ Pages.skins = {
       try { wardrobe = await api('skins:addFromUsername', n); staged = wardrobe[0].id; previewDefault = null; show(wardrobe[0].data, wardrobe[0].variant); drawWardrobe(); stage(); toast(`Added ${n}'s skin`); } catch (e) { toastErr(e); }
     };
 
+    /** Edit skin: arm type (Slim / Wide) and which cape to wear, with a live 3D preview. */
+    const editSkin = (sk) => {
+      if (!sk) return;
+      const origVariant = sk.variant === 'slim' ? 'slim' : 'classic';
+      let variant = origVariant;
+      const activeCape = accountCapes.find((c) => c.state === 'ACTIVE');
+      const origCape = activeCape ? activeCape.id : '';
+      let cape = origCape;
+      let pv = null;
+      const dispose = () => { if (pv) { clearInterval(pv._capeTimer); pv.dispose(); pv = null; } };
+      const m = modal({
+        title: 'Edit skin',
+        body: `<div class="skin-edit"><div class="se-view"><canvas id="se-c" width="220" height="300"></canvas></div>
+          <div class="se-side"><div class="lbl">Arm type</div><div class="seg" id="se-arms"><button data-arm="slim">Slim</button><button data-arm="classic">Wide</button></div>
+            <div class="lbl" style="margin-top:14px">Cape</div>
+            ${acct?.type === 'msa' ? `<div class="se-capes"><button class="se-cape none" data-cp="" title="No cape">${icon('close')}</button>${accountCapes.map((c) => `<button class="se-cape" data-cp="${esc(c.id)}" title="${esc(c.alias)}"><canvas width="40" height="64"></canvas></button>`).join('')}</div>${accountCapes.length ? '' : '<div class="faint small" style="margin-top:6px">This account has no capes.</div>'}`
+              : '<div class="faint small">Capes need a Microsoft account.</div>'}
+          </div></div>`,
+        footer: `<button class="btn ghost" data-x>${T('Cancel')}</button><button class="btn primary" data-save disabled>${T('Save')}</button>`,
+        onClose: dispose,
+      });
+      try { if (window.skinview3d) { pv = new skinview3d.SkinViewer({ canvas: m.$('#se-c'), width: 220, height: 300 }); pv.zoom = 0.85; pv.autoRotate = !State.settings.lowEndMode; pv.autoRotateSpeed = 0.6; } } catch { pv = null; }
+      const capeUrl = (id) => { const c = accountCapes.find((x) => x.id === id); return c ? c.url.replace('http://', 'https://') : null; };
+      const preview = () => {
+        if (pv) { pv.loadSkin(sk.data, { model: variant === 'slim' ? 'slim' : 'default' }); loadCape(pv, capeUrl(cape)); }
+        else drawSkinFront(m.$('#se-c'), sk.data, variant === 'slim');
+      };
+      const dirty = () => variant !== origVariant || cape !== origCape;
+      const mark = () => {
+        $$('[data-arm]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.arm === variant));
+        $$('[data-cp]', m.el).forEach((b) => b.classList.toggle('on', b.dataset.cp === cape));
+        m.$('[data-save]').disabled = !dirty();
+      };
+      for (const c of accountCapes) {
+        const cv = m.$(`[data-cp="${CSS.escape(c.id)}"] canvas`); if (!cv) continue;
+        const img = new Image();
+        img.onload = () => { const x = cv.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(img, 1, 1, 10, 16, 0, 0, 40, 64); };
+        img.src = c.url.replace('http://', 'https://');
+      }
+      $$('[data-arm]', m.el).forEach((b) => (b.onclick = () => { variant = b.dataset.arm; mark(); preview(); }));
+      $$('[data-cp]', m.el).forEach((b) => (b.onclick = () => { cape = b.dataset.cp; mark(); preview(); }));
+      m.$('[data-x]').onclick = () => m.close();
+      m.$('[data-save]').onclick = async (e) => {
+        const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon('refresh', 'spin')}Saving…`;
+        try {
+          if (variant !== origVariant) {
+            wardrobe = await api('skins:update', sk.id, { variant });
+            // wearing this skin right now: Mojang needs the new arm type too
+            if (wearing === sk.id && acct) { await api('skins:apply', sk.id); if (acct.type === 'msa') current = await api('skins:current').catch(() => current); }
+          }
+          if (acct?.type === 'msa' && cape !== origCape) {
+            await api('skins:setCape', cape || null);
+            accountCapes = accountCapes.map((c) => ({ ...c, state: c.id === cape ? 'ACTIVE' : 'INACTIVE' }));
+            $$('#capes-wrap [data-cape]', el).forEach((x) => x.classList.toggle('on', x.dataset.cape === cape));
+            if (viewer) loadCape(viewer, capeUrl(cape));
+          }
+          toast('Skin saved');
+          drawWardrobe(); stage();
+          const n = wardrobe.find((x) => x.id === sk.id); if (n && staged === n.id) show(n.data, n.variant);
+          m.close();
+        } catch (er) { toastErr(er); if (b.isConnected) { b.disabled = false; b.textContent = T('Save'); } }
+      };
+      mark(); preview();
+    };
+
     // Current skin + capes
     current = await api('skins:current').catch(() => null);
     wearing = await api('skins:wearing', current?.url || null).catch(() => null);
@@ -190,6 +257,7 @@ Pages.skins = {
     if (acct?.type === 'msa') {
       try {
         const capes = await api('skins:capes');
+        accountCapes = capes;
         if (capes.length) {
           $('#capes-wrap', el).innerHTML = `<h2 style="margin-top:0">Capes</h2><div class="row wrap" style="margin-bottom:10px"><div class="cape ${capes.every((c) => c.state !== 'ACTIVE') ? 'on' : ''}" data-cape="">None</div>${capes.map((c) => `<div class="cape ${c.state === 'ACTIVE' ? 'on' : ''}" data-cape="${esc(c.id)}" title="${esc(c.alias)}"><canvas width="80" height="128" style="width:100%;height:100%"></canvas></div>`).join('')}</div>`;
           for (const c of capes) {

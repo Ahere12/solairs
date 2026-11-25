@@ -15,7 +15,7 @@ let reg = null;
 function thirdParty() { try { return require('../eco/devhub').definitions(); } catch (e) { console.error('[Astra] Developer Hub:', e.message); return []; } }
 const registry = () => (reg = reg || createRegistry({ defs: [...INTEGRATIONS, ...thirdParty()], store: { read: () => readJSON(file(), {}), write: (d) => writeJSON(file(), d) }, secrets,
   // a new problem goes to the Astra inbox (Notifications → Integration problems)
-  onError: (id, name, message) => require('../eco/notify').add({ category: 'integration', title: `${name}: problem`, body: message, key: `integration:${id}:${message}`, action: { kind: 'route', page: 'connect' } }),
+  onError: (id, name, message) => require('../eco/notify').add({ category: 'integration', title: `${name}: problem`, body: message, key: `integration:${id}:${message}`, action: { kind: 'route', page: 'settings' } }),
 }));
 
 module.exports = {

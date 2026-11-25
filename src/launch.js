@@ -18,6 +18,39 @@ const modrinth = require('./modrinth');
 const running = new Map(); // runId -> { proc, instanceId, start, lines, logFile }
 const history = []; // finished runs (for the console)
 
+/** "KEY=value" lines (instance ones replace the defaults entirely). */
+function parseEnv(text) {
+  const out = {};
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/);
+    if (m) out[m[1]] = m[2].trim();
+  }
+  return out;
+}
+/** The launch hooks for an instance: its own (when turned on), else the defaults from Settings. */
+function hooksFor(inst, s) {
+  const own = inst.hooks && inst.hooks.enabled ? inst.hooks : {};
+  const pick = (k, d) => String(own[k] || d || '').trim();
+  return { pre: pick('pre', s.hookPre), wrapper: pick('wrapper', s.hookWrapper), post: pick('post', s.hookPost) };
+}
+/** Runs a hook command in the shell (pre-launch waits for it, post-exit doesn't). */
+function runHook(cmd, env, cwd, wait) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, { shell: true, cwd, env, windowsHide: true, detached: !wait, stdio: wait ? 'pipe' : 'ignore' });
+    if (!wait) { p.on('error', () => {}); p.unref(); return resolve(0); }
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; if (out.length > 4000) out = out.slice(-4000); });
+    p.stderr.on('data', (d) => { out += d; if (out.length > 4000) out = out.slice(-4000); });
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0 ? resolve(0) : reject(new Error(`Pre-launch command failed (exit code ${code})${out.trim() ? ': ' + out.trim().split(/\r?\n/).pop().slice(0, 200) : ''}`))));
+  });
+}
+/** Splits a wrapper command like `prime-run` or `"C:\\x y\\wrap.exe" --flag` into program + arguments. */
+function splitCmd(cmd) {
+  const parts = []; const re = /"([^"]*)"|'([^']*)'|(\S+)/g; let m;
+  while ((m = re.exec(cmd))) parts.push(m[1] ?? m[2] ?? m[3]);
+  return parts;
+}
 function cleanEnv() {
   const e = { ...process.env }; delete e.JAVA_TOOL_OPTIONS; delete e._JAVA_OPTIONS;
   if (process.platform === 'linux') {
@@ -337,7 +370,12 @@ async function launchInner(instanceId, opts = {}) {
   fs.mkdirSync(paths.logs(), { recursive: true });
   const logFile = path.join(paths.logs(), `${runId}.log`);
   const logStream = fs.createWriteStream(logFile);
-  const proc = spawn(javaPath, args, { cwd: gameDir, windowsHide: false, env: cleanEnv() });
+  // Environment variables and launch hooks (instance settings, else the defaults in Settings → Default options)
+  const env = { ...cleanEnv(), ...parseEnv(inst.envVars && String(inst.envVars).trim() ? inst.envVars : s.envVars), INST_NAME: inst.name, INST_ID: inst.id, INST_DIR: gameDir, INST_MC_VER: inst.versionId, INST_JAVA: javaPath };
+  const hooks = hooksFor(inst, s);
+  if (hooks.pre) { status(instanceId, 'Running pre-launch command'); await runHook(hooks.pre, env, gameDir, true); }
+  const wrap = hooks.wrapper && !s.dedicatedGpu ? splitCmd(hooks.wrapper) : [];
+  const proc = wrap.length ? spawn(wrap[0], [...wrap.slice(1), javaPath, ...args], { cwd: gameDir, windowsHide: false, env }) : spawn(javaPath, args, { cwd: gameDir, windowsHide: false, env });
   const run = { runId, proc, instanceId, name: inst.name, start: Date.now(), lines: [], logFile, gameDir };
   running.set(runId, run);
   const safe = (l) => (auth.accessToken.length > 8 ? l.split(auth.accessToken).join('••••••') : l);
@@ -381,8 +419,8 @@ async function launchInner(instanceId, opts = {}) {
 
   instances.save({ ...instances.get(instanceId), lastPlayed: Date.now() });
   push('launch:started', { runId, instanceId, name: inst.name });
-  events.emit('window', s.launchBehavior);
-  discord.playing({ runId, inst, server: opts.server, world: opts.world, start: run.start, account: accounts.active(), modded });
+  events.emit('window', inst.launchBehavior || s.launchBehavior);
+  if (inst.discordRpc !== 'off') discord.playing({ runId, inst, server: opts.server, world: opts.world, start: run.start, account: accounts.active(), modded });
 
   proc.on('close', (code, signal) => {
     if (!running.has(runId)) return; // already handled (Java failed to start)
@@ -406,6 +444,7 @@ async function launchInner(instanceId, opts = {}) {
     history.splice(20);
     push('launch:exited', { runId, instanceId, code, killed, duration, analysis });
     discord.gameEnded(runId);
+    if (hooks.post) runHook(hooks.post, { ...env, INST_EXIT_CODE: String(code ?? -1) }, gameDir, false).catch(() => {});
     if (!running.size) { events.emit('window', 'restore'); }
   });
   return { runId };

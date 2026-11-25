@@ -16,7 +16,7 @@ const BUTTONS = [{ label: 'Get Astra', url: 'https://github.com/Ahere12/solairs/
 const PAGES = {
   home: 'In the launcher', library: 'Organising instances', instance: 'Setting up an instance', browse: 'Browsing mods',
   solaris: 'Setting up Astra Client', servers: 'Looking for a server', skins: 'Picking a skin', friends: 'Checking on friends',
-  host: 'Managing servers', connect: 'Setting up Astra Connect', maps: 'Looking at a map', stats: 'Checking their stats', waypoints: 'Planning a trip', gallery: 'Looking at screenshots', console: 'Reading game logs', settings: 'Tweaking settings',
+  host: 'Managing servers', stats: 'Checking their stats', gallery: 'Looking at screenshots', console: 'Reading game logs', settings: 'Tweaking settings',
   changelog: 'Reading what’s new', roadmap: 'Reading the roadmap',
 };
 

@@ -116,11 +116,24 @@ module.exports = (getWin) => ({
   'instances:duplicates': (id) => instances.duplicates(id),
   'instances:scan': (id) => instances.scan(id),
   'instances:worlds': (id) => instances.worlds(id),
-  'instances:export': async (id, include) => {
+  'instances:contentCounts': (id) => instances.contentCounts(id),
+  'instances:unlink': (id) => instances.unlink(id),
+  'instances:exportTree': (id) => instances.exportTree(id),
+  /** Checks every game file by checksum on the next launch and re-resolves the loader. */
+  'instances:repair': (id) => {
+    if (launch.isBusy(id)) throw new Error('Close the game before repairing this instance.');
+    instances.update(id, { launchVersionId: null });
+    fs.writeFileSync(paths.file('repair.flag'), new Date().toISOString());
+    return true;
+  },
+  /** Desktop shortcut that starts Astra and launches this instance. */
+  'instances:shortcut': (id, picture) => require('./shortcut').create(instances.get(id), typeof picture === 'string' && picture.length < 2e6 ? picture : null),
+  'instances:export': async (id, include, pack = {}) => {
     const inst = instances.get(id);
-    const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${inst.name}.solpack`, filters: [{ name: 'Astra pack', extensions: ['solpack'] }] })).filePath;
+    const base = String(pack.name || inst.name).replace(/[<>:"/\\|?*]+/g, '').trim() || 'instance';
+    const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${base}${pack.version ? ' ' + String(pack.version).replace(/[<>:"/\\|?*]+/g, '') : ''}.solpack`, filters: [{ name: 'Astra pack', extensions: ['solpack'] }] })).filePath;
     if (!dest) return null;
-    await instances.exportPack(id, dest, include);
+    await instances.exportPack(id, dest, include, pack);
     shell.showItemInFolder(dest);
     return dest;
   },
@@ -301,6 +314,7 @@ module.exports = (getWin) => ({
   // ---------- CurseForge ----------
   'curseforge:available': () => curseforge.available(),
   'curseforge:search': (q) => curseforge.search(q),
+  'curseforge:categories': (type) => curseforge.categories(type),
   'curseforge:project': (id) => curseforge.project(id),
   'curseforge:files': (id, o) => curseforge.files(id, o),
   'curseforge:install': async (instanceId, o) => { const r = await curseforge.install(instanceId, o); autoScan(instanceId, modsPath(instanceId, r)); return r; },

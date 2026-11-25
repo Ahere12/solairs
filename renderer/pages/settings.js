@@ -91,7 +91,7 @@ function applyLook(s) {
 Pages.settings = {
   async render(el, params, ctx) {
     let tab = params.tab || 'general';
-    const TABS = [['general', 'General', 'settings'], ['appearance', 'Appearance', 'palette'], ['java', 'Java & Memory', 'cpu'], ['performance', 'Performance', 'zap'], ['accounts', 'Accounts', 'user'], ['privacy', 'Privacy & safety', 'shield'], ['keybinds', 'Keybinds', 'key'], ['storage', 'Storage', 'hdd'], ['integrations', 'Integrations', 'link'], ['diagnostics', 'Diagnostics', 'bug'], ['about', 'About', 'info']];
+    const TABS = [['general', 'General', 'settings'], ['appearance', 'Appearance', 'palette'], ['java', 'Java & Memory', 'cpu'], ['defaults', 'Default options', 'sliders'], ['performance', 'Performance', 'zap'], ['accounts', 'Accounts', 'user'], ['privacy', 'Privacy & safety', 'shield'], ['keybinds', 'Keybinds', 'key'], ['storage', 'Storage', 'hdd'], ['integrations', 'Integrations', 'link'], ['diagnostics', 'Diagnostics', 'bug'], ['about', 'About', 'info']];
     el.innerHTML = `<div class="page-head"><h1>${T('Settings')}</h1></div>
       <div class="settings"><nav>${TABS.map(([k, l, ic]) => `<button class="nav-item" data-st="${k}">${icon(ic)}${l}</button>`).join('')}</nav><div id="sbody"></div></div>`;
     const show = (t) => {
@@ -249,6 +249,24 @@ Pages.settings = {
       i.oninput = () => { const ct = { ...State.settings.customTheme, [i.dataset.ct]: i.value }; applyTheme({ ...State.settings, theme: 'custom', customTheme: ct }); };
       i.onchange = () => set({ customTheme: { ...State.settings.customTheme, [i.dataset.ct]: i.value } });
     });
+  },
+
+  /** Defaults applied to instances that don't set their own (Instance Settings → Java & Memory / Launch Hooks). */
+  defaults(box) {
+    const s = State.settings;
+    box.innerHTML = `<div class="card">
+      <div class="notice row" style="gap:10px;margin-bottom:6px">${icon('info')}<span>Defaults applied to instances that don’t override them. JVM arguments and memory are under Java &amp; Memory.</span></div>
+      <div class="setting" style="flex-direction:column;align-items:stretch"><div class="txt"><div class="t">Environment variables</div><div class="d">One KEY=value per line. Applied when an instance has no environment variables set (per-instance values replace these entirely).</div></div>
+        <textarea data-text="envVars" rows="4" class="mono" placeholder="KEY=value&#10;ANOTHER_KEY=another_value">${esc(s.envVars || '')}</textarea></div>
+      <div class="setting" style="flex-direction:column;align-items:stretch"><div class="txt"><div class="t">Pre-launch command</div><div class="d">Runs before the game starts when the instance doesn’t set its own pre-launch command. The game waits for it to finish.</div></div>
+        <input type="text" data-text="hookPre" class="mono" value="${esc(s.hookPre || '')}" placeholder="C:\\path\\to\\pre-launch.bat"></div>
+      <div class="setting" style="flex-direction:column;align-items:stretch"><div class="txt"><div class="t">Wrapper command</div><div class="d">${s.dedicatedGpu ? 'Not available while Use dedicated GPU is enabled.' : 'Starts Java through this program, e.g. prime-run or gamemoderun.'}</div></div>
+        <input type="text" data-text="hookWrapper" class="mono" value="${esc(s.hookWrapper || '')}" placeholder="gamemoderun" ${s.dedicatedGpu ? 'disabled' : ''}></div>
+      <div class="setting" style="flex-direction:column;align-items:stretch"><div class="txt"><div class="t">Post-exit command</div><div class="d">Runs after the game has closed.</div></div>
+        <input type="text" data-text="hookPost" class="mono" value="${esc(s.hookPost || '')}" placeholder="C:\\path\\to\\post-exit.bat"></div>
+      <p class="faint small" style="margin-bottom:0">Commands run in your system shell with INST_NAME, INST_ID, INST_DIR, INST_MC_VER and INST_JAVA set (post-exit also gets INST_EXIT_CODE).</p>
+    </div>`;
+    this.bind(box);
   },
 
   async java(box) {
