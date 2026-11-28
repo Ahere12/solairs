@@ -31,8 +31,9 @@ function inForeignSandbox(appData) {
 /** Starts the same Astra again through Windows Explorer (outside the sandbox). The caller then quits. */
 function restartOutside(exe) {
   const { spawn } = require('child_process');
-  // a short pause first, so this copy has quit (and let go of the single-instance lock) when the new one starts
-  const p = spawn('cmd.exe', ['/d', '/c', `ping -n 3 127.0.0.1 >nul & start "" explorer.exe "${exe}"`], { detached: true, stdio: 'ignore', windowsHide: true });
+  // Explorer hands the start to the Windows shell (which isn't sandboxed) and returns at once. No delay is needed:
+  // the sandboxed copy never takes the single-instance lock. (A cmd/ping wait in between got cut off when this copy quit.)
+  const p = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'explorer.exe'), [exe], { detached: true, stdio: 'ignore' });
   p.unref();
 }
 

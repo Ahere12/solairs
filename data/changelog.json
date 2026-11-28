@@ -1,6 +1,23 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.6",
+    "date": "2026-11-28",
+    "title": "Fix: restarting normally when started from inside another app",
+    "groups": [
+      {
+        "area": "Fixes",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "When Astra notices it was started from inside another app’s sandbox, it now reliably opens again as a normal start (1.17.5 sometimes closed without reopening)."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.17.5",
     "date": "2026-11-28",
     "title": "Fix: modpacks crashing with “Fabric was loaded twice”",
