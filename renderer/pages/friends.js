@@ -108,7 +108,7 @@ const Friends = {
     h += on.map(row).join('') + off.map(row).join('');
     if (!d.friends.length) h += `<div class="fd-empty">${icon('users')}<div>No friends yet</div><div class="faint small">Add players by their Minecraft username.</div><button class="btn sm primary" data-fd-add2>${icon('userPlus')}Add a friend</button></div>`;
     if (d.outgoing.length) h += `<div class="fd-sec">Pending</div>${d.outgoing.map((r) => req(r, true)).join('')}`;
-    if (d.mode === 'local' && d.friends.length) h += `<p class="faint small fd-pad">Friends show as online when Solaris sees them on a server you’ve checked. Press ${icon('refresh', 'inline')} to check now.</p>`;
+    if (d.mode === 'local' && d.friends.length) h += `<p class="faint small fd-pad">Friends show as online when Astra sees them on a server you’ve checked. Press ${icon('refresh', 'inline')} to check now.</p>`;
     return h;
   },
   drawSettings(el) {

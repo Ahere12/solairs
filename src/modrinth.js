@@ -1,4 +1,4 @@
-// Modrinth: search, install (with dependencies), modpacks (.mrpack), updates, Solaris Client modules.
+// Modrinth: search, install (with dependencies), modpacks (.mrpack), updates, Astra Client modules.
 const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
@@ -52,7 +52,7 @@ async function bestVersion(projectId, inst, projectType = 'mod') {
 
 /**
  * project_id → { file, versionId } for every jar/zip already in `dir`, identified by SHA-1 through Modrinth.
- * This catches content Solaris didn't install itself (modpacks, imports, manual drops), so installing a mod
+ * This catches content Astra didn't install itself (modpacks, imports, manual drops), so installing a mod
  * never adds a second copy of something that is already there (e.g. Fabric API → "Duplicate mods" crash).
  */
 async function installedProjects(dir) {
@@ -82,7 +82,7 @@ async function install(instanceId, { projectId, versionId, projectType = 'mod', 
     dir = path.join(inst.gameDir, 'saves', world, 'datapacks');
   }
   if (!found[dir]) found[dir] = await installedProjects(dir);
-  // Replace any other version of the same project — whether Solaris installed it or not.
+  // Replace any other version of the same project — whether Astra installed it or not.
   const record = readRecord(inst);
   const prev = record[v.project_id] || found[dir][v.project_id];
   if (prev && prev.file && prev.file !== f.filename) {
@@ -191,7 +191,7 @@ async function packProjectId(inst) {
 async function modpackVersions(instanceId) {
   const inst = instances.get(instanceId);
   const pid = await packProjectId(inst);
-  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Solaris doesn’t know where to look for updates.' };
+  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Astra doesn’t know where to look for updates.' };
   const list = await versions(pid);
   return {
     updatable: true, projectId: pid, current: inst.modpack.versionId,
@@ -295,7 +295,7 @@ async function applyUpdate(instanceId, kind, file, versionId) {
   return finalName;
 }
 
-// ---------- Solaris Client: curated all-in-one module set ----------
+// ---------- Astra Client: curated all-in-one module set ----------
 const MODULES = [
   { slug: 'fabric-api', name: 'Fabric API', cat: 'Core', required: true, desc: 'Library required by most Fabric mods.' },
   { slug: 'sodium', name: 'Sodium', cat: 'Performance', default: true, desc: 'Modern rendering engine — huge FPS boost.' },
@@ -330,7 +330,7 @@ async function moduleAvailability(mc) {
   return out;
 }
 
-/** Install/update the selected modules in a Solaris-managed instance. */
+/** Install/update the selected modules in a Astra-managed instance. */
 /** Quick single check (no retries) so offline launches don't wait on dozens of retried lookups. */
 async function reachable() {
   try { const r = await fetch(API, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) }); return r.status < 500; } catch { return false; }
@@ -361,7 +361,7 @@ async function syncModules(instanceId, onProgress) {
       if (rec[p.id]) { rec[p.id].slug = slug; writeRecord(inst, rec); }
     } catch (e) { report.unavailable.push(slug); }
   }
-  // Disable modules the user turned off (only ones Solaris installed).
+  // Disable modules the user turned off (only ones Astra installed).
   const fresh = readRecord(inst);
   for (const m of MODULES) {
     if (wanted.includes(m.slug)) continue;

@@ -1,6 +1,6 @@
 // CurseForge: search, project details, file browsing, installs (with dependencies) and modpacks.
 // The CurseForge API needs a personal API key (free, from console.curseforge.com). Players paste it in
-// Settings → Integrations; Solaris never ships someone else's key.
+// Settings → Integrations; Astra never ships someone else's key.
 const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
@@ -163,7 +163,7 @@ async function installModpack({ projectId, fileId, file }) {
 async function modpackVersions(instanceId) {
   const inst = instances.get(instanceId);
   const pid = inst.modpack?.projectId;
-  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Solaris doesn’t know where to look for updates.' };
+  if (!pid) return { updatable: false, reason: 'This modpack was imported from a file, so Astra doesn’t know where to look for updates.' };
   const list = (await cf(`/mods/${pid}/files?pageSize=50`)).data;
   return { updatable: true, projectId: pid, current: inst.modpack.fileId, versions: list.map((f) => ({ id: String(f.id), name: f.displayName, number: f.displayName, type: f.releaseType === 1 ? 'release' : f.releaseType === 2 ? 'beta' : 'alpha', date: f.fileDate, gameVersions: (f.gameVersions || []).filter((v) => /^\d/.test(v)) })) };
 }
@@ -171,7 +171,7 @@ async function modpackVersions(instanceId) {
 async function updateModpack(instanceId, fileId) {
   const inst = instances.get(instanceId);
   const pid = inst.modpack?.projectId;
-  if (!pid) throw new Error('Solaris doesn’t know which CurseForge project this modpack came from.');
+  if (!pid) throw new Error('Astra doesn’t know which CurseForge project this modpack came from.');
   push('task', { id: 'modpack', label: `Updating ${inst.name}`, progress: null });
   try {
     const f = (await cf(`/mods/${pid}/files/${fileId}`)).data;

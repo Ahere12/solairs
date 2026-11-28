@@ -1,5 +1,5 @@
 /* Real Minecraft icons, read at runtime from the player's own downloaded client jar
-   (versions/<id>/<id>.jar). Nothing from Mojang is bundled with Solaris: textures are
+   (versions/<id>/<id>.jar). Nothing from Mojang is bundled with Astra: textures are
    extracted on this machine, rendered (blocks as isometric cubes, items flat) and cached
    locally as small data URLs. */
 
@@ -119,7 +119,7 @@ function defaultSkinIndex(uuid) {
   return i < 9 ? { name: SKIN_NAMES[i], model: 'slim' } : { name: SKIN_NAMES[i - 9], model: 'wide' };
 }
 
-// The emoji icons Solaris used before → their real Minecraft counterpart.
+// The emoji icons Astra used before → their real Minecraft counterpart.
 const EMOJI_TO_MC = { '🧱': 'grass_block', '⛏️': 'diamond_pickaxe', '🗡️': 'diamond_sword', '🏹': 'bow', '🛡️': 'iron_chestplate', '🌲': 'oak_log', '🌋': 'magma_block', '🏰': 'stone_bricks', '🐉': 'ender_eye', '🧪': 'experience_bottle', '💎': 'diamond', '🔥': 'blaze_powder', '❄️': 'snowball', '🌙': 'clock', '⭐': 'nether_star', '🚀': 'firework_rocket', '🧭': 'compass', '🌸': 'cherry_planks', '🍄': 'red_mushroom', '🐺': 'bone', '🐝': 'honeycomb', '⚙️': 'redstone_block', '🎮': 'command_block', '🏝️': 'sand', '🌊': 'water_bucket', '👾': 'ender_pearl', '🌱': 'oak_sapling', '🌍': 'grass_block' };
 
 const McIcons = {

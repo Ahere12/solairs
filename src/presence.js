@@ -2,8 +2,8 @@
 // and, when a friends service is configured (config.FRIENDS_API), sharing it with friends plus
 // friend requests.
 //
-// Without a service, Solaris still tracks your own status. Friends then show as "Online on <server>"
-// when Solaris saw them in a server's live player list, or "Offline" otherwise.
+// Without a service, Astra still tracks your own status. Friends then show as "Online on <server>"
+// when Astra saw them in a server's live player list, or "Offline" otherwise.
 //
 // Service protocol (JSON over HTTPS, all routes under FRIENDS_API):
 //   POST /v1/auth/challenge                 -> { serverId }

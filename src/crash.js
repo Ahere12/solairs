@@ -6,7 +6,7 @@ const RULES = [
   { re: /java\.lang\.OutOfMemoryError|Could not reserve enough space|There is insufficient memory/i,
     title: 'Out of memory', fix: 'Increase the memory for this instance (Instance → Settings → Memory), or close other programs. With many mods, 4–6 GB is typical.' },
   { re: /UnsupportedClassVersionError|class file version (\d+)/i,
-    title: 'Wrong Java version', fix: 'This version or a mod needs a newer Java. Clear the custom Java path so Solaris picks the right runtime automatically.' },
+    title: 'Wrong Java version', fix: 'This version or a mod needs a newer Java. Clear the custom Java path so Astra picks the right runtime automatically.' },
   { re: /Incompatible mods? found|Mod resolution encountered an incompatible|requires (?:version .* of )?['"]?(fabric(?:-api|loader)?|[\w-]+)/i,
     title: 'Missing or incompatible mod dependency', fix: 'A mod needs another mod (often Fabric API) or a different version. Check the log lines above for the exact requirement and install it from Browse.' },
   { re: /Missing or unsupported mandatory dependencies|Mod .* requires/i,

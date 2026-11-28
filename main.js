@@ -1,6 +1,10 @@
 const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, Notification } = require('electron');
 const path = require('path');
 
+// The launcher used to be called Solaris. Keep Electron's own folder (boot.json: where the data folder lives,
+// window state) at its old name so renaming the app to Astra doesn't lose anything.
+app.setPath('userData', path.join(app.getPath('appData'), 'Solaris'));
+
 let win = null;
 let tray = null;
 let hiddenForGame = false;
@@ -35,13 +39,13 @@ async function recoverDataDir() {
     const missing = paths.missingDataDir();
     if (!missing) return true;
     const { response } = await dialog.showMessageBox({
-      type: 'warning', title: 'Solaris data folder not found', noLink: true, defaultId: 0, cancelId: 3,
-      message: 'Solaris can’t find its data folder',
+      type: 'warning', title: 'Astra data folder not found', noLink: true, defaultId: 0, cancelId: 3,
+      message: 'Astra can’t find its data folder',
       detail: `Your instances, settings and accounts were moved to:\n${missing}\n\nThat folder isn’t there right now — maybe a USB or external drive is unplugged, or the folder was renamed.`,
       buttons: ['Try again', 'Choose the folder…', 'Use the default folder', 'Quit'],
     });
     if (response === 1) {
-      const r = await dialog.showOpenDialog({ title: 'Where is your Solaris data folder?', properties: ['openDirectory'] });
+      const r = await dialog.showOpenDialog({ title: 'Where is your Astra data folder?', properties: ['openDirectory'] });
       if (r.filePaths[0]) paths.setRoot(r.filePaths[0]);
     } else if (response === 2) paths.setRoot(paths.defaultRoot());
     else if (response === 3) { app.quit(); return false; }
@@ -83,7 +87,7 @@ function init() {
   win = new BrowserWindow({
     width: 1320, height: 840, minWidth: 1040, minHeight: 660,
     frame: false, backgroundColor: '#0d0b12', show: false, icon,
-    title: 'Solaris',
+    title: 'Astra',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -92,11 +96,11 @@ function init() {
   win.on('close', (e) => {
     if (app.isQuitting) return;
     if (settings.get().minimizeToTray) { e.preventDefault(); win.hide(); return; }
-    // A game is running: keep Solaris alive in the tray so play time and logs are still recorded,
+    // A game is running: keep Astra alive in the tray so play time and logs are still recorded,
     // then quit by itself once the last game closes.
     if (require('./src/launch').anyRunning()) {
       e.preventDefault(); win.hide(); quitWhenGamesClose = true;
-      if (Notification.isSupported()) new Notification({ title: 'Solaris is still running', body: 'It will close by itself when you quit the game. Click the tray icon to reopen it.' }).show();
+      if (Notification.isSupported()) new Notification({ title: 'Astra is still running', body: 'It will close by itself when you quit the game. Click the tray icon to reopen it.' }).show();
     }
   });
   win.on('maximize', () => win.webContents.send('event', 'window:maximized', true));
@@ -106,11 +110,11 @@ function init() {
 
   // Tray with quick launch of recent instances.
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip('Solaris');
+  tray.setToolTip('Astra');
   const rebuildTray = () => {
     const instances = require('./src/instances').list().sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 5);
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Open Solaris', click: showWindow },
+      { label: 'Open Astra', click: showWindow },
       { type: 'separator' },
       ...instances.map((i) => ({ label: `Play ${i.name}`, click: () => require('./src/launch').launch(i.id).catch((e) => { showWindow(); events.emit('send', 'toast', { type: 'error', text: e.message }); }) })),
       { type: 'separator' },

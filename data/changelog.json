@@ -31,7 +31,7 @@
         { "type": "improvement", "text": "Damaged game files are detected automatically and repaired on the next launch." }
       ] },
       { "area": "Accounts & safety", "entries": [
-        { "type": "feature", "text": "Friends: follow players, see their real skins, and see when Solaris spots them on a server." },
+        { "type": "feature", "text": "Friends: follow players, see their real skins, and see when Astra spots them on a server." },
         { "type": "feature", "text": "New mods are scanned for malware automatically, plus Scan now in Settings → Privacy & safety." },
         { "type": "feature", "text": "Discord shows your player head for Microsoft accounts, with privacy switches for what is shared." },
         { "type": "feature", "text": "Refresh skin button, streamer mode, and warnings for unusual offline usernames." }
@@ -40,13 +40,13 @@
         { "type": "feature", "text": "Light, dark or match-system mode, a Classic layout, and custom gradients for buttons and the background." },
         { "type": "feature", "text": "Low-end PC mode and a GPU acceleration switch in Settings → Performance." },
         { "type": "improvement", "text": "Smarter Java: per-version Java choices, a Test button, and Java that is too old is skipped automatically." },
-        { "type": "fix", "text": "If your moved data folder is missing (e.g. an unplugged drive), Solaris asks what to do instead of starting empty." }
+        { "type": "fix", "text": "If your moved data folder is missing (e.g. an unplugged drive), Astra asks what to do instead of starting empty." }
       ] }
     ]
   },
   {
     "product": "launcher", "version": "1.0.0", "date": "2026-11-09",
-    "title": "Solaris is here",
+    "title": "Astra is here",
     "groups": [
       { "area": "Launch", "entries": [
         { "type": "feature", "text": "Launch every Minecraft: Java Edition release, snapshot and old version from one launcher." },
@@ -70,9 +70,9 @@
         { "type": "feature", "text": "Update manager that checks every mod against Modrinth by file hash." },
         { "type": "feature", "text": "Duplicate-mod detection and a heuristic malware scan." }
       ]},
-      { "area": "Solaris Client", "entries": [
+      { "area": "Astra Client", "entries": [
         { "type": "feature", "text": "One-click all-in-one modpack: Sodium, Lithium, FerriteCore, Zoomify and more, kept up to date on every launch." },
-        { "type": "feature", "text": "Toggle modules per instance from the Solaris Client page." }
+        { "type": "feature", "text": "Toggle modules per instance from the Astra Client page." }
       ]},
       { "area": "Social", "entries": [
         { "type": "feature", "text": "Server browser with live player counts, ping, MOTD, region & tag filters and favourites." },

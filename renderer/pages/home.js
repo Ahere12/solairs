@@ -24,8 +24,8 @@ Pages.home = {
           </div>` : `
           <section class="hero-strip">
             <div class="sunburst">${SUN_SVG.replace('class="sun"', 'width="100%" height="100%"')}</div>
-            <div class="txt"><h2>Welcome to Solaris</h2><div class="muted">Create your first instance — or one-click the Solaris Client, an all-in-one performance modpack that keeps itself up to date.</div>
-              <div class="row"><button class="btn primary" id="first-solaris">${icon('sun')}Get Solaris Client</button><button class="btn" id="first-new">${icon('plus')}${T('New instance')}</button></div></div>
+            <div class="txt"><h2>Welcome to Astra</h2><div class="muted">Create your first instance — or one-click the Astra Client, an all-in-one performance modpack that keeps itself up to date.</div>
+              <div class="row"><button class="btn primary" id="first-solaris">${icon('sun')}Get Astra Client</button><button class="btn" id="first-new">${icon('plus')}${T('New instance')}</button></div></div>
           </section>`}
 
         ${show.packs ? `<div class="section-head"><h2>Explore modpacks</h2><div class="grow"></div><a href="#" id="to-browse" class="small">See all →</a></div>
@@ -36,7 +36,7 @@ Pages.home = {
           ${show.playtime ? `<div><div class="section-head"><h2>Your Playtime</h2></div><div class="card playtime" id="ptime"></div></div>` : ''}
         </div>` : ''}
 
-        ${show.news ? `<div class="section-head"><h2>What's new in Solaris</h2></div><div class="card" id="news"></div>` : ''}
+        ${show.news ? `<div class="section-head"><h2>What's new in Astra</h2></div><div class="card" id="news"></div>` : ''}
         ${!show.packs && !show.servers && !show.playtime && !show.news ? `<p class="faint small" style="margin-top:24px">Home sections are hidden — turn them back on in <a href="#" id="to-look">Settings → Appearance</a>.</p>` : ''}`;
       $('#to-lib', el).onclick = () => Router.go('library');
       if ($('#to-browse', el)) $('#to-browse', el).onclick = (e) => { e.preventDefault(); Router.go('browse', { type: 'modpack' }); };
@@ -82,7 +82,7 @@ Pages.home = {
       const r = log[0];
       if (!r || !$('#news', el)) return;
       const entries = r.groups.flatMap((g) => g.entries.map((e) => ({ ...e, area: g.area }))).slice(0, 5);
-      $('#news', el).innerHTML = `<div class="row" style="margin-bottom:6px"><b>Solaris ${esc(r.version)}</b><span class="faint small">${fmtDate(r.date)}</span><div class="grow"></div><a href="#" id="all-news" class="small">Full changelog →</a></div>${entries.map((e) => `<div class="news-item"><span class="chip ${e.type === 'feature' ? 'accent' : e.type === 'bugfix' ? 'danger' : 'info'}">${esc(e.area)}</span><span class="small">${esc(e.text)}</span></div>`).join('')}`;
+      $('#news', el).innerHTML = `<div class="row" style="margin-bottom:6px"><b>Astra ${esc(r.version)}</b><span class="faint small">${fmtDate(r.date)}</span><div class="grow"></div><a href="#" id="all-news" class="small">Full changelog →</a></div>${entries.map((e) => `<div class="news-item"><span class="chip ${e.type === 'feature' ? 'accent' : e.type === 'bugfix' ? 'danger' : 'info'}">${esc(e.area)}</span><span class="small">${esc(e.text)}</span></div>`).join('')}`;
       $('#all-news', el).onclick = (e) => { e.preventDefault(); Router.go('changelog'); };
     };
     const loadFeatured = async () => {

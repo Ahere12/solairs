@@ -24,12 +24,12 @@ const DATA = path.join(__dirname, '..', 'data');
 
 function withRunning(list) { return list.map((i) => ({ ...i, running: launch.isRunning(i.id) })); }
 
-/** File actions from the UI are limited to Solaris's own folders (data folder + instance game folders). */
+/** File actions from the UI are limited to Astra's own folders (data folder + instance game folders). */
 function assertKnownPath(p) {
   const r = path.resolve(String(p || ''));
   const roots = [paths.getRoot(), ...instances.list().map((i) => i.gameDir)].map((x) => path.resolve(x).toLowerCase());
   const rl = r.toLowerCase();
-  if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Solaris folders.');
+  if (!roots.some((root) => rl === root || rl.startsWith(root + path.sep))) throw new Error('That file is outside the Astra folders.');
   return r;
 }
 /** Scan newly installed jars in the background and warn if something looks like malware. */
@@ -67,7 +67,7 @@ module.exports = (getWin) => ({
   'settings:set': (patch) => {
     const s = settings.set(patch);
     if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin, args: ['--hidden'] });
-    if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Solaris to apply the GPU acceleration change.' });
+    if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Astra to apply the GPU acceleration change.' });
     if ('discordRpc' in patch || 'discordClientId' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
     if ('friendsParticipate' in patch || 'friendsAllowRequests' in patch) { const p = require('./presence'); p.sendPresence().catch(() => {}); push('presence:self', p.current()); }
     return s;
@@ -107,7 +107,7 @@ module.exports = (getWin) => ({
   'instances:worlds': (id) => instances.worlds(id),
   'instances:export': async (id, include) => {
     const inst = instances.get(id);
-    const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${inst.name}.solpack`, filters: [{ name: 'Solaris pack', extensions: ['solpack'] }] })).filePath;
+    const dest = (await dialog.showSaveDialog(getWin(), { defaultPath: `${inst.name}.solpack`, filters: [{ name: 'Astra pack', extensions: ['solpack'] }] })).filePath;
     if (!dest) return null;
     await instances.exportPack(id, dest, include);
     shell.showItemInFolder(dest);
@@ -214,15 +214,15 @@ module.exports = (getWin) => ({
   'safety:disable': (id, file) => instances.setEnabled(id, 'mods', [path.basename(file)], false),
   'modrinth:installModpack': (o) => modrinth.installModpack(o),
 
-  // ---------- Solaris Client ----------
+  // ---------- Astra Client ----------
   'solaris:modules': () => modrinth.modules(),
   'solaris:availability': (mc) => modrinth.moduleAvailability(mc),
   'solaris:create': async ({ mc, modules, name }) => {
-    const inst = instances.create({ name: name || `Solaris ${mc}`, versionId: mc, loader: { type: 'fabric' }, icon: 'sun', extra: { solarisModules: modules } });
+    const inst = instances.create({ name: name || `Astra ${mc}`, versionId: mc, loader: { type: 'fabric' }, icon: 'sun', extra: { solarisModules: modules } });
     return inst;
   },
   'solaris:setModules': (id, modules) => instances.update(id, { solarisModules: modules }),
-  'solaris:sync': (id) => modrinth.syncModules(id, (p, slug) => push('task', { id: 'sync-' + id, label: 'Syncing Solaris modules', progress: p, detail: slug })),
+  'solaris:sync': (id) => modrinth.syncModules(id, (p, slug) => push('task', { id: 'sync-' + id, label: 'Syncing Astra modules', progress: p, detail: slug })),
 
   // ---------- servers ----------
   'servers:list': () => servers.list(),
@@ -302,7 +302,7 @@ module.exports = (getWin) => ({
   'storage:relocate': async () => {
     const [dir] = (await dialog.showOpenDialog(getWin(), { properties: ['openDirectory', 'createDirectory'] })).filePaths;
     if (!dir) return null;
-    const target = path.join(dir, 'Solaris');
+    const target = path.join(dir, 'Astra');
     const old = paths.getRoot();
     if (path.resolve(target) === path.resolve(old)) return null;
     push('task', { id: 'relocate', label: 'Moving data folder', progress: null });

@@ -12,7 +12,7 @@ for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
   const glow = Math.max(0, 1 - r / 0.75); if (glow > 0) { const ga = Math.pow(glow, 2) * 200; if (ga > A) { R = 255; G = 120; B = 40; A = ga; } }
   // core
   if (r < 0.5) { const t = Math.min(1, r / 0.5); R = 255; G = mix(225, 120, t); B = mix(110, 20, t); A = 255;
-    // eclipse ring cut for a "Solaris" look
+    // eclipse ring cut for a "Astra" look
     const ex = dx - S * 0.09, ey = dy + S * 0.07, er = Math.hypot(ex, ey) / (S / 2);
     if (er < 0.36) { const e = Math.min(1, (0.36 - er) / 0.02); R = mix(R, 22, e); G = mix(G, 15, e); B = mix(B, 30, e); }
     const edge = Math.min(1, (0.5 - r) * S / 4); A = 255 * edge; }

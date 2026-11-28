@@ -1,6 +1,6 @@
 // Read-only diagnostic for Microsoft → Xbox Live → XSTS → Minecraft Services sign-in.
-// Uses the same client ID, scope and endpoints as Solaris (src/config.js, src/accounts.js) but does
-// NOT touch Solaris's code, settings or saved accounts. Every token is redacted from the output.
+// Uses the same client ID, scope and endpoints as Astra (src/config.js, src/accounts.js) but does
+// NOT touch Astra's code, settings or saved accounts. Every token is redacted from the output.
 //
 // Usage: node tools/auth-diagnose.js [outfile]
 const fs = require('fs');
@@ -25,7 +25,7 @@ const json = (b) => { try { return JSON.parse(b); } catch { return null; } };
 const form = (o) => new URLSearchParams(o).toString();
 
 (async () => {
-  log(`# Solaris auth diagnostic — ${new Date().toISOString()}`);
+  log(`# Astra auth diagnostic — ${new Date().toISOString()}`);
   log(`client_id: ${MS_CLIENT_ID}   scope: ${SCOPE}   endpoint: login.microsoftonline.com/consumers`);
 
   // 1. Microsoft (device code — same app, same scope as the browser flow)

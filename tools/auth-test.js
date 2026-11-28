@@ -18,7 +18,7 @@ app.whenReady().then(async () => {
     ok('redirect URI is exactly the registered one', redirectUri === 'http://localhost:25585/relogin', redirectUri);
     const state = u.searchParams.get('state');
 
-    // 1b. Microsoft itself accepts the redirect URI Solaris sends (no sign-in, just loads the form)
+    // 1b. Microsoft itself accepts the redirect URI Astra sends (no sign-in, just loads the form)
     {
       let next2 = url, verdict = 'unknown';
       for (let i = 0; i < 6; i++) {
@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
 
     // 2. Wrong state is rejected and the flow keeps waiting; other paths 404
     let r = await fetch(`${redirectUri}?code=x&state=forged`);
-    ok('forged state rejected', /not from Solaris/.test(await r.text()));
+    ok('forged state rejected', /not from Astra/.test(await r.text()));
     r = await fetch(`http://localhost:25585/?code=x&state=${state}`);
     ok('only /relogin is handled', r.status === 404, 'HTTP ' + r.status);
 
@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
     ({ url, redirectUri } = await urlP);
     loginP = next('account:login');
     r = await fetch(`${redirectUri}?code=FAKECODE&state=${new URL(url).searchParams.get('state')}`);
-    ok('success page shown', /Signed in to Solaris/.test(await r.text()));
+    ok('success page shown', /Signed in to Astra/.test(await r.text()));
     res = await loginP;
     ok('token exchange reached Microsoft', !res.ok && /expired or was already used|Microsoft sign-in failed. Please try again./.test(res.error) && !/AADSTS/.test(res.error), res.error.slice(0, 140));
 

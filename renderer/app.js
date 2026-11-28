@@ -4,7 +4,7 @@ const NAV = [
   { id: 'browse', label: 'Browse', icon: 'browse', key: 'nav.browse' },
   { id: 'servers', label: 'Servers', icon: 'servers', key: 'nav.servers' },
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
-  { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
+  { id: 'solaris', label: 'Astra Client', icon: 'sun', key: 'nav.solaris' },
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];
 const SIDE_TOOLS = [
@@ -130,7 +130,7 @@ on('toast', (t) => toast(t.text, t.type || 'info'));
 on('safety:flagged', ({ instanceId, file, findings }) => {
   const inst = State.instances.find((i) => i.id === instanceId);
   const m = modal({ title: 'Suspicious mod found', body: `<div class="crash-cause"><b>${esc(file)}</b>${inst ? `<div class="faint small">in ${esc(inst.name)}</div>` : ''}${findings.map((f) => `<div class="small muted">• ${esc(f)}</div>`).join('')}</div>
-    <p class="muted small">Solaris’s malware scan found signs that this mod may steal accounts or run hidden programs. It’s a heuristic check, so it can be wrong — but if you don’t fully trust where this file came from, turn it off or delete it.</p>`,
+    <p class="muted small">Astra’s malware scan found signs that this mod may steal accounts or run hidden programs. It’s a heuristic check, so it can be wrong — but if you don’t fully trust where this file came from, turn it off or delete it.</p>`,
     footer: `<button class="btn ghost" data-keep>Keep it</button><button class="btn" data-off>${icon('eye')}Turn it off</button><button class="btn danger" data-del>${icon('trash')}Delete</button>` });
   m.$('[data-keep]').onclick = () => m.close();
   m.$('[data-off]').onclick = async () => { try { await api('safety:disable', instanceId, file); toast(`${file} turned off`); } catch (e) { toastErr(e); } m.close(); };
@@ -176,7 +176,7 @@ document.addEventListener('drop', async (e) => {
 });
 
 /* ---------- splash + welcome (sign-in) screens ---------- */
-const appName = () => State.info?.name || 'Solaris';
+const appName = () => State.info?.name || 'Astra';
 const SKY = '<div class="sky" aria-hidden="true"><div class="aurora"></div><div class="stars"></div><div class="stars s2"></div><div class="shooting"></div></div>';
 const Splash = {
   show(info) {

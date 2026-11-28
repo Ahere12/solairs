@@ -6,7 +6,7 @@ const THEMES = {
   custom: { name: 'Custom', bg: null, panel: null, side: null },
 };
 const ACCENTS = ['#ff9f1c', '#ff5e3a', '#ffd23f', '#3ddc84', '#2ec4b6', '#6aa8ff', '#8b5cf6', '#ff5ca8', '#e5e5e5'];
-const KEY_LABELS = { 'nav.home': 'Go to Home', 'nav.library': 'Go to Library', 'nav.browse': 'Go to Browse', 'nav.solaris': 'Go to Solaris Client', 'nav.servers': 'Go to Servers', 'nav.skins': 'Go to Skins', 'nav.friends': 'Open friends', 'nav.console': 'Go to Console', 'nav.settings': 'Open Settings', 'play.selected': 'Play selected instance', 'search.focus': 'Focus search' };
+const KEY_LABELS = { 'nav.home': 'Go to Home', 'nav.library': 'Go to Library', 'nav.browse': 'Go to Browse', 'nav.solaris': 'Go to Astra Client', 'nav.servers': 'Go to Servers', 'nav.skins': 'Go to Skins', 'nav.friends': 'Open friends', 'nav.console': 'Go to Console', 'nav.settings': 'Open Settings', 'play.selected': 'Play selected instance', 'search.focus': 'Focus search' };
 
 /** Light / dark / follow Windows. Light mode uses the Dawn palette; dark mode never shows Dawn. */
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -122,11 +122,11 @@ Pages.settings = {
     const s = State.settings;
     box.innerHTML = `<div class="card">
       <div class="setting"><div class="txt"><div class="t">Language</div><div class="d">Switches instantly.</div></div><div class="ctl"><select data-sel="language">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}" ${k === s.language ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
-      <div class="setting"><div class="txt"><div class="t">When the game starts</div><div class="d">What Solaris does with its window while you play.</div></div><div class="ctl"><select data-sel="launchBehavior"><option value="keep">Keep open</option><option value="minimize">Minimize</option><option value="hide">Hide (reopen when the game closes)</option></select></div></div>
+      <div class="setting"><div class="txt"><div class="t">When the game starts</div><div class="d">What Astra does with its window while you play.</div></div><div class="ctl"><select data-sel="launchBehavior"><option value="keep">Keep open</option><option value="minimize">Minimize</option><option value="hide">Hide (reopen when the game closes)</option></select></div></div>
       ${this.toggle('doubleClickLaunch', 'Double-click to launch', 'Double-clicking an instance card starts the game.')}
-      ${this.toggle('startMinimized', 'Start minimized', 'Open Solaris in the background.')}
-      ${this.toggle('openAtLogin', 'Launch on system startup', 'Start Solaris when you sign in to your computer.')}
-      ${this.toggle('minimizeToTray', 'Close to tray', 'Closing the window keeps Solaris running in the system tray (right-click it to quick-launch).')}
+      ${this.toggle('startMinimized', 'Start minimized', 'Open Astra in the background.')}
+      ${this.toggle('openAtLogin', 'Launch on system startup', 'Start Astra when you sign in to your computer.')}
+      ${this.toggle('minimizeToTray', 'Close to tray', 'Closing the window keeps Astra running in the system tray (right-click it to quick-launch).')}
       ${this.toggle('notifications', 'Notifications', 'Show confirmations, crash and download notifications.')}
       ${this.toggle('showSnapshots', 'Show snapshots', 'Include snapshots and old versions in version lists by default.')}
     </div>`;
@@ -195,7 +195,7 @@ Pages.settings = {
       ${this.lookToggle('homeModpacks', 'Explore modpacks', 'Popular modpacks from Modrinth.')}
       ${this.lookToggle('homeServers', 'Servers', 'Featured servers with live player counts.')}
       ${this.lookToggle('homePlaytime', 'Your Playtime', 'Play time per instance.')}
-      ${this.lookToggle('homeNews', "What's new", 'Latest Solaris changelog entries.')}
+      ${this.lookToggle('homeNews', "What's new", 'Latest Astra changelog entries.')}
     </div>
     <div class="row" style="margin-top:14px"><button class="btn sm ghost" id="look-reset">${icon('refresh')}Reset appearance to defaults</button></div>`;
     const set = async (patch) => { await saveSettings(patch); applyTheme(State.settings); this.appearance(box); };
@@ -253,7 +253,7 @@ Pages.settings = {
     box.innerHTML = `<div class="card">
       ${this.toggle('autoMemory', 'Automatic memory', `Pick memory based on your ${Math.round(total / 1024)} GB of RAM (currently ${auto} MB, +1 GB for modded).`)}
       <div class="setting ${s.autoMemory ? 'hidden' : ''}" id="memrow"><div class="txt"><div class="t">Maximum memory: <span id="memv">${s.memoryMax}</span> MB</div><input type="range" id="mem" min="1024" max="${Math.min(total - 1024, 32768)}" step="256" value="${s.memoryMax}" style="margin-top:8px"></div></div>
-      <div class="setting"><div class="txt"><div class="t">Java for all versions</div><div class="d">Empty = automatic: Solaris picks the right Java for each Minecraft version (recommended). A Java that is too old for a version is skipped automatically.</div></div><div class="ctl"><input type="text" data-text="javaPath" id="jp-all" value="${esc(s.javaPath)}" placeholder="Automatic" style="width:240px"><button class="btn sm" data-jpick="all" title="Browse">${icon('folder')}</button><button class="btn sm" data-jtest="all">Test</button></div></div>
+      <div class="setting"><div class="txt"><div class="t">Java for all versions</div><div class="d">Empty = automatic: Astra picks the right Java for each Minecraft version (recommended). A Java that is too old for a version is skipped automatically.</div></div><div class="ctl"><input type="text" data-text="javaPath" id="jp-all" value="${esc(s.javaPath)}" placeholder="Automatic" style="width:240px"><button class="btn sm" data-jpick="all" title="Browse">${icon('folder')}</button><button class="btn sm" data-jtest="all">Test</button></div></div>
       ${this.toggle('javaAutoInstall', 'Install Java automatically', 'Download the official Java runtime the first time a version needs it. Turn off to only use Java already installed on this PC.')}
     </div>
     <h2>Java per version</h2>
@@ -280,7 +280,7 @@ Pages.settings = {
     }));
     $$('[data-jtest]', box).forEach((b) => (b.onclick = async () => {
       const k = b.dataset.jtest, p = $('#jp-' + k, box).value.trim();
-      if (!p) return toast('Automatic Java — Solaris picks the right version for you', 'info');
+      if (!p) return toast('Automatic Java — Astra picks the right version for you', 'info');
       try {
         const r = await api('java:test', p);
         if (k !== 'all' && r.major !== +k) toast(`That is Java ${r.major}, not Java ${k}`, 'warn');
@@ -290,7 +290,7 @@ Pages.settings = {
     $$('[data-rt]', box).forEach((b) => (b.onclick = async () => { b.disabled = true; try { await api('java:install', b.dataset.rt); toast('Java installed'); this.java(box); } catch (e) { toastErr(e); b.disabled = false; } }));
     const js = await api('java:detect');
     const jbox = $('#javas', box); if (!jbox) return;
-    jbox.innerHTML = js.length ? js.map((j) => `<div class="list-row"><div class="mod-icon">${icon('cpu')}</div><div class="info"><div class="title">Java ${esc(j.version)} ${j.managed ? '<span class="chip accent">Solaris</span>' : ''}</div><div class="desc mono">${esc(j.path)}</div></div><button class="btn sm" data-use="${esc(j.path)}">Use globally</button></div>`).join('') : '<div class="list-row faint">No Java found — that\'s fine, Solaris installs it automatically.</div>';
+    jbox.innerHTML = js.length ? js.map((j) => `<div class="list-row"><div class="mod-icon">${icon('cpu')}</div><div class="info"><div class="title">Java ${esc(j.version)} ${j.managed ? '<span class="chip accent">Astra</span>' : ''}</div><div class="desc mono">${esc(j.path)}</div></div><button class="btn sm" data-use="${esc(j.path)}">Use globally</button></div>`).join('') : '<div class="list-row faint">No Java found — that\'s fine, Astra installs it automatically.</div>';
     $$('[data-use]', jbox).forEach((b) => (b.onclick = async () => { await saveSettings({ javaPath: b.dataset.use }); toast('Java path set'); this.java(box); }));
   },
 
@@ -301,8 +301,8 @@ Pages.settings = {
       <div class="stack" style="margin-top:12px">${accounts.map((a) => `<div class="row"><div class="head" data-h="${esc(a.id)}"></div><b>${esc(a.name)}</b><span class="chip">${a.type === 'msa' ? 'Microsoft' : 'Offline'}</span>${a.id === active ? '<span class="chip ok">Active</span>' : ''}</div>`).join('') || '<div class="faint">No accounts yet.</div>'}</div>
     </div>
     <h2>Microsoft sign-in</h2><div class="card">
-      <div class="setting"><div class="txt"><div class="t">Status <span id="ms-status"></span></div><div class="d">Sign in from the account menu. You sign in on Microsoft’s own page; Solaris never sees your password.</div></div><div class="ctl"><button class="btn sm" id="ms-signin">${MS_LOGO}Sign in with Microsoft</button></div></div>
-      <p class="faint small" style="margin-bottom:0">Privacy: Solaris talks directly to Microsoft, Xbox Live and Minecraft services. Tokens are encrypted on this computer and never sent anywhere else.</p>
+      <div class="setting"><div class="txt"><div class="t">Status <span id="ms-status"></span></div><div class="d">Sign in from the account menu. You sign in on Microsoft’s own page; Astra never sees your password.</div></div><div class="ctl"><button class="btn sm" id="ms-signin">${MS_LOGO}Sign in with Microsoft</button></div></div>
+      <p class="faint small" style="margin-bottom:0">Privacy: Astra talks directly to Microsoft, Xbox Live and Minecraft services. Tokens are encrypted on this computer and never sent anywhere else.</p>
     </div>`;
     $$('[data-h]', box).forEach((h) => renderHead(h, accounts.find((a) => a.id === h.dataset.h)));
     api('accounts:microsoftAvailable').then((ok) => {
@@ -344,7 +344,7 @@ Pages.settings = {
       <div class="card" style="margin-top:14px">
         <div class="setting"><div class="txt"><div class="t">Clean up</div><div class="d">Removes the download cache, extracted natives, logs older than 14 days and game versions no instance uses.</div></div><div class="ctl"><button class="btn sm" id="clean">${icon('trash')}Clean up</button></div></div>
         <div class="setting"><div class="txt"><div class="t">Repair game files</div><div class="d">On the next launch, every game file is checked by checksum and damaged ones are downloaded again.</div></div><div class="ctl"><button class="btn sm" id="repair">${icon('refresh')}Repair</button></div></div>
-        <div class="setting"><div class="txt"><div class="t">Data folder</div><div class="d">Move all instances, versions and settings to another drive. Solaris restarts afterwards.</div></div><div class="ctl"><button class="btn sm" id="open">${icon('folder')}Open</button><button class="btn sm" id="move">Move…</button><button class="btn sm ghost" id="resetdir">Reset location</button></div></div>
+        <div class="setting"><div class="txt"><div class="t">Data folder</div><div class="d">Move all instances, versions and settings to another drive. Astra restarts afterwards.</div></div><div class="ctl"><button class="btn sm" id="open">${icon('folder')}Open</button><button class="btn sm" id="move">Move…</button><button class="btn sm ghost" id="resetdir">Reset location</button></div></div>
         <div class="setting"><div class="txt"><div class="t">Reset settings</div><div class="d">Restore every setting to its default. Instances and accounts are kept.</div></div><div class="ctl"><button class="btn sm danger" id="reset">Reset</button></div></div>
       </div>`;
     $('#ddir', box).textContent = State.info.dataDir;
@@ -355,7 +355,7 @@ Pages.settings = {
     $('#clean', box).onclick = async () => { if (!(await confirmDialog('Remove cached and unused files?', { ok: 'Clean up' }))) return; try { const freed = await api('storage:cleanup'); toast(`Freed ${fmtBytes(freed)}`); this.storage(box); } catch (e) { toastErr(e); } };
     $('#repair', box).onclick = async () => { try { await api('storage:repair'); toast('Every game file will be checked and re-downloaded if damaged on the next launch'); } catch (e) { toastErr(e); } };
     $('#open', box).onclick = () => api('diag:openData');
-    $('#move', box).onclick = async () => { if (await confirmDialog('Copy all Solaris data to a new folder and restart? The old folder is kept until you delete it.', { ok: 'Choose folder' })) api('storage:relocate').catch(toastErr); };
+    $('#move', box).onclick = async () => { if (await confirmDialog('Copy all Astra data to a new folder and restart? The old folder is kept until you delete it.', { ok: 'Choose folder' })) api('storage:relocate').catch(toastErr); };
     $('#resetdir', box).onclick = async () => { if (await confirmDialog('Use the default data folder again and restart?')) api('storage:resetDataDir'); };
     $('#reset', box).onclick = async () => { if (await confirmDialog('Reset all settings to defaults?', { danger: true, ok: 'Reset' })) { State.settings = await api('settings:reset'); applyTheme(State.settings); renderNav(); toast('Settings reset'); } };
   },
@@ -367,9 +367,9 @@ Pages.settings = {
       ${this.toggle('performanceMode', 'Game performance flags', 'Extra Java flags that help Minecraft run smoother on low-end machines.')}
       ${this.toggle('hardwareAcceleration', 'GPU acceleration', 'Draw the launcher with your graphics card. Turn off if the launcher flickers or shows a black window. Needs a restart.')}
       ${this.toggle('dedicatedGpu', 'Play on the dedicated GPU', 'Windows laptops: asks the system to run Minecraft on your high-performance graphics card.')}
-      <div class="setting"><div class="txt"><div class="t">Parallel downloads</div><div class="d">How many files Solaris downloads at once. Lower this on slow or unstable connections.</div></div><div class="ctl"><select data-sel="concurrency">${[4, 8, 16, 32].map((n) => `<option ${n == s.concurrency ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
+      <div class="setting"><div class="txt"><div class="t">Parallel downloads</div><div class="d">How many files Astra downloads at once. Lower this on slow or unstable connections.</div></div><div class="ctl"><select data-sel="concurrency">${[4, 8, 16, 32].map((n) => `<option ${n == s.concurrency ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
     </div>
-    <div class="row" style="margin-top:12px"><button class="btn sm" id="hw-restart">${icon('refresh')}Restart Solaris now</button></div>`;
+    <div class="row" style="margin-top:12px"><button class="btn sm" id="hw-restart">${icon('refresh')}Restart Astra now</button></div>`;
     this.bind(box);
     $('[data-bool="lowEndMode"]', box).addEventListener('change', async (e) => { if (e.target.checked && !State.settings.performanceMode) { await saveSettings({ performanceMode: true }); $('[data-bool="performanceMode"]', box).checked = true; } applyTheme(State.settings); });
     $('[data-sel="concurrency"]', box).onchange = async (e) => { await saveSettings({ concurrency: +e.target.value }); toast('Saved'); };
@@ -388,7 +388,7 @@ Pages.settings = {
       ${this.toggle('discordShowInstance', 'Discord: show instance name', 'Show which instance you are playing. Off: just “Playing Minecraft”.')}
       ${this.toggle('discordShowServer', 'Discord: show server address', 'Show the server you joined.')}
       ${this.toggle('discordShowHead', 'Discord: show my player head', 'Microsoft accounts: your player head is shown as the Discord picture (loaded from mc-heads.net by Discord).')}
-      <p class="faint small" style="margin-bottom:0">Solaris has no telemetry or analytics. It only talks to Microsoft/Mojang (sign-in, game files, skins), Modrinth/CurseForge (when you browse), servers you ping, and mclo.gs when you upload a log.</p>
+      <p class="faint small" style="margin-bottom:0">Astra has no telemetry or analytics. It only talks to Microsoft/Mojang (sign-in, game files, skins), Modrinth/CurseForge (when you browse), servers you ping, and mclo.gs when you upload a log.</p>
     </div>`;
     this.bind(box);
     $('[data-bool="streamerMode"]', box).addEventListener('change', () => setTimeout(renderAccountChip, 50));
@@ -447,9 +447,9 @@ Pages.settings = {
     const i = State.info;
     box.innerHTML = `<div class="card" style="text-align:center;padding:36px">
       <img src="../assets/icon.png" style="width:96px;height:96px">
-      <h1 style="margin:10px 0 4px">Solaris</h1><div class="muted">Version ${esc(i.version)} · Electron ${esc(i.electron)} · ${esc(i.platform)}-${esc(i.arch)}</div>
+      <h1 style="margin:10px 0 4px">Astra</h1><div class="muted">Version ${esc(i.version)} · Electron ${esc(i.electron)} · ${esc(i.platform)}-${esc(i.arch)}</div>
       <div class="row" style="justify-content:center;margin-top:18px"><button class="btn" id="cl">${icon('changelog')}${T('Changelog')}</button><button class="btn" id="rm">${icon('roadmap')}${T('Roadmap')}</button></div>
-      <p class="faint small" style="margin-top:22px">Solaris is not affiliated with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</p></div>`;
+      <p class="faint small" style="margin-top:22px">Astra is not affiliated with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</p></div>`;
     $('#cl', box).onclick = () => Router.go('changelog');
     $('#rm', box).onclick = () => Router.go('roadmap');
   },

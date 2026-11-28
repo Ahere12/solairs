@@ -82,7 +82,7 @@ async function detect() {
       add(path.join(r, e, 'Contents', 'Home'));
     }
   }
-  // Solaris-managed runtimes
+  // Astra-managed runtimes
   try { for (const c of fs.readdirSync(paths.runtime())) { const e = javaExe(path.join(paths.runtime(), c)); if (fs.existsSync(e)) candidates.add(e); } } catch {}
   const out = [];
   for (const exe of candidates) {

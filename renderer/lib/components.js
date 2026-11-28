@@ -74,7 +74,7 @@ function instIcon(inst, size = '') {
 }
 function loaderLabel(inst) { return LOADER_NAMES[inst.loader?.type || 'vanilla']; }
 function instMeta(inst) {
-  return `<span class="chip">${esc(inst.versionId)}</span><span class="chip ${inst.loader?.type !== 'vanilla' ? 'accent' : ''}">${loaderLabel(inst)}</span>${inst.solarisModules ? '<span class="chip warn">Solaris</span>' : ''}`;
+  return `<span class="chip">${esc(inst.versionId)}</span><span class="chip ${inst.loader?.type !== 'vanilla' ? 'accent' : ''}">${loaderLabel(inst)}</span>${inst.solarisModules ? '<span class="chip warn">Astra</span>' : ''}`;
 }
 
 /** Draws the face of a Minecraft skin (with hat layer) on a canvas, at 8× so it scales down crisply. */
@@ -264,14 +264,14 @@ function openAccounts() {
           ${a.id !== active ? `<button class="btn sm" data-use="${esc(a.id)}">Use</button>` : ''}
           <button class="icon-btn" data-rm="${esc(a.id)}" title="Remove">${icon('trash')}</button></div>`).join('')}</div>` : ''}
       <button class="btn lg" data-ms style="width:100%;background:#fff;color:#1b1b1b;border:0" ${msOk ? '' : 'disabled'}>${MS_LOGO}Sign in with Microsoft</button>
-      ${msOk ? '<div class="faint small" style="text-align:center;margin-top:8px">Uses Microsoft’s secure sign-in page. Solaris never sees your password.</div>'
-        : '<div class="faint small" style="text-align:center;margin-top:8px">Microsoft sign-in isn’t available in this version of Solaris yet. Update Solaris to enable it — you can play offline meanwhile.</div>'}
+      ${msOk ? '<div class="faint small" style="text-align:center;margin-top:8px">Uses Microsoft’s secure sign-in page. Astra never sees your password.</div>'
+        : '<div class="faint small" style="text-align:center;margin-top:8px">Microsoft sign-in isn’t available in this version of Astra yet. Update Astra to enable it — you can play offline meanwhile.</div>'}
       <div class="row" style="margin:18px 0 10px"><div class="grow" style="height:1px;background:var(--border)"></div><span class="faint small">or play offline</span><div class="grow" style="height:1px;background:var(--border)"></div></div>
       <div class="row"><input type="text" class="grow" id="off-name" placeholder="Username (3–16 characters)" maxlength="16"><button class="btn" data-off>Add offline</button></div>
       <div class="faint small" style="margin-top:8px">Offline accounts play singleplayer and offline-mode servers. Online servers and skins need a Microsoft account that owns Minecraft.</div>`;
     $$('[data-head]', m.el).forEach((el) => renderHead(el, accounts.find((a) => a.id === el.dataset.head)));
     $$('[data-use]', m.el).forEach((b) => (b.onclick = async () => { await api('accounts:setActive', b.dataset.use); draw(); }));
-    $$('[data-rm]', m.el).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this account from Solaris?', { danger: true, ok: 'Remove' })) { await api('accounts:remove', b.dataset.rm); draw(); } }));
+    $$('[data-rm]', m.el).forEach((b) => (b.onclick = async () => { if (await confirmDialog('Remove this account from Astra?', { danger: true, ok: 'Remove' })) { await api('accounts:remove', b.dataset.rm); draw(); } }));
     $$('[data-reauth]', m.el).forEach((b) => (b.onclick = () => microsoftLogin(m, draw)));
     m.$('[data-off]').onclick = async () => {
       const name = m.$('#off-name').value.trim();
@@ -298,7 +298,7 @@ function awaitLogin(m, redraw) {
   });
   return off;
 }
-/** Microsoft sign-in: opens Microsoft's page in the browser; Solaris finishes automatically. */
+/** Microsoft sign-in: opens Microsoft's page in the browser; Astra finishes automatically. */
 async function microsoftLogin(parent, redraw, method = 'browser') {
   let info;
   try { info = await api('accounts:startMicrosoft', { method }); }
@@ -309,7 +309,7 @@ async function microsoftLogin(parent, redraw, method = 'browser') {
       title: 'Sign in with Microsoft',
       body: `<div style="text-align:center;padding:6px 0 4px">${icon('globe', 'big-ic')}
         <p style="font-size:15px;margin:10px 0 4px"><b>Continue in your browser</b></p>
-        <p class="muted" style="margin:0">Sign in with the Microsoft account that owns Minecraft: Java Edition and allow Solaris. You'll come back here automatically.</p></div>
+        <p class="muted" style="margin:0">Sign in with the Microsoft account that owns Minecraft: Java Edition and allow Astra. You'll come back here automatically.</p></div>
         <div class="row" style="margin-top:16px"><div class="progress indeterminate grow"><div></div></div><span class="faint small">Waiting for Microsoft…</span></div>
         <p class="faint small" style="margin-top:14px">Browser didn't open? <a href="#" data-reopen>Open it again</a> · Signing in on another device? <a href="#" data-code>Use a code instead</a></p>`,
       footer: `<button class="btn ghost" data-cancel>${T('Cancel')}</button>`,
@@ -428,12 +428,12 @@ function openImport() {
   const m = modal({
     title: T('Import'),
     body: `<div class="stack">
-      <button class="btn" data-file style="justify-content:flex-start">${icon('box')}Modpack file (Modrinth .mrpack, CurseForge .zip, Solaris .solpack)</button>
+      <button class="btn" data-file style="justify-content:flex-start">${icon('box')}Modpack file (Modrinth .mrpack, CurseForge .zip, Astra .solpack)</button>
       <button class="btn" data-official style="justify-content:flex-start">${icon('download')}Official Minecraft Launcher profiles</button>
       <button class="btn" data-mmc style="justify-content:flex-start">${icon('folder')}MultiMC / Prism Launcher instances folder</button>
       <button class="btn" data-cfapp style="justify-content:flex-start">${icon('layers')}CurseForge app instances</button>
       <div id="imp-list"></div>
-      <div class="faint small">Tip: you can also drag & drop .mrpack / .zip / .solpack files anywhere in Solaris.</div></div>`,
+      <div class="faint small">Tip: you can also drag & drop .mrpack / .zip / .solpack files anywhere in Astra.</div></div>`,
   });
   m.$('[data-cfapp]').onclick = async () => {
     let items = await api('import:cfScan');
@@ -517,9 +517,9 @@ function pickIcon(current, { allowUpload = false } = {}) {
     const draw = () => {
       const box = m.$('#pi-body');
       if (tab === 'emoji') {
-        box.innerHTML = `<div class="emoji-grid">${EMOJIS.map((e) => `<button data-v="${e}" class="${e === current ? 'on' : ''}" title="${e === 'sun' ? 'Solaris' : e}">${e === 'sun' ? '☀️' : e}</button>`).join('')}</div>`;
+        box.innerHTML = `<div class="emoji-grid">${EMOJIS.map((e) => `<button data-v="${e}" class="${e === current ? 'on' : ''}" title="${e === 'sun' ? 'Astra' : e}">${e === 'sun' ? '☀️' : e}</button>`).join('')}</div>`;
       } else if (!McIcons.ready()) {
-        box.innerHTML = `<div class="empty">${icon('box')}<div><b>Minecraft icons load from your game files</b></div><div class="faint small" style="max-width:420px;margin:6px auto 12px">Solaris uses the real textures from a Minecraft version you've downloaded. Play any instance once, then come back — or try loading now.</div><button class="btn sm primary" data-load>${icon('refresh')}Load Minecraft icons</button></div>`;
+        box.innerHTML = `<div class="empty">${icon('box')}<div><b>Minecraft icons load from your game files</b></div><div class="faint small" style="max-width:420px;margin:6px auto 12px">Astra uses the real textures from a Minecraft version you've downloaded. Play any instance once, then come back — or try loading now.</div><button class="btn sm primary" data-load>${icon('refresh')}Load Minecraft icons</button></div>`;
         m.$('[data-load]').onclick = async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Loading…'; const ok = await McIcons.init({ force: true }); if (ok) Bus.emit('instances', State.instances); else toast('No downloaded Minecraft version found yet — play an instance once first.', 'warn', 6000); draw(); };
       } else {
         const list = McIcons.defs.filter(([k, label]) => McIcons.icons[k] && (!q || label.toLowerCase().includes(q) || k.includes(q)));

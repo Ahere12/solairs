@@ -1,4 +1,4 @@
-// Smoke test: boots Solaris, visits every page, saves screenshots, reports renderer errors.
+// Smoke test: boots Astra, visits every page, saves screenshots, reports renderer errors.
 // Usage: SOLARIS_DATA_DIR=<tmp> SMOKE_OUT=<dir> electron tools/smoke.js
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');

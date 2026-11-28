@@ -49,7 +49,7 @@ async function setActivity(activity) {
   if (!(await connect()) || !ready) return;
   sock.write(frame(1, { cmd: 'SET_ACTIVITY', args: { pid: process.pid, activity: activity || null }, nonce: String(Date.now()) + Math.random() }));
 }
-function idle() { return setActivity({ details: 'In the launcher', assets: { large_image: 'solaris', large_text: 'Solaris Launcher' } }); }
+function idle() { return setActivity({ details: 'In the launcher', assets: { large_image: 'solaris', large_text: 'Astra Launcher' } }); }
 /**
  * "Playing" presence. Privacy settings decide whether the instance, the server and the player head are shown.
  * For Microsoft accounts the large image is the player's own head (an https image Discord loads itself).
@@ -64,8 +64,8 @@ function playing({ inst, server, start, account, modded }) {
     state,
     timestamps: { start: Math.floor(start / 1000) },
     assets: head
-      ? { large_image: head, large_text: s.streamerMode ? 'Minecraft' : account.name, small_image: 'solaris', small_text: 'Solaris Launcher' }
-      : { large_image: 'solaris', large_text: 'Solaris Launcher' },
+      ? { large_image: head, large_text: s.streamerMode ? 'Minecraft' : account.name, small_image: 'solaris', small_text: 'Astra Launcher' }
+      : { large_image: 'solaris', large_text: 'Astra Launcher' },
   });
 }
 function disconnect() { try { sock && sock.destroy(); } catch {} sock = null; ready = false; }
