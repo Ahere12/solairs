@@ -1,0 +1,119 @@
+/* ---------- Friends panel (slides out from the people icon next to the account) ---------- */
+#friends-panel { position: fixed; top: 44px; bottom: 8px; left: 260px; z-index: 60; width: 330px; display: flex; flex-direction: column;
+  background: color-mix(in srgb, var(--bg-2) 96%, #000); border: 1px solid var(--border-2); border-radius: 16px; box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+  opacity: 0; transform: translateX(-10px); transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.3, 0.7, 0.2, 1); }
+#friends-panel.in { opacity: 1; transform: none; }
+#friends-panel[hidden] { display: none; }
+#friends-panel .fp-head { display: flex; align-items: center; gap: 2px; padding: 14px 12px 12px 16px; border-bottom: 1px solid var(--border); }
+#friends-panel .fp-title { display: flex; align-items: center; gap: 9px; flex: 1; font-size: 16px; }
+#friends-panel .fp-title svg { width: 19px; height: 19px; color: var(--muted); }
+#friends-panel .fp-head .icon-btn svg { width: 17px; height: 17px; }
+#friends-panel .icon-btn.spinning svg { animation: fp-spin 0.9s linear infinite; }
+@keyframes fp-spin { to { transform: rotate(360deg); } }
+#friends-panel .fp-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+#friends-panel .fp-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border: 0; background: transparent; border-radius: 12px; cursor: pointer; text-align: left; color: inherit; transition: background 0.12s; }
+#friends-panel .fp-row:hover { background: var(--panel); }
+#friends-panel .fp-row .head { width: 42px; height: 42px; border-radius: 9px; overflow: hidden; flex: none; display: grid; place-items: center; background: var(--panel-3); }
+#friends-panel .fp-row .head canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+#friends-panel .fp-who { flex: 1; min-width: 0; display: grid; gap: 2px; }
+#friends-panel .fp-who b { font-size: 14.5px; font-weight: 600; }
+#friends-panel .fp-who small { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; }
+#friends-panel .fp-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #6b7280; }
+#friends-panel .fp-dot.on { background: #22c55e; box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 22%, transparent); }
+#friends-panel .fp-join { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; opacity: 0; transition: opacity 0.12s; flex: none; }
+#friends-panel .fp-join svg { width: 14px; height: 14px; }
+#friends-panel .fp-row:hover .fp-join, #friends-panel .fp-row:focus-visible .fp-join { opacity: 1; }
+#friends-panel .fp-empty { margin: 40px 14px; display: grid; justify-items: center; gap: 6px; text-align: center; color: var(--muted); }
+#friends-panel .fp-empty > svg { width: 34px; height: 34px; color: var(--faint); margin-bottom: 4px; }
+#friends-panel .fp-empty b { color: var(--text); }
+#friends-panel .fp-empty span { font-size: 12.5px; }
+#friends-panel .fp-empty .btn { margin-top: 10px; }
+#friends-panel .fp-more { text-align: center; padding: 10px 0 4px; }
+#friends-panel .fp-foot { padding: 10px 16px 14px; border-top: 1px solid var(--border); font-size: 12.5px; }
+#friends-panel .fp-foot a { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+#friends-panel .fp-foot a:hover { color: var(--accent); }
+#friends-panel .fp-foot svg { width: 13px; height: 13px; }
+/* settings view */
+#friends-panel .fp-sets { padding: 10px; overflow-y: auto; display: grid; gap: 10px; align-content: start; }
+#friends-panel .fp-group { background: var(--panel); border: 1px solid var(--border); border-radius: 13px; overflow: hidden; }
+#friends-panel .fp-set { display: flex; align-items: center; gap: 12px; padding: 13px 14px; cursor: pointer; }
+#friends-panel .fp-set + .fp-set { border-top: 1px solid var(--border); }
+#friends-panel .fp-set > span:first-child { flex: 1; display: grid; gap: 2px; }
+#friends-panel .fp-set b { font-size: 14px; }
+#friends-panel .fp-set small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+#friends-panel .fp-note { margin: 4px 4px 0; line-height: 1.45; }
+
+/* people icon: how many friends are online */
+#who-friends { position: relative; }
+#who-friends .fr-count { position: absolute; top: -3px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; display: grid; place-items: center;
+  background: #22c55e; color: #04140a; font-size: 10.5px; font-weight: 800; line-height: 1; border: 2px solid var(--bg-2); }
+
+/* "Add a friend" dialog */
+.modal.af-modal { width: min(420px, 100%); }
+.modal.af-modal header { gap: 12px; }
+.modal.af-modal .af-ic { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; flex: none; background: color-mix(in srgb, #38bdf8 16%, transparent); color: #38bdf8; }
+.modal.af-modal .af-ic svg { width: 21px; height: 21px; }
+.modal.af-modal .af-input { width: 100%; height: 44px; font-size: 15px; border-radius: 11px; }
+.modal.af-modal .af-off { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.modal.af-modal footer .btn { min-width: 84px; }
+.modal.af-modal footer .btn svg { width: 16px; height: 16px; }
+
+/* ---------- starry night background (splash + Welcome) ---------- */
+:root { --sky: radial-gradient(120% 75% at 28% -18%, color-mix(in srgb, #2b6cd8 62%, transparent), transparent 58%),
+    radial-gradient(90% 60% at 92% -8%, color-mix(in srgb, var(--accent) 62%, transparent), transparent 62%),
+    radial-gradient(140% 90% at 55% 115%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 60%),
+    #04050a; }
+.starfield, #splash.starfield, #auth-gate.ag-sky { background: var(--sky); }
+.starfield::before, .starfield::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+/* two layers of small stars, tiled at different sizes so the pattern doesn't repeat visibly */
+.starfield::before { background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(255, 255, 255, 0.75), transparent 60%), radial-gradient(1px 1px at 140px 80px, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1.4px 1.4px at 90px 190px, rgba(255, 255, 255, 0.8), transparent 60%), radial-gradient(1px 1px at 210px 150px, rgba(190, 210, 255, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 250px 260px, rgba(255, 255, 255, 0.5), transparent 60%); background-size: 280px 280px; opacity: 0.8; }
+.starfield::after { background-image:
+    radial-gradient(1px 1px at 60px 110px, rgba(255, 255, 255, 0.6), transparent 60%), radial-gradient(1.6px 1.6px at 330px 40px, rgba(220, 230, 255, 0.85), transparent 60%),
+    radial-gradient(1px 1px at 410px 300px, rgba(255, 255, 255, 0.5), transparent 60%), radial-gradient(1px 1px at 190px 380px, rgba(255, 255, 255, 0.65), transparent 60%);
+  background-size: 460px 460px; animation: star-twinkle 6s ease-in-out infinite alternate; }
+@keyframes star-twinkle { from { opacity: 0.35; } to { opacity: 0.95; } }
+:root[data-reduce-motion] .starfield::after { animation: none; }
+
+/* ---------- splash: big logo + name, version in the corner ---------- */
+#splash.starfield { gap: 0; }
+#splash .sp-mark { position: relative; z-index: 1; display: flex; align-items: center; gap: 22px; }
+#splash .sp-mark img { width: 118px; height: 118px; filter: drop-shadow(0 0 28px color-mix(in srgb, var(--accent) 55%, transparent)); animation: sp-pulse 2.2s ease-in-out infinite; }
+#splash .sp-mark b { margin: 0; font-size: 78px; font-weight: 800; letter-spacing: -0.03em; color: #fff; }
+#splash .sp-step { position: relative; z-index: 1; margin-top: 26px; color: rgba(255, 255, 255, 0.6); }
+#splash .sp-bar { position: relative; z-index: 1; background: rgba(255, 255, 255, 0.12); }
+#splash .sp-ver { position: absolute; right: 18px; bottom: 14px; z-index: 1; font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+
+/* ---------- Welcome (sign-in) as one centered card on the night sky ---------- */
+#auth-gate.ag-sky { display: grid; grid-template-columns: 1fr; place-items: center; padding: 0; overflow: hidden; }
+#auth-gate.ag-sky[hidden] { display: none; }
+#auth-gate.ag-sky > * { position: relative; z-index: 1; }
+#auth-gate .ag-box { width: min(448px, calc(100% - 32px)); padding: 34px 32px 30px; border-radius: 22px; text-align: center;
+  background: linear-gradient(180deg, color-mix(in srgb, #0d1020 88%, transparent), color-mix(in srgb, #07080f 92%, transparent));
+  border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), inset 0 1px 0 color-mix(in srgb, var(--accent) 40%, transparent); backdrop-filter: blur(10px); }
+#auth-gate .ag-logo { width: 74px; height: 74px; filter: drop-shadow(0 6px 22px color-mix(in srgb, var(--accent) 50%, transparent)); }
+#auth-gate .ag-box h1 { margin: 14px 0 6px; font-size: 26px; color: #fff; }
+#auth-gate .ag-box p.muted { margin: 0 0 24px; }
+#auth-gate .ag-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#auth-gate .ag-choice .btn { height: 50px; font-size: 15.5px; border-radius: 12px; gap: 10px; }
+#auth-gate .ag-choice .ag-ms { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 85%, #5b8cff), var(--accent-2)); color: #fff; border: 0; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+#auth-gate .ag-choice .ag-ms:hover:not(:disabled) { filter: brightness(1.08); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 85%, #5b8cff), var(--accent-2)); }
+#auth-gate .ag-choice .ag-ms svg rect { fill: #fff; }
+#auth-gate .ag-choice .ag-off-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #fff; }
+#auth-gate .ag-choice .ag-off-btn:hover { background: rgba(255, 255, 255, 0.09); }
+#auth-gate .ag-choice .ag-off-btn img { width: 20px; height: 20px; }
+#auth-gate .ag-sub { margin-top: 14px; }
+#auth-gate .ag-sub a { color: var(--muted); }
+#auth-gate .ag-sub a:hover { color: var(--accent); }
+#auth-gate .ag-saved { text-align: left; }
+#auth-gate .ag-box .ag-field { text-align: left; }
+#auth-gate .ag-back { position: absolute; top: 14px; left: 14px; }
+#auth-gate .ag-box { position: relative; }
+#auth-gate .ag-legal { position: absolute; left: 0; right: 0; bottom: 14px; display: grid; gap: 4px; justify-items: center; font-size: 11.5px; color: rgba(255, 255, 255, 0.45); text-align: center; padding: 0 120px; }
+#auth-gate .ag-legal a { color: rgba(255, 255, 255, 0.6); }
+#auth-gate .ag-legal a:hover { color: var(--accent); }
+#auth-gate .ag-corner { position: absolute; right: 18px; bottom: 14px; font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+#auth-gate .ag-pane[hidden] { display: none; }
+@media (max-width: 760px) { #auth-gate .ag-legal { padding: 0 16px; bottom: 36px; } }

@@ -1,6 +1,44 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.3",
+    "date": "2026-11-27",
+    "title": "Friends panel, new splash and Welcome screen",
+    "groups": [
+      {
+        "area": "Friends",
+        "entries": [
+          {
+            "type": "feature",
+            "text": "Friends panel: the people icon next to your account opens a panel with your friends, their skins and live status (playing on a server, on your server, or offline). A green badge on the icon shows how many are online."
+          },
+          {
+            "type": "feature",
+            "text": "Add a friend right from the panel — just type their username (tick “offline account” for friends who play cracked)."
+          },
+          {
+            "type": "feature",
+            "text": "Friends settings in the panel: check who’s online every 5 minutes, show or hide offline friends, and a notification when a friend comes online."
+          }
+        ]
+      },
+      {
+        "area": "Look",
+        "entries": [
+          {
+            "type": "improvement",
+            "text": "New start-up screen: the Astra logo and name on a starry night sky, with the version in the corner."
+          },
+          {
+            "type": "improvement",
+            "text": "New Welcome screen: one card — “Welcome to Astra, add a new account to continue” — with Microsoft and Offline buttons."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.17.2",
     "date": "2026-11-25",
     "title": "Server check — is my modpack server ready?",

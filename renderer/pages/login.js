@@ -22,7 +22,7 @@ const AuthGate = {
     this.el.hidden = false;
     this.el.classList.remove('leaving');
     this.msOk = await api('accounts:microsoftAvailable').catch(() => false);
-    this.setTab(this.tab || (this.msOk ? 'microsoft' : 'offline'));
+    this.setTab('choose');
     this.drawSaved();
     await loadSkinview();
     this.startViewer();
@@ -45,57 +45,52 @@ const AuthGate = {
     }, 380);
   },
 
+  // One centered card on the night sky: "Welcome to Astra — add a new account to continue", with a Microsoft and an
+  // Offline button. Offline opens the username step inside the same card.
   build() {
     const el = document.createElement('section');
     el.id = 'auth-gate';
+    el.className = 'ag-sky starfield';
     el.hidden = true;
     el.innerHTML = `
-      <div class="ag-art">
-        <div class="ag-sun" aria-hidden="true"></div>
-        <div class="ag-brand"><img src="../assets/icon.png" alt=""><div><b>Astra</b><span>Minecraft: Java Edition launcher</span></div></div>
-        <div class="ag-stage"><canvas id="ag-skin"></canvas><div class="ag-floor"></div></div>
-        <div class="ag-name" id="ag-name"></div>
-      </div>
-      <div class="ag-panel">
-        <div class="ag-card">
-          <h1>Welcome</h1>
-          <p class="muted">Sign in to start playing. You can add more accounts later.</p>
+      <div class="ag-box">
+        <div class="ag-pane" data-pane="choose">
+          <img class="ag-logo" src="../assets/icon.png" alt="">
+          <h1>Welcome to Astra</h1>
+          <p class="muted">Add a new account to continue</p>
           <div class="ag-saved" id="ag-saved"></div>
-          <div class="ag-tabs" role="tablist">
-            <button role="tab" data-tab="microsoft">${MS_LOGO}<span>Microsoft</span></button>
-            <button role="tab" data-tab="offline">${icon('user')}<span>Offline</span></button>
-            <i class="ag-tab-ink"></i>
+          <div class="ag-choice">
+            <button class="btn ag-ms" id="ag-ms">${MS_LOGO}Microsoft</button>
+            <button class="btn ag-off-btn" id="ag-to-off"><img src="../assets/icon.png" alt="">Offline</button>
           </div>
-          <div class="ag-pane" data-pane="microsoft">
-            <button class="btn lg ag-ms" id="ag-ms">${MS_LOGO}Sign in with Microsoft</button>
-            <p class="faint small" id="ag-ms-note"></p>
-            <ul class="ag-perks">
-              <li>${icon('check')}Online servers & Realms</li>
-              <li>${icon('check')}Your own skin and capes</li>
-              <li>${icon('check')}Astra never sees your password</li>
-            </ul>
-            <p class="faint small"><a href="#" id="ag-code">Sign in with a code instead</a> — for when the browser can't reach this PC.</p>
-          </div>
-          <div class="ag-pane" data-pane="offline">
-            <label class="ag-field">
-              <span>Username</span>
-              <div class="ag-input"><input type="text" id="ag-off" maxlength="16" spellcheck="false" autocomplete="off" placeholder="Steve"><em id="ag-count">0/16</em></div>
-              <small id="ag-hint" class="faint">3–16 characters: letters, numbers or _</small>
-            </label>
-            <button class="btn primary lg ag-go" id="ag-play" disabled>${icon('play')}Play offline</button>
-            <p class="faint small">Offline accounts play singleplayer and offline-mode servers. Online servers and custom skins need a Microsoft account that owns Minecraft.</p>
-          </div>
+          <p class="faint small ag-sub" id="ag-ms-note"></p>
+          <p class="faint small ag-sub"><a href="#" id="ag-code">Sign in with a code instead</a></p>
         </div>
-        <div class="ag-foot faint small"><span id="ag-ver"></span><a href="#" id="ag-buy">Don't own Minecraft? Get it at minecraft.net</a></div>
-      </div>`;
+        <div class="ag-pane" data-pane="offline" hidden>
+          <button class="icon-btn ag-back" id="ag-back" title="Back">${icon('back')}</button>
+          <img class="ag-logo" src="../assets/icon.png" alt="">
+          <h1>Play offline</h1>
+          <p class="muted">Pick a username for this PC</p>
+          <label class="ag-field">
+            <div class="ag-input"><input type="text" id="ag-off" maxlength="16" spellcheck="false" autocomplete="off" placeholder="Username"><em id="ag-count">0/16</em></div>
+            <small id="ag-hint" class="faint">3–16 characters: letters, numbers or _</small>
+          </label>
+          <button class="btn primary lg ag-go" id="ag-play" disabled>${icon('play')}Play offline</button>
+          <p class="faint small ag-sub">Offline accounts play singleplayer and offline-mode servers. Online servers and custom skins need a Microsoft account that owns Minecraft.</p>
+        </div>
+        <div class="ag-name" id="ag-name" hidden></div>
+      </div>
+      <div class="ag-legal"><span>© ${new Date().getFullYear()} Astra · <a href="#" id="ag-buy">Don’t own Minecraft? Get it at minecraft.net</a></span><span>NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</span></div>
+      <div class="ag-corner" id="ag-ver"></div>`;
     $('#app').appendChild(el);
     this.el = el;
 
-    $$('[data-tab]', el).forEach((b) => (b.onclick = () => this.setTab(b.dataset.tab)));
-    $('#ag-ver', el).textContent = State.info?.version ? 'Astra ' + State.info.version : 'Astra';
+    $('#ag-ver', el).textContent = State.info?.version ? 'v' + State.info.version : '';
     $('#ag-buy', el).onclick = (e) => { e.preventDefault(); api('shell:open', 'https://www.minecraft.net/store/minecraft-java-bedrock-edition-pc'); };
     $('#ag-ms', el).onclick = () => this.msOk && microsoftLogin(null, null);
     $('#ag-code', el).onclick = (e) => { e.preventDefault(); if (this.msOk) microsoftLogin(null, null, 'code'); };
+    $('#ag-to-off', el).onclick = () => this.setTab('offline');
+    $('#ag-back', el).onclick = () => this.setTab('choose');
 
     const input = $('#ag-off', el);
     const preview = debounce((v) => this.previewName(v), 220);
@@ -113,16 +108,17 @@ const AuthGate = {
     $('#ag-play', el).onclick = () => this.playOffline();
   },
 
+  /** 'choose' (Microsoft / Offline) or 'offline' (the username step). 'microsoft' is the choose step too. */
   setTab(tab) {
+    if (tab !== 'offline') tab = 'choose';
     this.tab = tab;
-    $$('[data-tab]', this.el).forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     $$('[data-pane]', this.el).forEach((p) => (p.hidden = p.dataset.pane !== tab));
-    this.el.querySelector('.ag-tabs').dataset.on = tab;
     const ms = $('#ag-ms', this.el);
     ms.disabled = !this.msOk;
-    $('#ag-ms-note', this.el).textContent = this.msOk
-      ? 'Opens Microsoft’s secure sign-in page in your browser. Use the account that owns Minecraft: Java Edition.'
-      : 'Microsoft sign-in isn’t available in this version of Astra yet. You can play offline meanwhile.';
+    const note = $('#ag-ms-note', this.el);
+    note.textContent = this.msOk ? '' : 'Microsoft sign-in isn’t available in this version of Astra yet — play offline meanwhile.';
+    note.hidden = this.msOk;
+    $('#ag-code', this.el).parentElement.hidden = !this.msOk;
     if (tab === 'offline') setTimeout(() => $('#ag-off', this.el)?.focus(), 30);
   },
 

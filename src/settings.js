@@ -32,6 +32,11 @@ const DEFAULTS = {
   autoScanMods: true,
   confirmLogUpload: true,
   streamerMode: false,
+  // Friends panel (people icon next to the account): toast when a friend comes online, check the servers they
+  // play on every few minutes, and show friends who are offline in the list
+  friendsNotify: true,
+  friendsAutoCheck: true,
+  friendsShowOffline: true,
   // integrations
   curseforgeKey: '',
   browseSource: 'modrinth',

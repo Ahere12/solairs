@@ -72,8 +72,9 @@ function renderAccountChip() {
   renderHead($('#chip-head'), a);
   chip.classList.toggle('streamer', !!State.settings?.streamerMode);
   $('#who').onclick = openAccounts;
-  $('#who-friends').onclick = () => Router.go('friends');
-  $('#who-friends').classList.toggle('on', Router.current?.name === 'friends');
+  $('#who-friends').onclick = () => FriendsPanel.toggle();
+  $('#who-friends').classList.toggle('on', Router.current?.name === 'friends' || FriendsPanel.isOpen());
+  FriendsPanel.badge(); // the chip was just redrawn: put the "online" count back
   $('#who-settings').onclick = () => Router.go('settings');
   $('#who-settings').classList.toggle('on', Router.current?.name === 'settings');
 }
@@ -219,6 +220,7 @@ if (POPOUT === 'host') {
   Snow.sync(State.settings);
   applyTheme(State.settings);
   $('#app-ver').textContent = State.info.version ? State.info.version : '';
+  { const sv = $('#sp-ver'); if (sv && State.info.version) sv.textContent = 'v' + State.info.version; }
   Splash.step('Loading your instances…');
   await Promise.all([refreshInstances(), refreshAccounts(), McIcons.loadCache().catch(() => false)]);
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
@@ -235,6 +237,7 @@ if (POPOUT === 'host') {
     return;
   }
   Router.go('home');
+  FriendsPanel.init(); // people icon: online badge + "came online" toasts
   if (State.settings.firstRun) await saveSettings({ firstRun: false });
   AuthGate.sync(); // sign-in screen first: the launcher can't be used without an account
   if (State.accounts.active) Updater.whatsNew(); // otherwise shown right after signing in
