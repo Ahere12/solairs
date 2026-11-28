@@ -17,7 +17,13 @@
 // MS_REDIRECT_PORT / MS_REDIRECT_PATH
 //   Must match the redirect URI registered on the app ("Mobile and desktop applications" platform):
 //   http://localhost:25585/relogin. Use the hostname "localhost" — Microsoft rejects 127.0.0.1 here.
+//
+// FRIENDS_API
+//   Base URL of the friends service (friend requests and live "In singleplayer" / "Playing on …" statuses).
+//   See src/presence.js for the protocol. Leave empty to use the local friends list, where friends show as
+//   online when Solaris sees them on a server. SOLARIS_FRIENDS_API overrides it (testing only).
 module.exports = {
+  FRIENDS_API: '',
   MS_CLIENT_ID: process.env.SOLARIS_MS_CLIENT_ID || 'b014fe11-f01c-4e2e-b698-f4ad3dcddad5',
   MS_REDIRECT_PORT: 25585,
   MS_REDIRECT_PATH: '/relogin',

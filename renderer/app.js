@@ -4,7 +4,6 @@ const NAV = [
   { id: 'browse', label: 'Browse', icon: 'browse', key: 'nav.browse' },
   { id: 'servers', label: 'Servers', icon: 'servers', key: 'nav.servers' },
   { id: 'skins', label: 'Skins', icon: 'skins', key: 'nav.skins' },
-  { id: 'friends', label: 'Friends', icon: 'users', key: 'nav.friends' },
   { id: 'solaris', label: 'Solaris Client', icon: 'sun', key: 'nav.solaris' },
   { id: 'library', label: 'Library', icon: 'box', key: 'nav.library', add: true },
 ];
@@ -26,8 +25,11 @@ function renderNav() {
   $('#nav').innerHTML = NAV.map((n) => `<div class="nav-row"><button class="nav-item ${cur === n.id ? 'active' : ''}" data-nav="${n.id}" title="${esc(State.settings.keybinds[n.key] || '')}">${icon(n.icon)}<span>${esc(T(n.label))}</span></button>${n.add ? `<button class="icon-btn nav-add" id="nav-new" title="${esc(T('New instance'))}">${icon('plus')}</button>` : ''}</div>`).join('');
   $$('[data-nav]', $('#nav')).forEach((b) => (b.onclick = () => Router.go(b.dataset.nav)));
   $('#nav-new').onclick = () => openNewInstance();
-  $('#side-tools').innerHTML = SIDE_TOOLS.map((n) => `<button class="icon-btn ${cur === n.id ? 'on' : ''}" data-tool="${n.id}" title="${esc(T(n.label))}">${icon(n.icon)}${n.id === 'console' && running ? `<span class="count">${running}</span>` : ''}</button>`).join('');
+  const reqs = Friends.badge();
+  $('#side-tools').innerHTML = SIDE_TOOLS.map((n) => `<button class="icon-btn ${cur === n.id ? 'on' : ''}" data-tool="${n.id}" title="${esc(T(n.label))}">${icon(n.icon)}${n.id === 'console' && running ? `<span class="count">${running}</span>` : ''}</button>`).join('')
+    + `<button class="icon-btn side-friends ${Friends.open ? 'on' : ''}" data-friends-btn title="${esc(T('Friends'))}${reqs ? ` · ${reqs} request${reqs > 1 ? 's' : ''}` : ''} (${esc(State.settings.keybinds['nav.friends'] || '')})">${icon('users')}${reqs ? `<span class="count friends-badge">${reqs}</span>` : ''}</button>`;
   $$('[data-tool]').forEach((b) => (b.onclick = () => Router.go(b.dataset.tool)));
+  $('[data-friends-btn]').onclick = () => Friends.toggle();
   renderSideInstances();
   const st = $('#who-settings'); if (st) st.classList.toggle('on', cur === 'settings');
 }
@@ -159,7 +161,8 @@ document.addEventListener('keydown', (e) => {
   const action = Object.entries(State.settings.keybinds).find(([, v]) => v && v.toLowerCase() === combo.toLowerCase())?.[0];
   if (!action) return;
   e.preventDefault();
-  if (action.startsWith('nav.')) Router.go(action.slice(4));
+  if (action === 'nav.friends') Friends.toggle();
+  else if (action.startsWith('nav.')) Router.go(action.slice(4));
   else if (action === 'play.selected' && State.settings.selectedInstance) play(State.settings.selectedInstance);
   else if (action === 'search.focus') { if (!['library', 'browse'].includes(Router.current?.name)) Router.go('browse'); setTimeout(() => Bus.emit('search-focus'), 50); }
 });
@@ -171,6 +174,83 @@ document.addEventListener('drop', async (e) => {
   if (!files.length) return toast('Drop mods onto an instance page. Here you can drop .mrpack or .solpack files.', 'info');
   for (const f of files) await importFile(f);
 });
+
+/* ---------- splash + welcome (sign-in) screens ---------- */
+const appName = () => State.info?.name || 'Solaris';
+const SKY = '<div class="sky" aria-hidden="true"><div class="aurora"></div><div class="stars"></div><div class="stars s2"></div><div class="shooting"></div></div>';
+const Splash = {
+  show(info) {
+    const el = $('#splash');
+    if (!el) return;
+    el.querySelector('.splash-name').textContent = appName();
+    el.querySelector('.splash-ver').textContent = info?.version ? 'v' + info.version : '';
+  },
+  /** Fade out after boot, keeping it up at least ~0.9 s so it doesn't just flash. */
+  async hide(since) {
+    const el = $('#splash');
+    if (!el) return;
+    const min = State.settings?.lowEndMode ? 0 : 900;
+    await sleep(Math.max(0, min - (Date.now() - since)));
+    el.classList.add('out');
+    await sleep(400);
+    el.remove();
+  },
+};
+/** Full-screen "Welcome" sign-in shown while there is no account. */
+const Welcome = {
+  el: null,
+  async show() {
+    if (this.el) return;
+    const msOk = await api('accounts:microsoftAvailable').catch(() => false);
+    const el = (this.el = document.createElement('div'));
+    el.className = 'welcome';
+    document.body.appendChild(el);
+    document.body.classList.add('welcome-open');
+    const done = Bus.on('accounts', (a) => { if (a.accounts.length) { done(); this.close(); } });
+    const frame = (inner) => `${SKY}<div class="welcome-card"><button class="icon-btn welcome-x" data-wx title="Close">${icon('close')}</button>${inner}</div>
+      <div class="welcome-foot">© ${new Date().getFullYear()} ${esc(appName())}<br>NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</div>
+      <div class="welcome-ver">${State.info?.version ? 'v' + esc(State.info.version) : ''}</div>`;
+    const bind = () => { el.querySelector('[data-wx]').onclick = () => { done(); this.close(); }; };
+    const main = () => {
+      el.innerHTML = frame(`<img class="welcome-logo" src="../assets/icon.png" alt="">
+        <h1>Welcome to ${esc(appName())}</h1><p>Add a new account to continue</p>
+        <div class="welcome-btns"><button class="btn lg primary" data-wms ${msOk ? '' : 'disabled'}>${MS_LOGO}Microsoft</button>
+        <button class="btn lg" data-woff>${icon('user')}Offline</button></div>
+        ${msOk ? '' : '<div class="faint small" style="margin-top:12px">Microsoft sign-in isn’t available in this version yet. You can play offline meanwhile.</div>'}`);
+      bind();
+      if (msOk) el.querySelector('[data-wms]').onclick = () => microsoftLogin(null, refreshAccounts);
+      el.querySelector('[data-woff]').onclick = offline;
+    };
+    const offline = () => {
+      el.innerHTML = frame(`<img class="welcome-logo" src="../assets/icon.png" alt="">
+        <h1>Offline account</h1><p>Pick a username for singleplayer and offline-mode servers</p>
+        <input type="text" id="w-name" placeholder="Username (3–16 characters)" maxlength="16" spellcheck="false" autocomplete="off">
+        <div class="welcome-btns"><button class="btn lg" data-wback>${icon('arrowLeft')}Back</button><button class="btn lg primary" data-wgo disabled>Continue</button></div>`);
+      bind();
+      const inp = el.querySelector('#w-name'), go = el.querySelector('[data-wgo]');
+      inp.oninput = () => (go.disabled = !/^[A-Za-z0-9_]{3,16}$/.test(inp.value.trim()));
+      inp.onkeydown = (e) => { if (e.key === 'Enter') go.click(); };
+      el.querySelector('[data-wback]').onclick = main;
+      go.onclick = async () => {
+        if (go.disabled) return;
+        const name = inp.value.trim();
+        go.disabled = true;
+        const warnings = await api('accounts:checkOfflineName', name).catch(() => []);
+        if (warnings.length && !(await confirmDialog(`${warnings.map((w) => '• ' + w).join('\n')}\n\nAdd “${name}” anyway?`, { title: 'Unusual offline username', ok: 'Add anyway' }))) { go.disabled = false; return; }
+        try { await api('accounts:addOffline', name); await refreshAccounts(); toast(`Welcome, ${name}!`); } catch (e) { toastErr(e); go.disabled = false; }
+      };
+      inp.focus();
+    };
+    main();
+  },
+  close() {
+    if (!this.el) return;
+    const el = this.el; this.el = null;
+    document.body.classList.remove('welcome-open');
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 300);
+  },
+};
 
 /* ---------- boot ---------- */
 (async function boot() {
@@ -188,17 +268,19 @@ document.addEventListener('drop', async (e) => {
   $('#win-close').onclick = () => api('win:close');
   $('.titlebar').ondblclick = (e) => { if (!e.target.closest('button')) api('win:maximize'); };
 
+  const splashStart = Date.now();
   [State.settings, State.info] = await Promise.all([api('settings:get'), api('app:info')]);
   applyTheme(State.settings);
+  Splash.show(State.info);
   $('#app-ver').textContent = State.info.version ? State.info.version : '';
   await Promise.all([refreshInstances(), refreshAccounts(), McIcons.loadCache().catch(() => false)]);
   try { const l = await api('launch:list'); for (const r of l.running) State.runs[r.runId] = { ...r, lines: await api('launch:logs', r.runId), running: true }; } catch {}
+  Friends.init();
   renderNav(); renderAccountChip(); renderTasks(); renderSidePlay();
   // real Minecraft icons from the player's own game files (cached after the first time)
   if (!McIcons.ready()) McIcons.init().then((ok) => { if (ok) { Bus.emit('instances', State.instances); renderAccountChip(); } }).catch(() => {});
   Router.go('home');
-  if (State.settings.firstRun) {
-    await saveSettings({ firstRun: false });
-    if (!State.accounts.accounts.length) setTimeout(openAccounts, 400);
-  }
+  await Splash.hide(splashStart);
+  if (State.settings.firstRun) await saveSettings({ firstRun: false });
+  if (!State.accounts.accounts.length) Welcome.show();
 })();

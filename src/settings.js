@@ -31,6 +31,10 @@ const DEFAULTS = {
   autoScanMods: true,
   confirmLogUpload: true,
   streamerMode: false,
+  // friends
+  friendsParticipate: true,
+  friendsAllowRequests: true,
+  friendsNotify: true,
   // integrations
   curseforgeKey: '',
   browseSource: 'modrinth',

@@ -48,7 +48,7 @@ const noGamesRunning = (what) => { if (launch.anyRunning()) throw new Error(`Clo
 
 module.exports = (getWin) => ({
   // ---------- app / window ----------
-  'app:info': () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
+  'app:info': () => ({ name: app.getName(), version: app.getVersion(), platform: process.platform, arch: process.arch, totalMem: os.totalmem(), dataDir: paths.getRoot(), electron: process.versions.electron }),
   'app:restart': () => { app.isQuitting = true; app.relaunch(); app.quit(); },
   'win:minimize': () => getWin()?.minimize(),
   'win:maximize': () => { const w = getWin(); if (w) w.isMaximized() ? w.unmaximize() : w.maximize(); },
@@ -69,6 +69,7 @@ module.exports = (getWin) => ({
     if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin, args: ['--hidden'] });
     if ('hardwareAcceleration' in patch) push('toast', { type: 'info', text: 'Restart Solaris to apply the GPU acceleration change.' });
     if ('discordRpc' in patch || 'discordClientId' in patch) { s.discordRpc ? discord.idle() : discord.disconnect(); }
+    if ('friendsParticipate' in patch || 'friendsAllowRequests' in patch) { const p = require('./presence'); p.sendPresence().catch(() => {}); push('presence:self', p.current()); }
     return s;
   },
   'settings:reset': () => settings.reset(),
@@ -152,8 +153,8 @@ module.exports = (getWin) => ({
   'accounts:startMicrosoft': (opts) => accounts.startMicrosoft(opts || {}),
   'accounts:microsoftAvailable': () => accounts.microsoftAvailable(),
   'accounts:cancelMicrosoft': () => accounts.cancelMicrosoft(),
-  'accounts:remove': (id) => accounts.remove(id),
-  'accounts:setActive': (id) => accounts.setActive(id),
+  'accounts:remove': (id) => { const r = accounts.remove(id); require('./presence').accountChanged(); return r; },
+  'accounts:setActive': (id) => { const r = accounts.setActive(id); require('./presence').accountChanged(); return r; },
 
   // ---------- modrinth ----------
   'modrinth:search': (q) => modrinth.search(q),
@@ -189,7 +190,9 @@ module.exports = (getWin) => ({
   'friends:list': () => friends.list(),
   'friends:add': (n) => friends.add(n),
   'friends:remove': (u) => friends.remove(u),
-  'friends:note': (u, n) => friends.setNote(u, n),
+  'friends:note': (u, n, name) => friends.setNote(u, n, name),
+  'friends:respond': (u, ok) => friends.respond(u, ok),
+  'presence:self': () => require('./presence').current(),
   'friends:skin': (u) => friends.skin(u),
 
   // ---------- instance files & logs ----------

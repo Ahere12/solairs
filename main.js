@@ -126,10 +126,12 @@ function init() {
   });
 
   if (s.discordRpc) discord.idle();
+  require('./src/presence').start();
 }
 
 app.on('before-quit', () => {
   app.isQuitting = true;
   try { require('./src/launch').savePlaytimeOnQuit(); } catch {}
+  try { require('./src/presence').shutdown(); } catch {}
 });
 app.on('window-all-closed', () => app.quit());

@@ -13,6 +13,7 @@ const instances = require('./instances');
 const accounts = require('./accounts');
 const crash = require('./crash');
 const discord = require('./discord');
+const presence = require('./presence');
 const modrinth = require('./modrinth');
 
 const running = new Map(); // runId -> { proc, instanceId, start, lines, logFile }
@@ -230,6 +231,7 @@ async function launchInner(instanceId, opts = {}) {
       run.lines.push(line); if (run.lines.length > 8000) run.lines.shift();
       logStream.write(line + '\n');
       push('game:log', { runId, instanceId, line });
+      presence.gameLine(runId, line);
     }
   };
   proc.stdout.on('data', onData);
@@ -249,12 +251,14 @@ async function launchInner(instanceId, opts = {}) {
   push('launch:started', { runId, instanceId, name: inst.name });
   events.emit('window', s.launchBehavior);
   discord.playing({ inst, server: opts.server, start: run.start, account: accounts.active(), modded });
+  presence.gameStarted(runId, { instance: inst.name, server: opts.server || null });
 
   proc.on('close', (code, signal) => {
     if (!running.has(runId)) return; // already handled (Java failed to start)
     if (buf) onData('\n');
     logStream.end();
     running.delete(runId);
+    presence.gameExited(runId);
     const duration = Date.now() - run.start;
     try { const cur = instances.get(instanceId); instances.save({ ...cur, playTime: (cur.playTime || 0) + duration }); } catch {}
     const killed = run.killed || signal === 'SIGTERM';

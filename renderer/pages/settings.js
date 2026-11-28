@@ -6,7 +6,7 @@ const THEMES = {
   custom: { name: 'Custom', bg: null, panel: null, side: null },
 };
 const ACCENTS = ['#ff9f1c', '#ff5e3a', '#ffd23f', '#3ddc84', '#2ec4b6', '#6aa8ff', '#8b5cf6', '#ff5ca8', '#e5e5e5'];
-const KEY_LABELS = { 'nav.home': 'Go to Home', 'nav.library': 'Go to Library', 'nav.browse': 'Go to Browse', 'nav.solaris': 'Go to Solaris Client', 'nav.servers': 'Go to Servers', 'nav.skins': 'Go to Skins', 'nav.friends': 'Go to Friends', 'nav.console': 'Go to Console', 'nav.settings': 'Open Settings', 'play.selected': 'Play selected instance', 'search.focus': 'Focus search' };
+const KEY_LABELS = { 'nav.home': 'Go to Home', 'nav.library': 'Go to Library', 'nav.browse': 'Go to Browse', 'nav.solaris': 'Go to Solaris Client', 'nav.servers': 'Go to Servers', 'nav.skins': 'Go to Skins', 'nav.friends': 'Open friends', 'nav.console': 'Go to Console', 'nav.settings': 'Open Settings', 'play.selected': 'Play selected instance', 'search.focus': 'Focus search' };
 
 /** Light / dark / follow Windows. Light mode uses the Dawn palette; dark mode never shows Dawn. */
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');

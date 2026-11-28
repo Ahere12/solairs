@@ -1,5 +1,21 @@
 [
   {
+    "product": "launcher", "version": "1.0.0", "date": "2026-11-28",
+    "title": "Friends panel, splash and welcome screens",
+    "groups": [
+      { "area": "Friends", "entries": [
+        { "type": "feature", "text": "Friends now open in a panel beside the page, from the Friends button at the bottom of the sidebar (Ctrl+8). A badge shows new friend requests." },
+        { "type": "feature", "text": "Live statuses: In singleplayer, Playing on <server>, In the launcher, or Offline. Join a friend’s server in one click." },
+        { "type": "feature", "text": "New Add a friend dialog, plus friend requests you can accept or decline." },
+        { "type": "feature", "text": "Friends settings: show yourself in friends lists, allow friend requests, and get a notification when a friend comes online." }
+      ] },
+      { "area": "Interface", "entries": [
+        { "type": "feature", "text": "A new splash screen while the launcher starts." },
+        { "type": "feature", "text": "A welcome screen to add your first account, with Microsoft or offline sign-in." }
+      ] }
+    ]
+  },
+  {
     "product": "launcher", "version": "1.0.0", "date": "2026-11-11",
     "title": "CurseForge, friends and a lot more",
     "groups": [
