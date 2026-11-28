@@ -1,6 +1,35 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.5",
+    "date": "2026-11-28",
+    "title": "Fix: modpacks crashing with “Fabric was loaded twice”",
+    "groups": [
+      {
+        "area": "Fixes",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "When Astra was started from inside another app (for example a Microsoft Store app), Windows quietly put everything Astra saved — like a modpack you installed — into that app’s hidden folder. The game then found Fabric in two places and crashed with “loader constraint violation”. Astra now notices this and starts itself again normally."
+          },
+          {
+            "type": "fix",
+            "text": "Files that ended up in such a hidden folder (like a modpack installed while it happened) are moved back into your Astra folder automatically on the next start."
+          },
+          {
+            "type": "fix",
+            "text": "Every file the game loads is passed with its real location, and a copy of Fabric/Quilt Loader inside a modpack’s mods folder is turned off before the game starts — two copies of the loader can no longer crash the game."
+          },
+          {
+            "type": "improvement",
+            "text": "The crash helper now explains “Fabric was loaded twice” in plain words and what to do."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.17.4",
     "date": "2026-11-28",
     "title": "Friends on the right, Settings in compact mode",

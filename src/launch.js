@@ -179,6 +179,31 @@ async function offlineSkin(inst, auth, gameDir) {
  */
 const hosting = new Map(); // runId -> { address, instanceId, name, since }
 /**
+ * A copy of the mod loader itself in the mods folder (some modpacks ship one) makes the game load Fabric/Quilt twice
+ * and crash ("loader constraint violation"). The launcher already provides the loader: such jars are turned off
+ * (renamed .disabled, never deleted) with a note in the console.
+ */
+function stripLoaderCopies(inst, gameDir) {
+  if (!['fabric', 'quilt'].includes(inst.loader?.type)) return;
+  const dir = path.join(gameDir, 'mods');
+  let files = []; try { files = fs.readdirSync(dir).filter((f) => /\.jar$/i.test(f)); } catch { return; }
+  const AdmZip = require('adm-zip');
+  for (const f of files) {
+    if (!/loader|fabric|quilt/i.test(f)) continue; // only jars whose name hints at it are opened
+    try {
+      const zip = new AdmZip(path.join(dir, f));
+      const fe = zip.getEntry('fabric.mod.json'), qe = zip.getEntry('quilt.mod.json');
+      const id = fe ? JSON.parse(zip.readAsText(fe).replace(/[\u0000-\u001f]+/g, ' ')).id : qe ? JSON.parse(zip.readAsText(qe)).quilt_loader?.id : null;
+      // the loader jar itself has no fabric.mod.json mod entry for "fabricloader"; it ships fabric-installer.json
+      const isLoader = id === 'fabricloader' || id === 'quilt_loader' || (!fe && !qe && zip.getEntry('fabric-installer.json') && zip.getEntry('net/fabricmc/loader/impl/FabricLoaderImpl.class'));
+      if (!isLoader) continue;
+      fs.renameSync(path.join(dir, f), path.join(dir, f + '.disabled'));
+      push('game:log', { runId: 'install-' + inst.id, instanceId: inst.id, line: `[Astra] Turned off ${f}: it is a copy of the mod loader itself — Astra already provides it, and two copies crash the game.` });
+    } catch {}
+  }
+}
+
+/**
  * Forge/NeoForge refuse a server whose mods differ ("mismatched mod list") and name the network channels:
  *   "Channels [mts:main] rejected their server side version number"  → the server lacks (or has another version of) mts
  *   "Channels [x:y] rejected their client side version number"        → the game lacks x
@@ -282,6 +307,7 @@ async function launchInner(instanceId, opts = {}) {
   fs.mkdirSync(inst.gameDir, { recursive: true });
   let gameDir = inst.gameDir;
   try { gameDir = fs.realpathSync.native(gameDir); } catch {}
+  stripLoaderCopies(inst, gameDir);
 
   const javaPath = await resolveJava(inst, version, (d, t) => status(instanceId, 'Installing Java', d / t, `${d}/${t}`));
   setGpuPreference(javaPath);
@@ -326,7 +352,11 @@ async function launchInner(instanceId, opts = {}) {
   const assetsRoot = versions.prepareLegacyAssets(assetInfo, gameDir);
 
   const sep = process.platform === 'win32' ? ';' : ':';
-  const classpath = [...libs.classpath.map((l) => l.path), clientJar].join(sep);
+  // Every path the game gets is its REAL location. If Windows redirected some files (Astra started from inside another
+  // app's sandbox — see sandbox.js), Java reports the redirected place for them; Fabric then sees its own jars at two
+  // paths, loads them twice and stops with "loader constraint violation … previously loaded by 'app'".
+  const real = (p) => { try { return fs.realpathSync.native(p); } catch { return p; } };
+  const classpath = [...libs.classpath.map((l) => real(l.path)), real(clientJar)].join(sep);
   const res = inst.resolution || s.resolution || {};
   const features = { is_demo_user: false, has_custom_resolution: !!(res.width && res.height) };
   const vars = {
@@ -473,4 +503,4 @@ const isRunning = (instanceId) => [...running.values()].some((r) => r.instanceId
 const anyRunning = () => running.size > 0 || starting.size > 0;
 const isBusy = (instanceId) => isRunning(instanceId) || starting.has(instanceId);
 
-module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit, hostingList, resolveJava };
+module.exports = { launch, stop, list, logs, isRunning, isBusy, anyRunning, ensureVersion, savePlaytimeOnQuit, hostingList, resolveJava, stripLoaderCopies };

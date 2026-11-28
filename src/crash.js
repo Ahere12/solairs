@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 
 const RULES = [
+  // Fabric's own classes loaded twice: the game saw Fabric Loader's jar at two paths (Astra started inside another
+  // app's sandbox, so Windows redirected new files), or a copy of Fabric Loader sits in the mods folder.
+  { re: /loader constraint violation: loader 'knot'[^\n]*previously loaded by 'app'|net\.fabricmc\.loader\.\S+ cannot be cast to class net\.fabricmc\.loader[\s\S]{0,300}loader 'knot'/i,
+    title: 'Fabric was loaded twice',
+    fix: 'The game found Fabric Loader in two places. Usually Astra was started from inside another app (Windows then hides new files, like a modpack you just installed, in that app’s private folder). Close Astra and open it from the Start menu or desktop shortcut — Astra now restarts itself normally and moves those files back — then press Play again. If a “fabric-loader” .jar is in this instance’s mods folder, Astra turns it off before the next start.' },
   { re: /java\.lang\.OutOfMemoryError|Could not reserve enough space|There is insufficient memory/i,
     title: 'Out of memory', fix: 'Increase the memory for this instance (Instance → Settings → Memory), or close other programs. With many mods, 4–6 GB is typical.' },
   { re: /UnsupportedClassVersionError|class file version (\d+)/i,

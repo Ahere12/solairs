@@ -80,7 +80,13 @@ function logMainError(kind, e) {
 process.on('uncaughtException', (e) => logMainError('uncaughtException', e));
 process.on('unhandledRejection', (e) => logMainError('unhandledRejection', e));
 
-if (!app.requestSingleInstanceLock()) {
+// Started from inside another app's sandbox (e.g. by a Microsoft Store app)? Everything written to AppData would be
+// redirected to a hidden folder and modpacks would crash — start again normally instead (src/sandbox.js).
+const SANDBOXED = app.isPackaged && process.platform === 'win32' && !process.env.SOLARIS_DATA_DIR && require('./src/sandbox').inForeignSandbox(app.getPath('appData'));
+if (SANDBOXED) {
+  require('./src/sandbox').restartOutside(process.execPath);
+  app.exit(0);
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   const deeplink = require('./src/deeplink');
@@ -94,7 +100,27 @@ if (!app.requestSingleInstanceLock()) {
     launchFromShortcut(argv); // an instance shortcut on the desktop while Astra is already open
   });
   app.on('open-url', (e, url) => { e.preventDefault(); showWindow(); deeplink.handle(url, !!(win && !win.webContents.isLoading())); }); // macOS
-  app.whenReady().then(async () => { if (await recoverDataDir()) init(); });
+  app.whenReady().then(async () => { if (await recoverDataDir()) { await rescueHiddenData(); init(); } });
+}
+
+/**
+ * Files an earlier start inside another app's sandbox left in a hidden folder (see src/sandbox.js) are moved back
+ * into the real data folder before anything reads it — e.g. a modpack installed while Astra ran sandboxed.
+ */
+async function rescueHiddenData() {
+  if (process.platform !== 'win32' || process.env.SOLARIS_DATA_DIR) return;
+  try {
+    const { paths } = require('./src/util');
+    const root = paths.getRoot();
+    if (path.basename(root).toLowerCase() !== '.solaris') return; // only the default folder can be redirected
+    const lines = [];
+    const res = await require('./src/sandbox').rescue({ localAppData: process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local'), dataDir: root, log: (l) => lines.push(l) });
+    if (!res.length) return;
+    fs.mkdirSync(paths.logs(), { recursive: true });
+    fs.appendFileSync(path.join(paths.logs(), 'sandbox-rescue.log'), lines.map((l) => `[${new Date().toISOString()}] ${l}`).join('\n') + '\n');
+    const n = res.reduce((a, r) => a + r.copied, 0);
+    if (n) setTimeout(() => { try { require('./src/util').push('toast', { type: 'info', text: `Astra found ${n} file${n === 1 ? '' : 's'} (like a modpack) that Windows had put in a hidden folder while Astra was started from inside another app, and moved ${n === 1 ? 'it' : 'them'} back.` }); } catch {} }, 6000);
+  } catch (e) { logMainError('sandbox rescue', e); }
 }
 
 /**
