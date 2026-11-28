@@ -42,10 +42,10 @@ const FriendsPanel = {
     setTimeout(() => { if (this.el && !this.el.classList.contains('in')) this.el.hidden = true; }, 180);
   },
 
-  /** Sits right next to the sidebar, full height, like a second column. */
+  /** Far right of the window, from under the title bar to the bottom — the same in every layout (side menu, top menu, compact). */
   place() {
-    const side = $('.sidebar')?.getBoundingClientRect();
-    if (side) { this.el.style.left = Math.round(side.right + 8) + 'px'; this.el.style.top = Math.round(side.top) + 'px'; this.el.style.bottom = Math.round(innerHeight - side.bottom) + 'px'; }
+    const tb = $('.titlebar')?.getBoundingClientRect();
+    this.el.style.top = Math.round((tb ? tb.bottom : 36) + 8) + 'px';
   },
 
   build() {

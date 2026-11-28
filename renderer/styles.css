@@ -88,8 +88,12 @@ a { color: var(--accent); text-decoration: none; }
 /* compact (icon-only) sidebar */
 :root[data-compact] { --sidebar: 64px; }
 :root[data-compact] .sidebar { padding: 8px 6px; align-items: stretch; }
-:root[data-compact] :is(.nav-item span, .profile .meta, .profile .caret, .profile .icon-btn, .side-inst .n, .side-inst .dot, .nav-add, .big-play .pt, .big-play-pick, .tasks .detail) { display: none; }
+:root[data-compact] :is(.nav-item span, .profile .meta, .profile .caret, .side-inst .n, .side-inst .dot, .nav-add, .big-play .pt, .big-play-pick, .tasks .detail) { display: none; }
 :root[data-compact] .profile .who { justify-content: center; padding: 4px; }
+/* compact: Friends and Settings stay reachable, stacked under the account head */
+:root[data-compact] .profile { flex-direction: column; align-items: center; gap: 4px; }
+:root[data-compact] .profile .who { flex: none; }
+:root[data-layout='classic'][data-compact] .profile { flex-direction: row; }
 :root[data-compact] :is(.nav-item, .side-inst) { justify-content: center; padding: 9px 0; }
 :root[data-compact] .side-tools { flex-direction: column; }
 :root[data-compact] .big-play { justify-content: center; padding: 0; border-radius: 14px !important; }

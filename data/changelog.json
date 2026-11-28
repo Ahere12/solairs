@@ -1,6 +1,27 @@
 [
   {
     "product": "launcher",
+    "version": "1.17.4",
+    "date": "2026-11-28",
+    "title": "Friends on the right, Settings in compact mode",
+    "groups": [
+      {
+        "area": "Fixes",
+        "entries": [
+          {
+            "type": "fix",
+            "text": "The Friends panel now opens on the far right of the window at full height in every layout — with the menu on top (Classic) it used to squeeze into a thin strip at the top."
+          },
+          {
+            "type": "fix",
+            "text": "Compact sidebar: the Friends and Settings buttons were hidden. They now sit under your account head (and next to it in the bottom bar of the Classic layout)."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "product": "launcher",
     "version": "1.17.3",
     "date": "2026-11-27",
     "title": "Friends panel, new splash and Welcome screen",
